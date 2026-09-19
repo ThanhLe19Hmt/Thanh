@@ -2279,58 +2279,19 @@ task.spawn(function()
 		end)
 	end
 end)
+-- ===== AUTO RAID BOSS v4 =====
 task.spawn(function()
-	while task.wait() do
-		if _G.Auto_Farm_Level or _G.Auto_CraftWeapon or _G.Auto_Farm_Material or _G.Auto_FarmBoss_Automatically or _G.Auto_FarmBoss or _G.Auto_DuckAutomatically or _G.Auto_Duck  or _G.Auto_Farm_Set or _G.Auto_Raid or _G.Auto_BaconThief or _G.Auto_Dungeon or _G.Auto_Piccolo then
-			pcall(function()
-				local Character = game.Players.LocalPlayer.Character
-				local HRP = Character and Character:FindFirstChild("HumanoidRootPart")
-				if HRP then
-						HRP.AssemblyAngularVelocity = Vector3.zero
-					local Vel = HRP.AssemblyLinearVelocity
-					HRP.AssemblyLinearVelocity = Vector3.new(0, Vel.Y, 0)
-				end
-			end)
-		end
-	end
-end)
-task.spawn(function()
-	pcall(function()
-		game:GetService("RunService").Stepped:Connect(function()
-			if _G.Auto_Farm_Level or _G.Auto_CraftWeapon or _G.Auto_Farm_Material or _G.Auto_FarmBoss_Automatically or _G.Auto_FarmBoss or _G.Auto_DuckAutomatically or _G.Auto_Duck or _G.Auto_Farm_Set or _G.Auto_Raid or _G.Auto_BaconThief or _G.Auto_Dungeon or _G.Auto_Piccolo or _G.Auto_DevilBoat then
-				if not game.Players.LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyClip") then
-				local Noclip = Instance.new("BodyVelocity")
-					Noclip.Name = "BodyClip"
-					Noclip.Parent = game.Players.LocalPlayer.Character.HumanoidRootPart
-					Noclip.MaxForce = Vector3.new(100000, 100000, 100000)
-					Noclip.Velocity = Vector3.new(0, 0, 0)
-					end
-				else    
-					if game.Players.LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyClip") then
-					game.Players.LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyClip"):Destroy()
-				end
-			end
-		end)
-	end)
-end)  
--- ===== AUTO RAID BOSS v3 — SIMPLE =====
-task.spawn(function()
-	print("[AutoRaid] task.spawn đã khởi động!")
+	print("[AutoRaid] ✅ task.spawn đã khởi động!")
 	while task.wait(0.3) do
 		if _G.AutoRaidRunning then
-			print("[AutoRaid Loop] Đang chạy...")
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
 			if Data and Data.Valid then
 				pcall(function()
-					-- Check map
 					local bf = workspace:FindFirstChild("Boss Fight")
 					local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
-
 					if baconFolder then
-						-- Đang trong map → đánh
+						-- Đang trong map
 						print("[AutoRaid] Trong map boss")
-
-						-- Cục vàng 1
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
 							local hrp = A1:FindFirstChild("HumanoidRootPart")
@@ -2344,8 +2305,6 @@ task.spawn(function()
 								until not _G.AutoRaidRunning or not A1.Parent or A1.Humanoid.Health <= 0
 							end
 						end
-
-						-- Cục vàng 2
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
 							local hrp = A2:FindFirstChild("HumanoidRootPart")
@@ -2359,8 +2318,6 @@ task.spawn(function()
 								until not _G.AutoRaidRunning or not A2.Parent or A2.Humanoid.Health <= 0
 							end
 						end
-
-						-- Boss
 						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
 						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
 							local hrp = BossBacon:FindFirstChild("HumanoidRootPart")
@@ -2376,7 +2333,7 @@ task.spawn(function()
 						end
 						task.wait(2)
 					else
-						-- Ngoài đảo → mở raid
+						-- Ngoài đảo
 						print("[AutoRaid] Đi tới NPC Open Raid")
 						local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
 						if npc and npc:FindFirstChild("HumanoidRootPart") then
@@ -2422,6 +2379,40 @@ task.spawn(function()
 		end
 	end
 end)
+task.spawn(function()
+	while task.wait() do
+		if _G.Auto_Farm_Level or _G.Auto_CraftWeapon or _G.Auto_Farm_Material or _G.Auto_FarmBoss_Automatically or _G.Auto_FarmBoss or _G.Auto_DuckAutomatically or _G.Auto_Duck  or _G.Auto_Farm_Set or _G.Auto_Raid or _G.Auto_BaconThief or _G.Auto_Dungeon or _G.Auto_Piccolo then
+			pcall(function()
+				local Character = game.Players.LocalPlayer.Character
+				local HRP = Character and Character:FindFirstChild("HumanoidRootPart")
+				if HRP then
+						HRP.AssemblyAngularVelocity = Vector3.zero
+					local Vel = HRP.AssemblyLinearVelocity
+					HRP.AssemblyLinearVelocity = Vector3.new(0, Vel.Y, 0)
+				end
+			end)
+		end
+	end
+end)
+task.spawn(function()
+	pcall(function()
+		game:GetService("RunService").Stepped:Connect(function()
+			if _G.Auto_Farm_Level or _G.Auto_CraftWeapon or _G.Auto_Farm_Material or _G.Auto_FarmBoss_Automatically or _G.Auto_FarmBoss or _G.Auto_DuckAutomatically or _G.Auto_Duck or _G.Auto_Farm_Set or _G.Auto_Raid or _G.Auto_BaconThief or _G.Auto_Dungeon or _G.Auto_Piccolo or _G.Auto_DevilBoat then
+				if not game.Players.LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyClip") then
+				local Noclip = Instance.new("BodyVelocity")
+					Noclip.Name = "BodyClip"
+					Noclip.Parent = game.Players.LocalPlayer.Character.HumanoidRootPart
+					Noclip.MaxForce = Vector3.new(100000, 100000, 100000)
+					Noclip.Velocity = Vector3.new(0, 0, 0)
+					end
+				else    
+					if game.Players.LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyClip") then
+					game.Players.LocalPlayer.Character.HumanoidRootPart:FindFirstChild("BodyClip"):Destroy()
+				end
+			end
+		end)
+	end)
+end)  
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
 	task.wait(1)
