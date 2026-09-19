@@ -619,6 +619,13 @@ Duck:Toggle({
 		end
 	end
 })
+DevilBoat:Toggle({
+	Title = "Auto Farm Devil Boat",
+	Value = false,
+	Callback = function(Value)
+		_G.Auto_DevilBoat = Value
+	end
+})
 local Spawn_Status = SpawnedT:Paragraph({
 	Title = "Spawn Status",
 	Content = "N/A"
@@ -860,7 +867,18 @@ task.spawn(function()
 		pcall(function()
 			local Text = {}
 			for Name, MobName in pairs(SpawnList) do
-				local Spawned = workspace.Mob:FindFirstChild(MobName) ~= nil
+				local Spawned = false
+				-- Check nhiều biến thể tên
+				local Names = {MobName}
+				if MobName == "Devil Boat" then
+					table.insert(Names, "DevilBoat")
+				end
+				for _, n in ipairs(Names) do
+					if workspace.Mob:FindFirstChild(n) then
+						Spawned = true
+						break
+					end
+				end
 				table.insert(Text, Name .. ": " .. (Spawned and "Spawned (✅)" or "Not Spawned (❌)"))
 			end
 			Spawn_Status:SetContent(table.concat(Text, "\n"))
@@ -1816,6 +1834,36 @@ task.spawn(function()
 		end)
 	end)
 end)  
+task.spawn(function()
+	while task.wait() do
+		if _G.Auto_DevilBoat then
+			pcall(function()
+				local Target
+				-- Tìm cả "Devil Boat" và "DevilBoat"
+				for _, v in pairs(workspace.Mob:GetChildren()) do
+					if v:IsA("Model") 
+						and (v.Name == "Devil Boat" or v.Name == "DevilBoat")
+						and v:FindFirstChild("Humanoid") 
+						and v:FindFirstChild("HumanoidRootPart") 
+						and v.Humanoid.Health > 0 then
+						Target = v
+						break
+					end
+				end
+				if Target then
+					Target.Humanoid.WalkSpeed = 0
+					Target.Humanoid.JumpPower = 0
+					repeat task.wait()
+						EquipWeapon()
+						AutoSkill()
+						Attack()
+						Teleport(Target.HumanoidRootPart.CFrame * MethodFarm)
+					until not _G.Auto_DevilBoat or not Target.Parent or Target.Humanoid.Health <= 0
+				end
+			end)
+		end
+	end
+end)
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
     task.wait(1)
