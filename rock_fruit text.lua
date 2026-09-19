@@ -693,7 +693,33 @@ WeaponCraft:Toggle({
 		_G.Auto_Farm_Set = v
 	end
 })
-
+RaidBossSection:Button({
+	Title = "Please choose a Boss Raid!! Which one do you want to do?",
+	Callback = function()
+		if not _G.AutoRaidWho then
+			Library:Notify({
+				Title = "❌ Chưa chọn Raid",
+				Description = "Vui lòng chọn Boss Raid trước!",
+				Duration = 3
+			})
+			return
+		end
+		if _G.AutoRaidWho ~= "Bacon of Grudge" then
+			Library:Notify({
+				Title = "❌ Raid không hợp lệ",
+				Description = "NO RAID!!! Please select a valid cluster.",
+				Duration = 3
+			})
+			return
+		end
+		_G.AutoRaidRunning = not _G.AutoRaidRunning
+		Library:Notify({
+			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
+			Description = _G.AutoRaidWho,
+			Duration = 3
+		})
+	end
+})
 RaidCard:Toggle({
 	Title = "Auto Raid Moon (Full)",
 	Value = false,
