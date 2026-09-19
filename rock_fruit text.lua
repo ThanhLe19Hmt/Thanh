@@ -1,14 +1,5 @@
 repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer and game.Players.LocalPlayer.Character
 if game.PlaceId == 119091355492870 then
--- ===== DEBUG START =====
-task.spawn(function()
-	local dem = 0
-	while task.wait(2) do
-		dem = dem + 1
-		print("[DEBUG #" .. dem .. "] AutoRaidRunning =", _G.AutoRaidRunning, "| AutoRaidWho =", _G.AutoRaidWho)
-	end
-end)
--- ===== DEBUG END =====
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
@@ -368,6 +359,15 @@ LocalPlayer.Idled:Connect(function()
 end)
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/znesr99/gui/refs/heads/main/MarvenRizLib.lua"))()
 local MySaveManager = Library.SaveManager
+-- ===== DEBUG START =====
+task.spawn(function()
+	local dem = 0
+	while task.wait(2) do
+		dem = dem + 1
+		print("[DEBUG #" .. dem .. "] AutoRaidRunning =", _G.AutoRaidRunning, "| AutoRaidWho =", _G.AutoRaidWho)
+	end
+end)
+-- ===== DEBUG END =====
 
 local Window = Library:CreateWindow({
     Title = "MarvenRiz Hub",
