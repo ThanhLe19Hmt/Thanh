@@ -471,12 +471,13 @@ RaidBossCard:Dropdown({
 		end
 	end
 })
-
 RaidBossCard:Button({
 	Title = "Please choose a Boss Raid!! Which one do you want to do?",
 	Callback = function()
+		print("[BUTTON] Clicked! AutoRaidWho =", _G.AutoRaidWho)
 		local Data = RaidBossData[_G.AutoRaidWho]
 		if not Data then
+			print("[BUTTON] Data = nil, không chọn được")
 			Library:Notify({
 				Title = "❌ Chưa chọn Raid",
 				Description = "Please choose a Boss Raid!! Which one do you want to do?",
@@ -485,6 +486,7 @@ RaidBossCard:Button({
 			return
 		end
 		if not Data.Valid then
+			print("[BUTTON] Data invalid")
 			Library:Notify({
 				Title = "❌ Raid không hợp lệ",
 				Description = "NO RAID!!! Please select a valid cluster.",
@@ -493,6 +495,7 @@ RaidBossCard:Button({
 			return
 		end
 		_G.AutoRaidRunning = not _G.AutoRaidRunning
+		print("[BUTTON] Set AutoRaidRunning =", _G.AutoRaidRunning)
 		Library:Notify({
 			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
 			Description = Data.Name,
@@ -500,7 +503,6 @@ RaidBossCard:Button({
 		})
 	end
 })
-
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
 	Options = TypeTool,
@@ -2314,9 +2316,8 @@ end)
 -- ===== AUTO RAID BOSS LOGIC =====
 task.spawn(function()
 	while task.wait(0.2) do
+		print("[AutoRaid Loop] Running =", _G.AutoRaidRunning, "| Who =", _G.AutoRaidWho)
 		if not _G.AutoRaidRunning then continue end
-		local Data = RaidBossData[_G.AutoRaidWho]
-		if not Data or not Data.Valid then continue end
 
 		pcall(function()
 			-- 1. Check Portal Gun
