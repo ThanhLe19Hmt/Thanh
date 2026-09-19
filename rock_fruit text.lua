@@ -620,6 +620,28 @@ Duck:Toggle({
 		end
 	end
 })
+local RaidBossInfo = RaidBossSection:Paragraph({
+	Title = "Name: ( chưa chọn )",
+	Content = "Please choose a Boss Raid!!"
+})
+
+RaidBossSection:Dropdown({
+	Title = "Auto Raid Who??",
+	Options = {"Bacon of Grudge", "??? (Raid 2)", "??? (Raid 3)"},
+	Multi = false,
+	Callback = function(Value)
+		_G.AutoRaidWho = Value
+		pcall(function()
+			if Value == "Bacon of Grudge" then
+				RaidBossInfo:SetTitle("Name: Bacon of Grudge")
+				RaidBossInfo:SetContent("Reward: Time Mystery Box x5, 7500 Diamond, Beli 50M, x3 Potion, Rroll Class + Raid Poiton x1\n- 1 Portal Gun")
+			else
+				RaidBossInfo:SetTitle("Name: ???")
+				RaidBossInfo:SetContent("SOON!! AND Just wait.")
+			end
+		end)
+	end
+})
 DevilBoat:Toggle({
 	Title = "Auto Farm Devil Boat",
 	Value = false,
