@@ -1954,6 +1954,7 @@ task.spawn(function()
 	end
 end)
 -- ===== AUTO RAID BOSS v5 - FIXED =====
+-- ===== AUTO RAID BOSS v6 - FIXED PORTAL =====
 task.spawn(function()
 	print("[AutoRaid] ✅ task.spawn đã khởi động!")
 	while task.wait(0.3) do
@@ -1961,7 +1962,6 @@ task.spawn(function()
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
 			if Data and Data.Valid then
 				pcall(function()
-					-- Kiểm tra đang trong map boss hay ngoài đảo
 					local bf = workspace:FindFirstChild("Boss Fight")
 					local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
 
@@ -1969,7 +1969,7 @@ task.spawn(function()
 						-- ===== ĐANG Ở TRONG MAP BOSS =====
 						print("[AutoRaid] Trong map boss")
 
-						-- 1. Đánh cục vàng 1
+						-- Cục vàng 1
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall1")
@@ -1986,7 +1986,7 @@ task.spawn(function()
 							end
 						end
 
-						-- 2. Đánh cục vàng 2
+						-- Cục vàng 2
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall2")
@@ -2003,7 +2003,7 @@ task.spawn(function()
 							end
 						end
 
-						-- 3. Đánh Boss
+						-- Boss
 						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
 						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh Boss Bacon Sad")
@@ -2020,16 +2020,15 @@ task.spawn(function()
 							end
 						end
 
-						-- 4. Boss chết → đợi 2s rồi làm lại
 						if _G.AutoRaidRunning then
 							task.wait(2)
 						end
 
 					else
-						-- ===== CHƯA VÀO MAP → ĐI MỞ RAID =====
-						print("[AutoRaid] Chưa vào map, đi tới NPC Open Raid")
+						-- ===== CHƯA VÀO MAP =====
+						print("[AutoRaid] Chưa vào map")
 
-						-- 1. Check Portal Gun
+						-- Check Portal Gun
 						if GetItemAmount("Portal Gun") < Data.PortalCost then
 							Library:Notify({
 								Title = "❌ Không đủ Portal Gun",
@@ -2040,21 +2039,67 @@ task.spawn(function()
 							return
 						end
 
-						-- 2. Teleport tới NPC Open Raid
-						local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
-						if npc and npc:FindFirstChild("HumanoidRootPart") then
-							Teleport(npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
-							task.wait(0.5)
+						-- Check xem portal đã mở chưa
+						local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
+						if TPZone and TPZone:FindFirstChild("Hitbox") then
+							-- Đã có portal → teleport vào
+							print("[AutoRaid] Đã có portal, teleport vào Hitbox!")
+							local Hitbox = TPZone.Hitbox
+							local StartTime = tick()
+							repeat task.wait(0.1)
+								Teleport(Hitbox.CFrame)
+							until not _G.AutoRaidRunning
+								or not TPZone.Parent
+								or workspace:FindFirstChild("Boss Fight")
+								or tick() - StartTime > 10
 
-							-- 3. Fire Remote mở raid trực tiếp
-							print("[AutoRaid] Fire SpawnBossFight: " .. Data.Name)
-							local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
-							NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
-
-							-- 4. Đợi 3.5s cho vòng đợi và teleport vào map
-							task.wait(3.5)
+							if tick() - StartTime > 10 then
+								print("[AutoRaid] Teleport vào portal quá lâu, thử lại...")
+							else
+								print("[AutoRaid] Đã vào map boss!")
+							end
 						else
-							print("[AutoRaid] Không tìm thấy NPC Open Raid!")
+							-- Chưa có portal → tới NPC fire
+							local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
+							if npc and npc:FindFirstChild("HumanoidRootPart") then
+								print("[AutoRaid] Tới NPC Open Raid")
+								Teleport(npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
+								task.wait(0.5)
+
+								-- Mở menu NPC
+								local prompt = npc.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt")
+								if prompt then
+									fireproximityprompt(prompt)
+									task.wait(0.8)
+								end
+
+								-- Fire Remote mở raid
+								print("[AutoRaid] Fire SpawnBossFight: " .. Data.Name)
+								local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
+								NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
+
+								-- Đợi portal xuất hiện
+								task.wait(1)
+
+								-- Teleport vào portal nếu đã có
+								local TPZone2 = workspace:FindFirstChild("TeleportBossFightZone")
+								if TPZone2 and TPZone2:FindFirstChild("Hitbox") then
+									print("[AutoRaid] Portal xuất hiện, teleport vào!")
+									local Hitbox2 = TPZone2.Hitbox
+									local StartTime2 = tick()
+									repeat task.wait(0.1)
+										Teleport(Hitbox2.CFrame)
+									until not _G.AutoRaidRunning
+										or not TPZone2.Parent
+										or workspace:FindFirstChild("Boss Fight")
+										or tick() - StartTime2 > 10
+								else
+									print("[AutoRaid] Portal chưa xuất hiện, đợi...")
+									task.wait(2)
+								end
+							else
+								print("[AutoRaid] Không tìm thấy NPC Open Raid!")
+							end
 						end
 					end
 				end)
