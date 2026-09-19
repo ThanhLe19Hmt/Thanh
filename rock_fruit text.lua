@@ -385,7 +385,7 @@ local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 
-local Tab2 = Window:CreateTab("Main", false, false)
+local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
 local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
