@@ -389,6 +389,84 @@ local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
 local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
+-- ===== AUTO RAID BOSS UI =====
+local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
+local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
+
+local RaidBossData = {
+	["Bacon of Grudge"] = {
+		Name = "Bacon of Grudge",
+		Reward = "Time Mystery Box x5, 7500 Diamond, Beli 50M, x3 Potion, Rroll Class + Raid Poiton x1",
+		PortalCost = 1,
+		Valid = true,
+	},
+	["??? (Raid 2)"] = {
+		Name = "???",
+		Reward = "SOON!! AND Just wait.",
+		PortalCost = 0,
+		Valid = false,
+	},
+	["??? (Raid 3)"] = {
+		Name = "???",
+		Reward = "SOON!! AND Just wait.",
+		PortalCost = 0,
+		Valid = false,
+	},
+}
+
+_G.AutoRaidWho = nil
+_G.AutoRaidRunning = false
+
+local RaidBossInfo = RaidBossInfoCard:Paragraph({
+	Title = "Name: ( chưa chọn )",
+	Content = "Please choose a Boss Raid!!"
+})
+
+RaidBossCard:Dropdown({
+	Title = "Auto Raid Who??",
+	Options = {"Bacon of Grudge", "??? (Raid 2)", "??? (Raid 3)"},
+	Multi = false,
+	Callback = function(Value)
+		_G.AutoRaidWho = Value
+		local Data = RaidBossData[Value]
+		if Data then
+			RaidBossInfo:SetTitle("Name: " .. Data.Name)
+			RaidBossInfo:SetContent(
+				"Reward: " .. Data.Reward ..
+				"\n- " .. Data.PortalCost .. " Portal Gun"
+			)
+		end
+	end
+})
+
+RaidBossCard:Button({
+	Title = "Please choose a Boss Raid!! Which one do you want to do?",
+	Callback = function()
+		local Data = RaidBossData[_G.AutoRaidWho]
+		if not Data then
+			Library:Notify({
+				Title = "❌ Chưa chọn Raid",
+				Description = "Please choose a Boss Raid!! Which one do you want to do?",
+				Duration = 3
+			})
+			return
+		end
+		if not Data.Valid then
+			Library:Notify({
+				Title = "❌ Raid không hợp lệ",
+				Description = "NO RAID!!! Please select a valid cluster.",
+				Duration = 3
+			})
+			return
+		end
+		_G.AutoRaidRunning = not _G.AutoRaidRunning
+		Library:Notify({
+			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
+			Description = Data.Name,
+			Duration = 3
+		})
+	end
+})
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
