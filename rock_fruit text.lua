@@ -2313,43 +2313,29 @@ task.spawn(function()
 		end)
 	end)
 end)  
--- ===== AUTO RAID BOSS LOGIC =====
--- ===== AUTO RAID BOSS LOGIC (v2 - no continue) =====
+-- ===== AUTO RAID BOSS v3 — SIMPLE =====
 task.spawn(function()
+	print("[AutoRaid] task.spawn đã khởi động!")
 	while task.wait(0.3) do
 		if _G.AutoRaidRunning then
-			local Data = RaidBossData[_G.AutoRaidWho]
+			print("[AutoRaid Loop] Đang chạy...")
+			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
 			if Data and Data.Valid then
-				xpcall(function()
-					print("[AutoRaid Loop] Chạy! Who =", _G.AutoRaidWho)
-
-					-- 1. Check Portal Gun
-					if GetItemAmount("Portal Gun") < Data.PortalCost then
-						Library:Notify({
-							Title = "❌ Không đủ Portal Gun",
-							Description = "Cần " .. Data.PortalCost .. " Portal Gun!",
-							Duration = 4
-						})
-						_G.AutoRaidRunning = false
-						return
-					end
-
-					-- 2. Kiểm tra trong map boss hay ngoài
+				pcall(function()
+					-- Check map
 					local bf = workspace:FindFirstChild("Boss Fight")
 					local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
 
 					if baconFolder then
-						-- ===== TRONG MAP BOSS =====
+						-- Đang trong map → đánh
 						print("[AutoRaid] Trong map boss")
 
-						-- Đánh cục vàng 1
+						-- Cục vàng 1
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
-							print("[AutoRaid] Đánh ArmorBall1")
 							local hrp = A1:FindFirstChild("HumanoidRootPart")
 							if hrp then
 								A1.Humanoid.WalkSpeed = 0
-								A1.Humanoid.JumpPower = 0
 								repeat task.wait()
 									EquipWeapon()
 									AutoSkill()
@@ -2359,14 +2345,12 @@ task.spawn(function()
 							end
 						end
 
-						-- Đánh cục vàng 2
+						-- Cục vàng 2
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
-							print("[AutoRaid] Đánh ArmorBall2")
 							local hrp = A2:FindFirstChild("HumanoidRootPart")
 							if hrp then
 								A2.Humanoid.WalkSpeed = 0
-								A2.Humanoid.JumpPower = 0
 								repeat task.wait()
 									EquipWeapon()
 									AutoSkill()
@@ -2376,14 +2360,12 @@ task.spawn(function()
 							end
 						end
 
-						-- Đánh Boss
+						-- Boss
 						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
 						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
-							print("[AutoRaid] Đánh Boss Bacon Sad")
 							local hrp = BossBacon:FindFirstChild("HumanoidRootPart")
 							if hrp then
 								BossBacon.Humanoid.WalkSpeed = 0
-								BossBacon.Humanoid.JumpPower = 0
 								repeat task.wait()
 									EquipWeapon()
 									AutoSkill()
@@ -2392,70 +2374,49 @@ task.spawn(function()
 								until not _G.AutoRaidRunning or not BossBacon.Parent or BossBacon.Humanoid.Health <= 0
 							end
 						end
-
-						if _G.AutoRaidRunning then
-							task.wait(2)
-						end
+						task.wait(2)
 					else
-						-- ===== NGOÀI ĐẢO - ĐI MỞ RAID =====
+						-- Ngoài đảo → mở raid
 						print("[AutoRaid] Đi tới NPC Open Raid")
-
 						local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
 						if npc and npc:FindFirstChild("HumanoidRootPart") then
-							-- Teleport
 							Teleport(npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
 							task.wait(0.5)
-
-							-- Fire ProximityPrompt
 							local prompt = npc.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt")
-								or npc:FindFirstChild("c3a8f2b", true)
 							if prompt then
-								print("[AutoRaid] Fire ProximityPrompt")
+								print("[AutoRaid] Fire prompt")
 								fireproximityprompt(prompt)
-							else
-								print("[AutoRaid] Không tìm thấy ProximityPrompt!")
 							end
 							task.wait(1)
-
-							-- Bấm nút Open trong GUI
 							local gui = LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_RaidBoss")
 							if gui and gui.Visible then
-								print("[AutoRaid] GUI mở, tìm nút Open")
+								print("[AutoRaid] GUI mở, click Open")
 								local sf = gui:FindFirstChild("ScrollingFrame")
 								if sf then
-									local clicked = false
 									for _, item in pairs(sf:GetChildren()) do
 										if item.Name == "Template" and item:FindFirstChild("Main") then
 											local titleLbl = item.Main:FindFirstChild("TitleLabel")
 											if titleLbl and titleLbl.Text == "Bacon of Grudge" then
 												local btn = item.Main:FindFirstChild("TextButton")
 												if btn then
-													print("[AutoRaid] Tìm thấy nút Open, click!")
 													local VIM = game:GetService("VirtualInputManager")
 													local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
 													VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
 													task.wait(0.1)
 													VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
-													clicked = true
+													print("[AutoRaid] Đã click Open!")
 												end
 												break
 											end
 										end
 									end
-									if not clicked then
-										print("[AutoRaid] Không tìm thấy nút Open!")
-									end
 								end
 							else
-								print("[AutoRaid] GUI Frame_RaidBoss chưa mở!")
+								print("[AutoRaid] GUI chưa mở!")
 							end
 							task.wait(2)
-						else
-							print("[AutoRaid] Không tìm thấy NPC Open Raid!")
 						end
 					end
-				end, function(err)
-					print("[AutoRaid ERROR]", err)
 				end)
 			end
 		end
