@@ -2273,6 +2273,133 @@ task.spawn(function()
 		end)
 	end)
 end)  
+task.spawn(function()
+	while task.wait() do
+		if not _G.AutoRaidRunning then
+			task.wait(0.5)
+			continue
+		end
+		local Data = RaidBossData[_G.AutoRaidWho]
+		if not Data or not Data.Valid then
+			_G.AutoRaidRunning = false
+			UpdateRaidButton()
+			continue
+		end
+
+		pcall(function()
+			-- Check Portal Gun
+			if GetItemAmount("Portal Gun") < Data.PortalCost then
+				Library:Notify({
+					Title = "❌ Không đủ Portal Gun",
+					Description = "Cần " .. Data.PortalCost .. " Portal Gun để vào raid!",
+					Duration = 5
+				})
+				_G.AutoRaidRunning = false
+				UpdateRaidButton()
+				return
+			end
+
+			-- Nếu đang ở ngoài map (PlaceId chính)
+			if game.PlaceId == 119091355492870 then
+				-- Check xem đang ở Boss Fight chưa
+				local bf = workspace:FindFirstChild("Boss Fight")
+				local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
+
+				if baconFolder then
+					-- Đang ở trong map boss → đánh
+					local ArmorBall1 = baconFolder:FindFirstChild("ArmorBall1")
+					local ArmorBall2 = baconFolder:FindFirstChild("ArmorBall2")
+					local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
+
+					-- Đánh cục vàng 1
+					if ArmorBall1 and ArmorBall1:FindFirstChild("Humanoid") and ArmorBall1.Humanoid.Health > 0 then
+						local hrp = ArmorBall1:FindFirstChild("HumanoidRootPart")
+						if hrp then
+							ArmorBall1.Humanoid.WalkSpeed = 0
+							ArmorBall1.Humanoid.JumpPower = 0
+							repeat task.wait()
+								EquipWeapon()
+								AutoSkill()
+								Attack()
+								Teleport(hrp.CFrame * MethodFarm)
+							until not _G.AutoRaidRunning or not ArmorBall1.Parent or ArmorBall1.Humanoid.Health <= 0
+						end
+					end
+
+					-- Đánh cục vàng 2
+					if _G.AutoRaidRunning and ArmorBall2 and ArmorBall2:FindFirstChild("Humanoid") and ArmorBall2.Humanoid.Health > 0 then
+						local hrp = ArmorBall2:FindFirstChild("HumanoidRootPart")
+						if hrp then
+							ArmorBall2.Humanoid.WalkSpeed = 0
+							ArmorBall2.Humanoid.JumpPower = 0
+							repeat task.wait()
+								EquipWeapon()
+								AutoSkill()
+								Attack()
+								Teleport(hrp.CFrame * MethodFarm)
+							until not _G.AutoRaidRunning or not ArmorBall2.Parent or ArmorBall2.Humanoid.Health <= 0
+						end
+					end
+
+					-- Sau khi 2 cục vàng chết → đánh boss
+					if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
+						local hrp = BossBacon:FindFirstChild("HumanoidRootPart")
+						if hrp then
+							BossBacon.Humanoid.WalkSpeed = 0
+							BossBacon.Humanoid.JumpPower = 0
+							repeat task.wait()
+								EquipWeapon()
+								AutoSkill()
+								Attack()
+								Teleport(hrp.CFrame * MethodFarm)
+							until not _G.AutoRaidRunning or not BossBacon.Parent or BossBacon.Humanoid.Health <= 0
+						end
+					end
+
+					-- Boss chết → về lại đảo, chuẩn bị raid tiếp
+					if _G.AutoRaidRunning then
+						task.wait(3)
+					end
+				else
+					-- Chưa vào map → đi tới NPC Open Raid
+					local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
+					if npc and npc:FindFirstChild("HumanoidRootPart") then
+						Teleport(npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
+						task.wait(0.5)
+						local prompt = npc.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt")
+							or npc:FindFirstChild("c3a8f2b", true)
+						if prompt then
+							fireproximityprompt(prompt)
+						end
+						task.wait(1)
+
+						-- Chờ GUI mở
+						local gui = LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_RaidBoss")
+						if gui and gui.Visible then
+							-- Tìm Template có title "Bacon of Grudge"
+							local sf = gui:FindFirstChild("ScrollingFrame")
+							if sf then
+								for _, item in pairs(sf:GetChildren()) do
+									if item.Name == "Template" and item:FindFirstChild("Main") then
+										local titleLbl = item.Main:FindFirstChild("TitleLabel")
+										if titleLbl and titleLbl.Text == "Bacon of Grudge" then
+											local btn = item.Main:FindFirstChild("TextButton")
+											if btn then
+												-- Fire TextButton
+												btn:Fire("MouseButton1Click", ...) -- có thể cần adjust
+											end
+											break
+										end
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end)
+	end
+end)
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
 	task.wait(1)
