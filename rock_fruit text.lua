@@ -389,10 +389,21 @@ local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
 local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
--- ===== AUTO RAID BOSS UI =====
+local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
+local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
+local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
+local Boss = AllBoss:CreateSection("👹 Boss","Left")
+local Thief = AllBoss:CreateSection("💸 Thief","Left")
+local Piccolo = AllBoss:CreateSection("🐉 Piccolo","Left")
+local SpawnedT = AllBoss:CreateSection("🔍 Spawned Check","Right")
+local Duck = AllBoss:CreateSection("🦆 Duck","Right")
+local DevilBoat = AllBoss:CreateSection("⛵ Devil Boat","Right")
+local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
+local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
+local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
-
+-- ===== AUTO RAID BOSS UI =====
 local RaidBossData = {
 	["Bacon of Grudge"] = {
 		Name = "Bacon of Grudge",
@@ -467,18 +478,6 @@ RaidBossCard:Button({
 		})
 	end
 })
-local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
-local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
-local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
-local Boss = AllBoss:CreateSection("👹 Boss","Left")
-local Thief = AllBoss:CreateSection("💸 Thief","Left")
-local Piccolo = AllBoss:CreateSection("🐉 Piccolo","Left")
-local SpawnedT = AllBoss:CreateSection("🔍 Spawned Check","Right")
-local Duck = AllBoss:CreateSection("🦆 Duck","Right")
-local DevilBoat = AllBoss:CreateSection("⛵ Devil Boat","Right")
-local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
-local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
-local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
