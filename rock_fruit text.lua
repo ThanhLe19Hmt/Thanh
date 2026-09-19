@@ -415,7 +415,7 @@ local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
 local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
-local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
+local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Left")
 
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
@@ -2014,8 +2014,10 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== AUTO RAID BOSS v5 - FIXED =====
--- ===== AUTO RAID BOSS v6 - FIXED PORTAL =====
+-- ===== AUTO RAID BOSS v7 - HEAL + THANOS =====
+_G.RaidHealing = false
+_G.RaidThanosUsed = false
+
 task.spawn(function()
 	print("[AutoRaid] ✅ task.spawn đã khởi động!")
 	while task.wait(0.3) do
@@ -2028,68 +2030,187 @@ task.spawn(function()
 
 					if baconFolder then
 						-- ===== ĐANG Ở TRONG MAP BOSS =====
-						print("[AutoRaid] Trong map boss")
+						local char = LocalPlayer.Character
+						local hum = char and char:FindFirstChild("Humanoid")
+						local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
+						if not hum or not hrp then return end
+
+						-- Check HP player
+						local HpPercent = (hum.Health / hum.MaxHealth) * 100
+						local NeedHeal = HpPercent <= _G.RaidStopHP
+
+						-- Check Boss HP (cho Thanos)
+						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
+						local BossHpPercent = 100
+						if BossBacon and BossBacon:FindFirstChild("Humanoid") then
+							BossHpPercent = (BossBacon.Humanoid.Health / BossBacon.Humanoid.MaxHealth) * 100
+						end
+
+						-- ===== LOGIC HEAL KHI HP THẤP =====
+						if NeedHeal and not _G.RaidHealing then
+							_G.RaidHealing = true
+							print("[AutoRaid] HP thấp (" .. math.floor(HpPercent) .. "%), bắt đầu heal...")
+
+							-- Núp xa boss, trên không
+							local SafePos = baconFolder:FindFirstChild("CenterBoss")
+							local HidePos
+							if SafePos then
+								HidePos = SafePos.CFrame * CFrame.new(0, 500, 0)
+							else
+								HidePos = CFrame.new(0, 1000, 0)
+							end
+
+							-- Loop teleport lên trời cho đến khi HP = 100%
+							task.spawn(function()
+								while _G.RaidHealing and _G.AutoRaidRunning do
+									pcall(function()
+										if hrp and hrp.Parent then
+											hrp.CFrame = HidePos
+											hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+										end
+									end)
+									task.wait(0.05)
+								end
+							end)
+
+							-- Đợi 1s cho núp an toàn
+							task.wait(1)
+
+							-- Equip Special heal
+							if _G.RaidHealSpecial then
+								local HealSpecial = _G.RaidHealSpecial
+								local SkillKey = (HealSpecial == "Agnes Tachyon") and "c" or "v"
+
+								-- Equip Special
+								print("[AutoRaid] Equip " .. HealSpecial)
+								ReplicatedStorage.Remotes.Inventory:FireServer(HealSpecial)
+								task.wait(0.5)
+
+								-- Spam skill cho đến khi HP = 100%
+								while _G.RaidHealing and _G.AutoRaidRunning and hum.Health < hum.MaxHealth do
+									pcall(function()
+										ReplicatedStorage.Remotes.Action:FireServer(HealSpecial, SkillKey)
+									end)
+									task.wait(0.3)
+								end
+							else
+								-- Không chọn Special → đợi hồi máu tự nhiên
+								print("[AutoRaid] Không có Special heal, đợi hồi máu tự nhiên...")
+								repeat task.wait(0.5)
+								until not _G.AutoRaidRunning or hum.Health >= hum.MaxHealth
+							end
+
+							-- Hồi máu xong → equip lại Special cũ (Thanos nếu đang bật)
+							if _G.RaidUseThanos then
+								ReplicatedStorage.Remotes.Inventory:FireServer("Thanos")
+								task.wait(0.3)
+							end
+
+							-- Quay lại đánh
+							print("[AutoRaid] Hồi máu xong, quay lại đánh!")
+							_G.RaidHealing = false
+						end
+
+						-- Nếu đang heal thì skip đánh
+						if _G.RaidHealing then
+							return
+						end
+
+						-- ===== LOGIC I AM THANOS =====
+						if _G.RaidUseThanos and BossHpPercent <= 50 and not _G.RaidThanosUsed then
+							print("[AutoRaid] Boss dưới 50% HP, dùng Thanos F!")
+							_G.RaidThanosUsed = true
+
+							-- Equip Thanos
+							ReplicatedStorage.Remotes.Inventory:FireServer("Thanos")
+							task.wait(0.5)
+
+							-- Đứng gần boss để dùng F
+							if BossBacon and BossBacon:FindFirstChild("HumanoidRootPart") then
+								local bossHrp = BossBacon.HumanoidRootPart
+								Teleport(bossHrp.CFrame * CFrame.new(0, 5, 0))
+								task.wait(0.3)
+
+								-- Dùng F
+								ReplicatedStorage.Remotes.Action:FireServer("Thanos", "f")
+								print("[AutoRaid] Đã dùng Thanos F!")
+								task.wait(1)
+
+								-- Bay lên đầu boss đợi nó chết
+								repeat task.wait(0.1)
+									pcall(function()
+										if bossHrp and bossHrp.Parent and hrp and hrp.Parent then
+											hrp.CFrame = bossHrp.CFrame * CFrame.new(0, 200, 0)
+										end
+									end)
+								until not _G.AutoRaidRunning or not BossBacon.Parent or BossBacon.Humanoid.Health <= 0
+
+								print("[AutoRaid] Boss đã chết, reset Thanos flag")
+								_G.RaidThanosUsed = false
+								task.wait(2)
+							end
+							return
+						end
+
+						-- ===== ĐÁNH BOSS BÌNH THƯỜNG =====
 						-- Cục vàng 1
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
-							print("[AutoRaid] Đánh ArmorBall1")
-							local hrp = A1:FindFirstChild("HumanoidRootPart")
-							if hrp then
+							local a1hrp = A1:FindFirstChild("HumanoidRootPart")
+							if a1hrp then
 								A1.Humanoid.WalkSpeed = 0
-								A1.Humanoid.JumpPower = 0
 								repeat task.wait()
+									if _G.RaidHealing then break end
 									EquipWeapon()
 									AutoSkill()
 									Attack()
-									Teleport(hrp.CFrame * MethodFarm)
-								until not _G.AutoRaidRunning or not A1.Parent or A1.Humanoid.Health <= 0
+									Teleport(a1hrp.CFrame * MethodFarm)
+								until not _G.AutoRaidRunning or not A1.Parent or A1.Humanoid.Health <= 0 or _G.RaidHealing
 							end
 						end
 
 						-- Cục vàng 2
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
-						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
-							print("[AutoRaid] Đánh ArmorBall2")
-							local hrp = A2:FindFirstChild("HumanoidRootPart")
-							if hrp then
+						if _G.AutoRaidRunning and not _G.RaidHealing and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
+							local a2hrp = A2:FindFirstChild("HumanoidRootPart")
+							if a2hrp then
 								A2.Humanoid.WalkSpeed = 0
-								A2.Humanoid.JumpPower = 0
 								repeat task.wait()
+									if _G.RaidHealing then break end
 									EquipWeapon()
 									AutoSkill()
 									Attack()
-									Teleport(hrp.CFrame * MethodFarm)
-								until not _G.AutoRaidRunning or not A2.Parent or A2.Humanoid.Health <= 0
+									Teleport(a2hrp.CFrame * MethodFarm)
+								until not _G.AutoRaidRunning or not A2.Parent or A2.Humanoid.Health <= 0 or _G.RaidHealing
 							end
 						end
 
 						-- Boss
-						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
-						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
-							print("[AutoRaid] Đánh Boss Bacon Sad")
-							local hrp = BossBacon:FindFirstChild("HumanoidRootPart")
-							if hrp then
+						if _G.AutoRaidRunning and not _G.RaidHealing and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
+							local bossHrp = BossBacon.HumanoidRootPart
+							if bossHrp then
 								BossBacon.Humanoid.WalkSpeed = 0
-								BossBacon.Humanoid.JumpPower = 0
 								repeat task.wait()
+									if _G.RaidHealing then break end
 									EquipWeapon()
 									AutoSkill()
 									Attack()
-									Teleport(hrp.CFrame * MethodFarm)
-								until not _G.AutoRaidRunning or not BossBacon.Parent or BossBacon.Humanoid.Health <= 0
+									Teleport(bossHrp.CFrame * MethodFarm)
+								until not _G.AutoRaidRunning or not BossBacon.Parent or BossBacon.Humanoid.Health <= 0 or _G.RaidHealing
 							end
 						end
 
-						if _G.AutoRaidRunning then
+						if _G.AutoRaidRunning and not _G.RaidHealing then
 							task.wait(2)
 						end
 
 					else
 						-- ===== CHƯA VÀO MAP =====
 						print("[AutoRaid] Chưa vào map")
+						_G.RaidHealing = false
+						_G.RaidThanosUsed = false
 
-						-- Check Portal Gun
 						if GetItemAmount("Portal Gun") < Data.PortalCost then
 							Library:Notify({
 								Title = "❌ Không đủ Portal Gun",
@@ -2100,11 +2221,9 @@ task.spawn(function()
 							return
 						end
 
-						-- Check xem portal đã mở chưa
 						local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
 						if TPZone and TPZone:FindFirstChild("Hitbox") then
-							-- Đã có portal → teleport vào
-							print("[AutoRaid] Đã có portal, teleport vào Hitbox!")
+							print("[AutoRaid] Teleport vào portal!")
 							local Hitbox = TPZone.Hitbox
 							local StartTime = tick()
 							repeat task.wait(0.1)
@@ -2113,36 +2232,23 @@ task.spawn(function()
 								or not TPZone.Parent
 								or workspace:FindFirstChild("Boss Fight")
 								or tick() - StartTime > 10
-
-							if tick() - StartTime > 10 then
-								print("[AutoRaid] Teleport vào portal quá lâu, thử lại...")
-							else
-								print("[AutoRaid] Đã vào map boss!")
-							end
 						else
-							-- Chưa có portal → tới NPC fire
 							local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
 							if npc and npc:FindFirstChild("HumanoidRootPart") then
-								print("[AutoRaid] Tới NPC Open Raid")
 								Teleport(npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
 								task.wait(0.5)
 
-								-- Mở menu NPC
 								local prompt = npc.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt")
 								if prompt then
 									fireproximityprompt(prompt)
 									task.wait(0.8)
 								end
 
-								-- Fire Remote mở raid
 								print("[AutoRaid] Fire SpawnBossFight: " .. Data.Name)
 								local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
 								NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
-
-								-- Đợi portal xuất hiện
 								task.wait(1)
 
-								-- Teleport vào portal nếu đã có
 								local TPZone2 = workspace:FindFirstChild("TeleportBossFightZone")
 								if TPZone2 and TPZone2:FindFirstChild("Hitbox") then
 									print("[AutoRaid] Portal xuất hiện, teleport vào!")
@@ -2155,11 +2261,8 @@ task.spawn(function()
 										or workspace:FindFirstChild("Boss Fight")
 										or tick() - StartTime2 > 10
 								else
-									print("[AutoRaid] Portal chưa xuất hiện, đợi...")
 									task.wait(2)
 								end
-							else
-								print("[AutoRaid] Không tìm thấy NPC Open Raid!")
 							end
 						end
 					end
