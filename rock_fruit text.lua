@@ -422,8 +422,6 @@ local Thief = AllBoss:CreateSection("💸 Thief","Left")
 local Piccolo = AllBoss:CreateSection("🐉 Piccolo","Left")
 local SpawnedT = AllBoss:CreateSection("🔍 Spawned Check","Right")
 local Duck = AllBoss:CreateSection("🦆 Duck","Right")
-local DevilBoat = AllBoss:CreateSection("⛵ Devil Boat","Right")
--- Tạo Page mới cho Auto Raid Boss
 local RaidBossPage = Tab2:CreatePage("Auto Raid Boss")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
@@ -476,6 +474,7 @@ function UpdateRaidButton()
 		RaidBossBtn:SetTitle(Text)
 	end)
 end
+local DevilBoat = AllBoss:CreateSection("⛵ Devil Boat","Right")
 local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
 local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
@@ -695,6 +694,84 @@ Duck:Toggle({
 		if Value then
 			game:GetService("ReplicatedStorage").Modules.NetworkFramework.NetworkEvent:FireServer("fire",nil,"Quest","Cancel")
 		end
+	end
+})
+-- ===== AUTO RAID BOSS UI =====
+local RaidBossData = {
+	["Bacon of Grudge"] = {
+		Name = "Bacon of Grudge",
+		Reward = "Time Mystery Box x5, 7500 Diamond, Beli 50M, x3 Potion, Rroll Class + Raid Poiton x1",
+		PortalCost = 1,
+		Valid = true,
+	},
+	["??? (Raid 2)"] = {
+		Name = "???",
+		Reward = "SOON!! AND Just wait.",
+		PortalCost = 0,
+		Valid = false,
+	},
+	["??? (Raid 3)"] = {
+		Name = "???",
+		Reward = "SOON!! AND Just wait.",
+		PortalCost = 0,
+		Valid = false,
+	},
+}
+local RaidBossList = {"Bacon of Grudge", "??? (Raid 2)", "??? (Raid 3)"}
+
+_G.AutoRaidWho = nil
+_G.AutoRaidRunning = false
+
+RaidBossSection:Dropdown({
+	Title = "Auto Raid Who??",
+	Options = RaidBossList,
+	Multi = false,
+	Callback = function(Value)
+		_G.AutoRaidWho = Value
+		local Data = RaidBossData[Value]
+		if Data then
+			if RaidBossInfoParagraph then
+				RaidBossInfoParagraph:SetTitle("Name: " .. Data.Name)
+				RaidBossInfoParagraph:SetContent(
+					"Reward: " .. Data.Reward ..
+					"\n- " .. Data.PortalCost .. " Portal Gun"
+				)
+			end
+		end
+	end
+})
+
+local RaidBossInfoParagraph = RaidBossSection:Paragraph({
+	Title = "Name: ( chưa chọn )",
+	Content = "Please choose a Boss Raid!!"
+})
+
+RaidBossSection:Button({
+	Title = "Please choose a Boss Raid!! Which one do you want to do?",
+	Callback = function()
+		local Data = RaidBossData[_G.AutoRaidWho]
+		if not Data then
+			Library:Notify({
+				Title = "❌ Chưa chọn Raid",
+				Description = "Vui lòng chọn Boss Raid trước!",
+				Duration = 3
+			})
+			return
+		end
+		if not Data.Valid then
+			Library:Notify({
+				Title = "❌ Raid không hợp lệ",
+				Description = "NO RAID!!! Please select a valid cluster.",
+				Duration = 3
+			})
+			return
+		end
+		_G.AutoRaidRunning = not _G.AutoRaidRunning
+		Library:Notify({
+			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
+			Description = Data.Name,
+			Duration = 3
+		})
 	end
 })
 DevilBoat:Toggle({
