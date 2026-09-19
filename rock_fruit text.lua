@@ -2,6 +2,78 @@ repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer and game.P
 if game.PlaceId == 119091355492870 then
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- ===== UTILITY: EQUIP + USE SKILL =====
+local function EquipSpecialByName(SpecialName)
+	local char = LocalPlayer.Character
+	if not char then return false end
+	local hum = char:FindFirstChild("Humanoid")
+	if not hum then return false end
+
+	-- Check đã equip chưa
+	local current = LocalPlayer:GetAttribute("UseSpecial")
+	if current == SpecialName then
+		return true
+	end
+
+	-- Tìm trong Backpack
+	local bp = LocalPlayer:FindFirstChild("Backpack")
+	local tool = nil
+	if bp then
+		for _, v in pairs(bp:GetChildren()) do
+			if v:IsA("Tool") and v.Name == SpecialName then
+				tool = v
+				break
+			end
+		end
+	end
+
+	-- Nếu có trong Backpack → tự equip
+	if tool then
+		hum:EquipTool(tool)
+		task.wait(0.3)
+		return true
+	end
+
+	-- Nếu không có → fire Remote để game tự equip
+	ReplicatedStorage.Remotes.Inventory:FireServer(SpecialName)
+	task.wait(0.5)
+
+	-- Kiểm tra lại
+	local newCurrent = LocalPlayer:GetAttribute("UseSpecial")
+	if newCurrent == SpecialName then
+		return true
+	end
+
+	-- Thử tìm Tool trên Character
+	for _, v in pairs(char:GetChildren()) do
+		if v:IsA("Tool") and v.Name == SpecialName then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function UseSkillOnEquipped(SkillKey)
+	local char = LocalPlayer.Character
+	if not char then return end
+	for _, tool in pairs(char:GetChildren()) do
+		if tool:IsA("Tool") and tool:GetAttribute("Type") == "Special" then
+			ReplicatedStorage.Remotes.Action:FireServer(tool.Name, SkillKey)
+		end
+	end
+end
+
+local function CheckAndEquipSpecial(SpecialName)
+	-- Loop đợi equip thành công
+	for i = 1, 10 do
+		if EquipSpecialByName(SpecialName) then
+			return true
+		end
+		task.wait(0.3)
+	end
+	return false
+end
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
@@ -96,7 +168,6 @@ _G.Select_Guarantee_Moon = nil
 _G.Auto_Guarantee_Moon = false
 _G.RaidStopHP = 30
 _G.RaidHealSpecial = nil
-_G.RaidUseThanos = false 
 
 for ItemName in pairs(Economy) do
 	table.insert(SellItems,ItemName)
@@ -1984,44 +2055,84 @@ task.spawn(function()
 		end)
 	end)
 end)  
+-- ===== DEVIL BOAT FIXED =====
 task.spawn(function()
-	while task.wait() do
+	while task.wait(0.2) do
 		if _G.Auto_DevilBoat then
 			pcall(function()
+				local char = LocalPlayer.Character
+				local hum = char and char:FindFirstChild("Humanoid")
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if not hum or not hrp then return end
+
+				-- Check HP, nếu thấp thì dừng
+				if (hum.Health / hum.MaxHealth) * 100 <= 20 then
+					return
+				end
+
+				-- Tìm Devil Boat gần nhất
 				local Target
-				-- Tìm cả "Devil Boat" và "DevilBoat"
+				local MinDist = math.huge
 				for _, v in pairs(workspace.Mob:GetChildren()) do
 					if v:IsA("Model") 
 						and (v.Name == "Devil Boat" or v.Name == "DevilBoat")
 						and v:FindFirstChild("Humanoid") 
 						and v:FindFirstChild("HumanoidRootPart") 
 						and v.Humanoid.Health > 0 then
-						Target = v
-						break
+						local dist = (v.HumanoidRootPart.Position - hrp.Position).Magnitude
+						if dist < MinDist then
+							MinDist = dist
+							Target = v
+						end
 					end
 				end
+
 				if Target then
 					Target.Humanoid.WalkSpeed = 0
 					Target.Humanoid.JumpPower = 0
-					repeat task.wait()
-						EquipWeapon()
-						AutoSkill()
-						Attack()
-						Teleport(Target.HumanoidRootPart.CFrame * MethodFarm)
-					until not _G.Auto_DevilBoat or not Target.Parent or Target.Humanoid.Health <= 0
+
+					-- Anchor HRP ở vị trí trên trời so với Devil Boat
+					local bp = hrp:FindFirstChild("DevilBoatBP")
+					if not bp then
+						bp = Instance.new("BodyPosition")
+						bp.Name = "DevilBoatBP"
+						bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+						bp.P = 50000
+						bp.D = 1000
+						bp.Parent = hrp
+					end
+
+					local targetPos = Target.HumanoidRootPart.CFrame * MethodFarm
+					bp.Position = targetPos.Position
+
+					-- Đánh
+					EquipWeapon()
+					AutoSkill()
+					Attack()
+				else
+					-- Không có Devil Boat → xóa BP
+					if hrp:FindFirstChild("DevilBoatBP") then
+						hrp.DevilBoatBP:Destroy()
+					end
 				end
 			end)
+		else
+			-- Tắt Auto Devil Boat → cleanup
+			local char = LocalPlayer.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hrp and hrp:FindFirstChild("DevilBoatBP") then
+				hrp.DevilBoatBP:Destroy()
+			end
 		end
 	end
 end)
 
--- ===== AUTO RAID BOSS v9 - SAFE + SMOOTH =====
+-- ===== AUTO RAID BOSS v10 - FIX HEAL + THANOS =====
 _G.RaidHealing = false
 _G.RaidThanosUsed = false
 _G.RaidDying = false
 _G.RaidWaitingBossClear = false
 
--- Hàm teleport mượt
 local function SmoothTeleport(hrp, targetCFrame)
 	if not hrp or not hrp.Parent then return end
 	local bp = hrp:FindFirstChild("AutoRaidBP")
@@ -2053,8 +2164,8 @@ local function CloseRaidGUI()
 	end)
 end
 
--- Anchor nhân vật ở vị trí an toàn
-local function AnchorAt(hrp, cf)
+-- Anchor cứng - không di chuyển
+local function HardAnchor(hrp, cf)
 	if not hrp or not hrp.Parent then return end
 	hrp.Anchored = true
 	hrp.CFrame = cf
@@ -2069,7 +2180,7 @@ local function Unanchor(hrp)
 end
 
 task.spawn(function()
-	print("[AutoRaid] ✅ task.spawn v9 đã khởi động!")
+	print("[AutoRaid] ✅ task.spawn v10 đã khởi động!")
 	while task.wait(0.2) do
 		if _G.AutoRaidRunning then
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
@@ -2080,7 +2191,6 @@ task.spawn(function()
 					local hrp = char and char:FindFirstChild("HumanoidRootPart")
 					if not hum or not hrp then return end
 
-					-- ===== CHECK NHÂN VẬT CHẾT =====
 					if hum.Health <= 0 then
 						if not _G.RaidDying then
 							_G.RaidDying = true
@@ -2097,16 +2207,13 @@ task.spawn(function()
 					local bf = workspace:FindFirstChild("Boss Fight")
 					local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
 
-					-- ===== NẾU ĐANG ĐỢI BOSS BIẾN MẤT =====
 					if _G.RaidWaitingBossClear then
 						if baconFolder then
-							-- Boss vẫn còn → đợi
 							print("[AutoRaid] Boss vẫn còn, đợi...")
 							task.wait(1)
 							return
 						else
-							-- Boss đã biến mất → reset, mở raid mới
-							print("[AutoRaid] Boss đã biến mất, mở raid mới!")
+							print("[AutoRaid] Boss biến mất, mở raid mới!")
 							_G.RaidWaitingBossClear = false
 							task.wait(1)
 						end
@@ -2115,7 +2222,6 @@ task.spawn(function()
 					if baconFolder then
 						-- ===== TRONG MAP BOSS =====
 						local HpPercent = (hum.Health / hum.MaxHealth) * 100
-						-- Buffer 5% an toàn: nếu HP ≤ StopHP + 5 thì bắt đầu núp
 						local SafeThreshold = math.min(_G.RaidStopHP + 5, _G.RaidStopHP * 1.15)
 						local NeedHeal = HpPercent <= SafeThreshold
 
@@ -2131,17 +2237,11 @@ task.spawn(function()
 							print("[AutoRaid] HP thấp (" .. math.floor(HpPercent) .. "%), núp + heal...")
 
 							local Center = baconFolder:FindFirstChild("CenterBoss")
-							local HidePos
-							if Center then
-								HidePos = Center.CFrame * CFrame.new(0, 800, 0)
-							else
-								HidePos = CFrame.new(0, 1500, 0)
-							end
+							local HidePos = Center and (Center.CFrame * CFrame.new(0, 800, 0)) or CFrame.new(0, 1500, 0)
 
-							-- Núp ngay lập tức: anchor + teleport
-							AnchorAt(hrp, HidePos)
+							HardAnchor(hrp, HidePos)
 
-							-- Loop giữ vị trí núp + check HP mỗi 0.05s
+							-- Loop giữ vị trí núp
 							task.spawn(function()
 								while _G.RaidHealing and _G.AutoRaidRunning do
 									pcall(function()
@@ -2156,35 +2256,46 @@ task.spawn(function()
 
 							task.wait(0.5)
 
-							-- Heal
+							-- ===== EQUIP + HEAL =====
 							if _G.RaidHealSpecial then
 								local HealSpecial = _G.RaidHealSpecial
 								local SkillKey = (HealSpecial == "Agnes Tachyon") and "c" or "v"
 
-								print("[AutoRaid] Equip " .. HealSpecial)
-								ReplicatedStorage.Remotes.Inventory:FireServer(HealSpecial)
-								task.wait(0.5)
+								print("[AutoRaid] Đang equip " .. HealSpecial)
+								local EquipOK = CheckAndEquipSpecial(HealSpecial)
+								print("[AutoRaid] Equip result:", EquipOK)
 
-								local StartHeal = tick()
-								while _G.RaidHealing and _G.AutoRaidRunning and hum.Health < hum.MaxHealth and tick() - StartHeal < 30 do
-									pcall(function()
-										ReplicatedStorage.Remotes.Action:FireServer(HealSpecial, SkillKey)
-									end)
-									task.wait(0.3)
+								if EquipOK then
+									local StartHeal = tick()
+									local LastSkill = 0
+									while _G.RaidHealing and _G.AutoRaidRunning and hum.Health < hum.MaxHealth and tick() - StartHeal < 30 do
+										-- Spam skill mỗi 0.3s
+										if tick() - LastSkill >= 0.3 then
+											LastSkill = tick()
+											UseSkillOnEquipped(SkillKey)
+										end
+										task.wait(0.05)
+									end
+								else
+									print("[AutoRaid] ❌ Không thể equip " .. HealSpecial)
+									Library:Notify({
+										Title = "❌ Không thể equip " .. HealSpecial,
+										Description = "Kiểm tra lại Special trong túi đồ!",
+										Duration = 4
+									})
 								end
 							else
 								repeat task.wait(0.5)
 								until not _G.AutoRaidRunning or hum.Health >= hum.MaxHealth
 							end
 
+							-- Equip lại Thanos nếu cần
 							if _G.RaidUseThanos then
-								ReplicatedStorage.Remotes.Inventory:FireServer("Thanos")
-								task.wait(0.3)
+								CheckAndEquipSpecial("Thanos")
 							end
 
 							Unanchor(hrp)
 							RemoveSmoothTP(hrp)
-
 							print("[AutoRaid] Heal xong, quay lại đánh!")
 							_G.RaidHealing = false
 							return
@@ -2197,22 +2308,28 @@ task.spawn(function()
 							print("[AutoRaid] Boss dưới 50%, dùng Thanos F!")
 							_G.RaidThanosUsed = true
 
-							ReplicatedStorage.Remotes.Inventory:FireServer("Thanos")
-							task.wait(0.5)
+							-- Equip Thanos
+							local EquipOK = CheckAndEquipSpecial("Thanos")
+							print("[AutoRaid] Equip Thanos:", EquipOK)
 
-							if BossBacon and BossBacon:FindFirstChild("HumanoidRootPart") then
+							if EquipOK and BossBacon and BossBacon:FindFirstChild("HumanoidRootPart") then
 								local bossHrp = BossBacon.HumanoidRootPart
+
+								-- Bay tới gần boss
 								for _ = 1, 20 do
 									if not BossBacon.Parent or not hrp.Parent then break end
 									SmoothTeleport(hrp, bossHrp.CFrame * CFrame.new(0, 5, 0))
 									task.wait(0.03)
 								end
 
-								ReplicatedStorage.Remotes.Action:FireServer("Thanos", "f")
-								print("[AutoRaid] Đã dùng Thanos F!")
+								task.wait(0.3)
+								-- Dùng F
+								print("[AutoRaid] Dùng Thanos F!")
+								UseSkillOnEquipped("f")
 								task.wait(1)
 
-								AnchorAt(hrp, bossHrp.CFrame * CFrame.new(0, 250, 0))
+								-- Bay lên đầu boss đợi
+								HardAnchor(hrp, bossHrp.CFrame * CFrame.new(0, 250, 0))
 								repeat task.wait(0.1)
 									pcall(function()
 										if bossHrp.Parent then
@@ -2228,32 +2345,24 @@ task.spawn(function()
 							return
 						end
 
-						-- ===== CHECK ĐÃ VÀO MAP ĐƯỢC 5S CHƯA =====
+						-- ===== ĐỢI 5S SAU KHI VÀO MAP =====
 						if not _G.RaidMapEnterTime then
 							_G.RaidMapEnterTime = tick()
 							print("[AutoRaid] Vừa vào map, đợi 5s...")
-							-- Đứng yên ở vị trí an toàn trên trời
 							local Center = baconFolder:FindFirstChild("CenterBoss") or baconFolder:FindFirstChild("Center")
-							if Center then
-								AnchorAt(hrp, Center.CFrame * CFrame.new(0, 500, 0))
-							else
-								AnchorAt(hrp, CFrame.new(0, 1000, 0))
-							end
+							local SafePos = Center and (Center.CFrame * CFrame.new(0, 500, 0)) or CFrame.new(0, 1000, 0)
+							HardAnchor(hrp, SafePos)
 							return
 						end
 
 						if tick() - _G.RaidMapEnterTime < 5 then
-							-- Vẫn đang trong 5s đợi
-							local remain = 5 - (tick() - _G.RaidMapEnterTime)
-							print("[AutoRaid] Đợi " .. string.format("%.1f", remain) .. "s nữa...")
 							task.wait(0.5)
 							return
 						end
 
-						-- Hết 5s → unanchor và bắt đầu đánh
 						Unanchor(hrp)
 
-						-- ===== ĐÁNH BOSS (check HP mỗi loop) =====
+						-- ===== ĐÁNH BOSS =====
 						local function CheckAndAttack(TargetPart, TargetModel)
 							if not TargetPart or not TargetModel then return end
 							if not TargetModel:FindFirstChild("Humanoid") then return end
@@ -2273,26 +2382,22 @@ task.spawn(function()
 							until not _G.AutoRaidRunning
 						end
 
-						-- Cục vàng 1
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
 							CheckAndAttack(A1:FindFirstChild("HumanoidRootPart"), A1)
 						end
 
-						-- Cục vàng 2
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and not _G.RaidHealing and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
 							CheckAndAttack(A2:FindFirstChild("HumanoidRootPart"), A2)
 						end
 
-						-- Boss
 						if _G.AutoRaidRunning and not _G.RaidHealing and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
 							CheckAndAttack(BossBacon:FindFirstChild("HumanoidRootPart"), BossBacon)
 						end
 
-						-- Boss chết → reset
 						if not baconFolder:FindFirstChild("Boss Bacon Sad") or (BossBacon and BossBacon.Humanoid.Health <= 0) then
-							print("[AutoRaid] Boss đã chết, đợi map reset...")
+							print("[AutoRaid] Boss chết, đợi reset...")
 							_G.RaidMapEnterTime = nil
 							_G.RaidThanosUsed = false
 							task.wait(3)
@@ -2317,12 +2422,17 @@ task.spawn(function()
 
 						local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
 						if TPZone and TPZone:FindFirstChild("Hitbox") then
-							print("[AutoRaid] Portal có sẵn, đứng vào!")
+							print("[AutoRaid] Portal có sẵn, đứng yên trong portal!")
 							CloseRaidGUI()
 							local Hitbox = TPZone.Hitbox
 							local StartTime = tick()
-							repeat task.wait(0.05)
-								AnchorAt(hrp, Hitbox.CFrame)
+							-- Anchor cứng, đứng yên
+							HardAnchor(hrp, Hitbox.CFrame)
+							repeat task.wait(0.1)
+								if hrp and hrp.Parent then
+									hrp.CFrame = Hitbox.CFrame
+									hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+								end
 							until not _G.AutoRaidRunning
 								or not TPZone.Parent
 								or workspace:FindFirstChild("Boss Fight")
@@ -2331,7 +2441,6 @@ task.spawn(function()
 						else
 							local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
 							if npc and npc:FindFirstChild("HumanoidRootPart") then
-								-- Bay tới NPC mượt
 								for _ = 1, 30 do
 									if not npc.Parent or not hrp.Parent then break end
 									SmoothTeleport(hrp, npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
@@ -2355,11 +2464,15 @@ task.spawn(function()
 
 								local TPZone2 = workspace:FindFirstChild("TeleportBossFightZone")
 								if TPZone2 and TPZone2:FindFirstChild("Hitbox") then
-									print("[AutoRaid] Đứng vào portal!")
+									print("[AutoRaid] Đứng yên trong portal!")
 									local Hitbox2 = TPZone2.Hitbox
 									local StartTime2 = tick()
-									repeat task.wait(0.05)
-										AnchorAt(hrp, Hitbox2.CFrame)
+									HardAnchor(hrp, Hitbox2.CFrame)
+									repeat task.wait(0.1)
+										if hrp and hrp.Parent then
+											hrp.CFrame = Hitbox2.CFrame
+											hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+										end
 									until not _G.AutoRaidRunning
 										or not TPZone2.Parent
 										or workspace:FindFirstChild("Boss Fight")
@@ -2377,7 +2490,7 @@ task.spawn(function()
 	end
 end)
 
--- ===== CLEANUP =====
+-- Cleanup
 task.spawn(function()
 	while task.wait(0.5) do
 		if not _G.AutoRaidRunning then
@@ -2388,24 +2501,6 @@ task.spawn(function()
 					hrp.AutoRaidBP:Destroy()
 				end
 				if hrp.Anchored and not workspace:FindFirstChild("Boss Fight") then
-					hrp.Anchored = false
-				end
-			end
-		end
-	end
-end)
--- ===== CLEANUP khi tắt AutoRaid =====
-task.spawn(function()
-	while task.wait(0.5) do
-		if not _G.AutoRaidRunning then
-			local char = LocalPlayer.Character
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
-			if hrp then
-				if hrp:FindFirstChild("AutoRaidBP") then
-					hrp.AutoRaidBP:Destroy()
-				end
-				if hrp.Anchored and (workspace:FindFirstChild("Boss Fight") == nil) then
-					-- Chỉ bỏ anchor nếu đang ở ngoài map (tránh rớt khi tắt giữa raid)
 					hrp.Anchored = false
 				end
 			end
