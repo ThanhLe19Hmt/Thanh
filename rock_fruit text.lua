@@ -94,6 +94,9 @@ _G.Select_Guarantee = nil
 _G.Auto_Guarantee = false
 _G.Select_Guarantee_Moon = nil
 _G.Auto_Guarantee_Moon = false
+_G.RaidStopHP = 30
+_G.RaidHealSpecial = nil
+_G.RaidUseThanos = false
 
 for ItemName in pairs(Economy) do
 	table.insert(SellItems,ItemName)
@@ -399,6 +402,7 @@ local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
+local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings","Right")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -715,11 +719,68 @@ DevilBoat:Toggle({
 		_G.Auto_DevilBoat = Value
 	end
 })
+RaidSettingsCard:Dropdown({
+	Title = "It stops attacking when health is low, but at what percentage of health do you want it to stop?",
+	Options = {"Below 5% HP", "Below 10% HP", "Below 30% HP", "Below 50% HP"},
+	Multi = false,
+	Value = "Below 30% HP",
+	Callback = function(Value)
+		local num = tonumber(Value:match("%d+"))
+		if num then
+			_G.RaidStopHP = num
+			print("[RaidSettings] Stop HP =", num)
+		end
+	end
+})
+RaidSettingsCard:Dropdown({
+	Title = "Choose a Special to heal.",
+	Options = {"Agnes Tachyon", "Super Chicken"},
+	Multi = false,
+	Callback = function(Value)
+		local HttpService = game:GetService("HttpService")
+		local Inv = HttpService:JSONDecode(game.Players.LocalPlayer:GetAttribute("Inventory") or "{}")
+		local Have = Inv[Value] and (Inv[Value].amount or 0) > 0
+		if not Have then
+			Library:Notify({
+				Title = "❌ Không có Special",
+				Description = "Bạn không có " .. Value .. " nên tính năng này không thể sử dụng.",
+				Duration = 5
+			})
+			_G.RaidHealSpecial = nil
+			return
+		end
+		_G.RaidHealSpecial = Value
+		print("[RaidSettings] Heal Special =", Value)
+	end
+})
+local ThanosToggle = RaidSettingsCard:Toggle({
+	Title = "I AM Thanos",
+	Value = false,
+	Callback = function(Value)
+		local HttpService = game:GetService("HttpService")
+		local Inv = HttpService:JSONDecode(game.Players.LocalPlayer:GetAttribute("Inventory") or "{}")
+		local Have = Inv["Thanos"] and (Inv["Thanos"].amount or 0) > 0
+		if Value and not Have then
+			Library:Notify({
+				Title = "❌ Không có Thanos",
+				Description = "Bạn không có Special Thanos nên tính năng này không thể sử dụng.",
+				Duration = 5
+			})
+			_G.RaidUseThanos = false
+			return
+		end
+		_G.RaidUseThanos = Value
+		print("[RaidSettings] I AM Thanos =", Value)
+	end
+})
+local ThanosInfo = RaidSettingsCard:Paragraph({
+	Title = "",
+	Content = "Use the F ability to finish off the target when they are below 50% HP."
+})
 local Spawn_Status = SpawnedT:Paragraph({
 	Title = "Spawn Status",
 	Content = "N/A"
 })
-
 local Item_Auto = WeaponCraft:Paragraph({
     Title = "Item Requirements ( None )",
     Content = "N/A"
