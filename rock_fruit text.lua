@@ -2301,7 +2301,8 @@ task.spawn(function()
 		end)
 	end)
 end)  
-	task.spawn(function()
+-- ===== AUTO RAID BOSS LOGIC =====
+task.spawn(function()
 	while task.wait(0.2) do
 		if not _G.AutoRaidRunning then continue end
 		local Data = RaidBossData[_G.AutoRaidWho]
@@ -2319,16 +2320,18 @@ end)
 				return
 			end
 
-			-- 2. Kiểm tra đang ở trong map boss hay ngoài đảo
+			-- 2. Kiểm tra đang trong map boss hay ngoài đảo
 			local bf = workspace:FindFirstChild("Boss Fight")
 			local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
 
 			if baconFolder then
 				-- ===== ĐANG Ở TRONG MAP BOSS =====
+				print("[AutoRaid] Đang ở trong map boss")
 
 				-- 3. Đánh cục vàng 1
 				local A1 = baconFolder:FindFirstChild("ArmorBall1")
 				if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
+					print("[AutoRaid] Đánh ArmorBall1")
 					local hrp = A1:FindFirstChild("HumanoidRootPart")
 					if hrp then
 						A1.Humanoid.WalkSpeed = 0
@@ -2345,6 +2348,7 @@ end)
 				-- 4. Đánh cục vàng 2
 				local A2 = baconFolder:FindFirstChild("ArmorBall2")
 				if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
+					print("[AutoRaid] Đánh ArmorBall2")
 					local hrp = A2:FindFirstChild("HumanoidRootPart")
 					if hrp then
 						A2.Humanoid.WalkSpeed = 0
@@ -2361,6 +2365,7 @@ end)
 				-- 5. Đánh Boss
 				local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
 				if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
+					print("[AutoRaid] Đánh Boss Bacon Sad")
 					local hrp = BossBacon:FindFirstChild("HumanoidRootPart")
 					if hrp then
 						BossBacon.Humanoid.WalkSpeed = 0
@@ -2374,52 +2379,77 @@ end)
 					end
 				end
 
-				-- 6. Boss chết → đợi 2s rồi làm lại
+				-- 6. Đợi rồi làm lại
 				if _G.AutoRaidRunning then
 					task.wait(2)
 				end
-
 			else
 				-- ===== CHƯA VÀO MAP → ĐI MỞ RAID =====
+				print("[AutoRaid] Chưa vào map, đi tới NPC Open Raid")
 
-				-- 7. Teleport tới NPC Open Raid
 				local npc = workspace:FindFirstChild("NpcPrompt") and workspace.NpcPrompt:FindFirstChild("Open Raid")
-				if npc and npc:FindFirstChild("HumanoidRootPart") then
-					Teleport(npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
-					task.wait(0.5)
+				if not npc then
+					print("[AutoRaid] Không tìm thấy NPC Open Raid!")
+					return
+				end
+				if not npc:FindFirstChild("HumanoidRootPart") then
+					print("[AutoRaid] NPC không có HumanoidRootPart!")
+					return
+				end
 
-					-- 8. Fire ProximityPrompt
-					local prompt = npc.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt")
-						or npc:FindFirstChild("c3a8f2b", true)
-					if prompt then
-						fireproximityprompt(prompt)
-					end
-					task.wait(1)
+				-- 7. Teleport tới NPC
+				Teleport(npc.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
+				task.wait(0.5)
 
-					-- 9. Tìm GUI Raid và bấm Open cho Bacon of Grudge
-					local gui = LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_RaidBoss")
-					if gui and gui.Visible then
-						local sf = gui:FindFirstChild("ScrollingFrame")
-						if sf then
-							for _, item in pairs(sf:GetChildren()) do
-								if item.Name == "Template" and item:FindFirstChild("Main") then
-									local titleLbl = item.Main:FindFirstChild("TitleLabel")
-									if titleLbl and titleLbl.Text == "Bacon of Grudge" then
-										local btn = item.Main:FindFirstChild("TextButton")
-										if btn then
-											-- Fire TextButton qua VirtualUser (cách phổ biến)
-											local VirtualUser = game:GetService("VirtualUser")
-											local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
-											VirtualUser:CaptureController()
-											VirtualUser:ClickButton1(pos)
-										end
-										break
-									end
-								end
+				-- 8. Fire ProximityPrompt
+				local prompt = npc.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt")
+					or npc:FindFirstChild("c3a8f2b", true)
+				if prompt then
+					print("[AutoRaid] Fire ProximityPrompt")
+					fireproximityprompt(prompt)
+				else
+					print("[AutoRaid] Không tìm thấy ProximityPrompt!")
+				end
+				task.wait(1)
+
+				-- 9. Bấm nút Open trong GUI
+				local gui = LocalPlayer.PlayerGui.HUD.Main:FindFirstChild("Frame_RaidBoss")
+				if not gui or not gui.Visible then
+					print("[AutoRaid] GUI Frame_RaidBoss chưa mở!")
+					return
+				end
+
+				local sf = gui:FindFirstChild("ScrollingFrame")
+				if not sf then
+					print("[AutoRaid] Không có ScrollingFrame!")
+					return
+				end
+
+				local clicked = false
+				for _, item in pairs(sf:GetChildren()) do
+					if item.Name == "Template" and item:FindFirstChild("Main") then
+						local titleLbl = item.Main:FindFirstChild("TitleLabel")
+						if titleLbl and titleLbl.Text == "Bacon of Grudge" then
+							local btn = item.Main:FindFirstChild("TextButton")
+							if btn then
+								print("[AutoRaid] Đã tìm thấy nút Open, đang click...")
+								-- Cách 1: VirtualUser
+								local VirtualUser = game:GetService("VirtualUser")
+								local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
+								VirtualUser:CaptureController()
+								VirtualUser:ClickButton1(pos)
+								clicked = true
 							end
+							break
 						end
 					end
 				end
+
+				if not clicked then
+					print("[AutoRaid] Không tìm thấy Template Bacon of Grudge!")
+				end
+
+				task.wait(2)
 			end
 		end)
 	end
