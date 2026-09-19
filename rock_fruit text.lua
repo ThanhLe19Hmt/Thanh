@@ -45,6 +45,7 @@ local SpawnList = {
 	["Devil Boat"] = "Devil Boat"
 }
 
+
 -- Default Global Settings
 _G.MainWeapon = "Melee"
 _G.Select_EquipWeapon = {}
@@ -359,7 +360,15 @@ LocalPlayer.Idled:Connect(function()
 end)
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/znesr99/gui/refs/heads/main/MarvenRizLib.lua"))()
 local MySaveManager = Library.SaveManager
-
+-- ===== DEBUG START =====
+task.spawn(function()
+	local dem = 0
+	while task.wait(2) do
+		dem = dem + 1
+		print("[DEBUG #" .. dem .. "] AutoRaidRunning =", _G.AutoRaidRunning, "| AutoRaidWho =", _G.AutoRaidWho)
+	end
+end)
+-- ===== DEBUG END =====
 local Window = Library:CreateWindow({
     Title = "MarvenRiz Hub",
     Subtitle = "Map : Rock Fruit",
@@ -388,8 +397,8 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
+local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -403,6 +412,19 @@ local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
+
+local Tab3 = Window:CreateTab("Other", false, false)
+local SItem = Tab3:CreatePage("Sell Item / Status")
+local RandomM = Tab3:CreatePage("Random Chest")
+local SellCard = SItem:CreateSection("💰 Auto Sell","Left")
+local StatusCard = SItem:CreateSection("📊 Status","Right")
+local DiamondChest =RandomM:CreateSection("💎 Diamond Chest","Right")
+local GuaranteeDiamond = RandomM:CreateSection("🎖️ Guarantee Gem Point","Right")
+local MoonChest = RandomM:CreateSection("🌙 Moon Chest","Left")
+local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point","Left")
+
+local ConfigTab = Window:CreateTab("Config", false, false)
+
 -- ===== AUTO RAID BOSS UI =====
 local RaidBossData = {
 	["Bacon of Grudge"] = {
@@ -453,23 +475,15 @@ RaidBossCard:Dropdown({
 RaidBossCard:Button({
 	Title = "Please choose a Boss Raid!! Which one do you want to do?",
 	Callback = function()
-		print("[RaidBtn] Click! AutoRaidWho =", _G.AutoRaidWho)
 		local Data = RaidBossData[_G.AutoRaidWho]
 		if not Data then
-			print("[RaidBtn] Data = nil")
-			Library:Notify({...})
+			Library:Notify({
+				Title = "❌ Chưa chọn Raid",
+				Description = "Please choose a Boss Raid!! Which one do you want to do?",
+				Duration = 3
+			})
 			return
 		end
-		if not Data.Valid then
-			print("[RaidBtn] Invalid")
-			Library:Notify({...})
-			return
-		end
-		_G.AutoRaidRunning = not _G.AutoRaidRunning
-		print("[RaidBtn] AutoRaidRunning =", _G.AutoRaidRunning)
-		Library:Notify({...})
-	end
-})
 		if not Data.Valid then
 			Library:Notify({
 				Title = "❌ Raid không hợp lệ",
@@ -486,18 +500,6 @@ RaidBossCard:Button({
 		})
 	end
 })
-
-local Tab3 = Window:CreateTab("Other", false, false)
-local SItem = Tab3:CreatePage("Sell Item / Status")
-local RandomM = Tab3:CreatePage("Random Chest")
-local SellCard = SItem:CreateSection("💰 Auto Sell","Left")
-local StatusCard = SItem:CreateSection("📊 Status","Right")
-local DiamondChest =RandomM:CreateSection("💎 Diamond Chest","Right")
-local GuaranteeDiamond = RandomM:CreateSection("🎖️ Guarantee Gem Point","Right")
-local MoonChest = RandomM:CreateSection("🌙 Moon Chest","Left")
-local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point","Left")
-
-local ConfigTab = Window:CreateTab("Config", false, false)
 
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
