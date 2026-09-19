@@ -453,15 +453,23 @@ RaidBossCard:Dropdown({
 RaidBossCard:Button({
 	Title = "Please choose a Boss Raid!! Which one do you want to do?",
 	Callback = function()
+		print("[RaidBtn] Click! AutoRaidWho =", _G.AutoRaidWho)
 		local Data = RaidBossData[_G.AutoRaidWho]
 		if not Data then
-			Library:Notify({
-				Title = "❌ Chưa chọn Raid",
-				Description = "Please choose a Boss Raid!! Which one do you want to do?",
-				Duration = 3
-			})
+			print("[RaidBtn] Data = nil")
+			Library:Notify({...})
 			return
 		end
+		if not Data.Valid then
+			print("[RaidBtn] Invalid")
+			Library:Notify({...})
+			return
+		end
+		_G.AutoRaidRunning = not _G.AutoRaidRunning
+		print("[RaidBtn] AutoRaidRunning =", _G.AutoRaidRunning)
+		Library:Notify({...})
+	end
+})
 		if not Data.Valid then
 			Library:Notify({
 				Title = "❌ Raid không hợp lệ",
