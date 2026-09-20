@@ -396,8 +396,8 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
+local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -1954,12 +1954,12 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== AUTO RAID BOSS v15 - SMOOTH ROTATION =====
+-- ===== AUTO RAID BOSS v16 - FIX RƠI =====
 _G.RaidWaitingClear = false
 _G.RaidDying = false
 
 task.spawn(function()
-	print("[AutoRaid] ✅ task.spawn v15 đã khởi động!")
+	print("[AutoRaid] ✅ task.spawn v16 đã khởi động!")
 	while task.wait(0.3) do
 		if _G.AutoRaidRunning then
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
@@ -2025,7 +2025,7 @@ task.spawn(function()
 							end
 						end
 
-						-- Hàm di chuyển mượt — KHÔNG set hrp.CFrame
+						-- Hàm di chuyển — P/D CAO để không rơi
 						local function MoveTo(targetPart, offsetY, offsetX)
 							if not hrp or not hrp.Parent or not targetPart then return end
 
@@ -2034,14 +2034,15 @@ task.spawn(function()
 								bp = Instance.new("BodyPosition")
 								bp.Name = "AutoRaidBP"
 								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-								bp.P = 20000
-								bp.D = 800
+								bp.P = 100000   -- CAO để giữ vị trí
+								bp.D = 3000     -- CAO để không rung
 								bp.Parent = hrp
 							end
 
 							SetupOrientation()
 							local ao = hrp:FindFirstChild("AutoRaidAO")
 
+							-- Vị trí: trên đầu mục tiêu, offset X để lệch mép
 							local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
 							bp.Position = targetPos
 
@@ -2065,12 +2066,16 @@ task.spawn(function()
 							targetModel.Humanoid.WalkSpeed = 0
 							targetModel.Humanoid.JumpPower = 0
 
+							-- Tạo BodyPosition + AlignOrientation ngay từ đầu
+							MoveTo(targetPart, offsetY, offsetX)
+
 							repeat task.wait(0.1)
 								if not _G.AutoRaidRunning then break end
 								if not targetModel.Parent then break end
 								if targetModel.Humanoid.Health <= 0 then break end
 								if hum.Health <= 0 then break end
 
+								-- Update vị trí (mỗi frame, nhưng AlignOrientation giữ rotation mượt)
 								MoveTo(targetPart, offsetY, offsetX)
 
 								EquipWeapon()
@@ -2101,7 +2106,7 @@ task.spawn(function()
 							local bossHrp = BossBacon:FindFirstChild("HumanoidRootPart")
 							if bossHrp then
 								print("[AutoRaid] Đánh Boss Bacon Sad")
-								AttackTarget(bossHrp, BossBacon, 45, 5)
+								AttackTarget(bossHrp, BossBacon, 55, 5)
 							end
 						end
 
