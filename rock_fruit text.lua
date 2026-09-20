@@ -557,16 +557,6 @@ ShopRaidCard:Button({
 local AutoBuyItem = nil
 _G.AutoBuyRunning = false
 
-local AutoBuyDropdown = ShopRaidCard:Dropdown({
-	Title = "Auto Buy Item",
-	Options = {"( đang load... )"},
-	Multi = false,
-	Callback = function(Value)
-		AutoBuyItem = Value
-		print("[AutoBuy] Chọn:", Value)
-	end
-})
-
 ShopRaidCard:Toggle({
 	Title = "Auto Buy (tự mua khi có hàng)",
 	Value = false,
