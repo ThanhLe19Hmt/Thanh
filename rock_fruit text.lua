@@ -166,72 +166,125 @@ for i,data in ipairs(Quest_Module) do
 	}
 end
 
-local function UseThanosF()
+local function EquipThanosFromInventory()
 	local char = LocalPlayer.Character
-	if not char then return false end
+	if not char then return false, "Không có Character" end
+	local hum = char:FindFirstChild("Humanoid")
+	if not hum then return false, "Không có Humanoid" end
 
-	-- Đợi Tool Thanos thật sự trên Character
-	local thanosTool = nil
-	for i = 1, 20 do
-		for _, tool in pairs(char:GetChildren()) do
-			if tool:IsA("Tool") and tool.Name == "Thanos" then
-				thanosTool = tool
+	-- Check Inventory có Thanos không
+	local HttpService = game:GetService("HttpService")
+	local ok, Inv = pcall(function()
+		return HttpService:JSONDecode(LocalPlayer:GetAttribute("Inventory") or "{}")
+	end)
+	Inv = ok and Inv or {}
+
+	if not (Inv["Thanos"] and (Inv["Thanos"].amount or Inv["Thanos"].Amount or 0) > 0) then
+		return false, "Không có Thanos trong Inventory"
+	end
+
+	-- Bước 1: Nếu Tool Thanos đã trên Character → OK
+	for _, v in pairs(char:GetChildren()) do
+		if v:IsA("Tool") and v.Name == "Thanos" then
+			print("[Thanos] Đã có trên Character")
+			return true
+		end
+	end
+
+	-- Bước 2: Nếu Tool Thanos có trong Backpack → equip trực tiếp
+	local bp = LocalPlayer:FindFirstChild("Backpack")
+	local tool = nil
+	if bp then
+		for _, v in pairs(bp:GetChildren()) do
+			if v:IsA("Tool") and v.Name == "Thanos" then
+				tool = v
 				break
 			end
 		end
-		if thanosTool then break end
-		task.wait(0.1)
 	end
 
-	if not thanosTool then
-		print("[Thanos] ❌ Không tìm thấy Tool Thanos trên Character")
-		return false
+	-- Bước 3: Nếu chưa có trong Backpack → fire Remote để game tạo Tool
+	if not tool then
+		print("[Thanos] Fire Inventory:FireServer('Thanos')")
+		pcall(function()
+			ReplicatedStorage.Remotes.Inventory:FireServer("Thanos")
+		end)
+
+		-- Đợi Tool xuất hiện trong Backpack
+		for i = 1, 15 do
+			task.wait(0.1)
+			if bp then
+				for _, v in pairs(bp:GetChildren()) do
+					if v:IsA("Tool") and v.Name == "Thanos" then
+						tool = v
+						break
+					end
+				end
+			end
+			if tool then break end
+		end
 	end
 
-	-- Thử 4 cách fire
-	local success = false
+	if not tool then
+		return false, "Tool Thanos không vào Backpack"
+	end
 
-	-- Cách 1: Remotes.Action
-	pcall(function()
-		ReplicatedStorage.Remotes.Action:FireServer("Thanos", "f")
-		success = true
-	end)
-	task.wait(0.1)
-
-	-- Cách 2: Tool:Activate()
-	pcall(function()
-		thanosTool:Activate()
-		success = true
-	end)
-	task.wait(0.1)
-
-	-- Cách 3: Fire qua NetworkEvent
-	pcall(function()
-		ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Action", "Thanos", "f")
-		success = true
-	end)
-	task.wait(0.1)
-
-	-- Cách 4: Fire qua Remotes.System
-	pcall(function()
-		ReplicatedStorage.Remotes.System:FireServer("Skill", "Thanos", "f")
+	-- Bước 4: Equip Tool lên Character
+	print("[Thanos] Tìm thấy Tool, equip...")
+	local equipOK = pcall(function()
+		hum:EquipTool(tool)
 	end)
 
-	print("[Thanos] Đã fire F:", success)
-	return success
+	if not equipOK then
+		-- Fallback: đổi Parent trực tiếp
+		pcall(function()
+			tool.Parent = char
+		end)
+	end
+
+	task.wait(0.3)
+
+	-- Bước 5: Verify
+	for _, v in pairs(char:GetChildren()) do
+		if v:IsA("Tool") and v.Name == "Thanos" then
+			print("[Thanos] ✅ Đã equip thành công")
+			return true
+		end
+	end
+
+	return false, "Không thể equip Tool lên Character"
 end
 
 -- ===== HÀM DÙNG SKILL F TRÊN THANOS =====
 local function UseThanosF()
 	local char = LocalPlayer.Character
-	if not char then return end
-	for _, tool in pairs(char:GetChildren()) do
-		if tool:IsA("Tool") and tool.Name == "Thanos" then
-			ReplicatedStorage.Remotes.Action:FireServer("Thanos", "f")
-			return true
+	if not char then return false end
+
+	-- Check Tool Thanos trên Character
+	local thanosTool = nil
+	for _, v in pairs(char:GetChildren()) do
+		if v:IsA("Tool") and v.Name == "Thanos" then
+			thanosTool = v
+			break
 		end
 	end
-	return false
+
+	if not thanosTool then
+		print("[Thanos] ❌ Tool Thanos không trên Character")
+		return false
+	end
+
+	-- Fire skill F
+	print("[Thanos] Fire skill F...")
+	pcall(function()
+		ReplicatedStorage.Remotes.Action:FireServer("Thanos", "f")
+	end)
+	task.wait(0.1)
+	pcall(function()
+		thanosTool:Activate()
+	end)
+
+	return true
 end
 
 local GetQuest_Level = function(My_level)
@@ -2165,47 +2218,53 @@ task.spawn(function()
 								-- ===== THANOS =====
 								local BossHpPercent = (BossBacon.Humanoid.Health / BossBacon.Humanoid.MaxHealth) * 100
 								if _G.RaidUseThanos and BossHpPercent <= 50 and not _G.RaidThanosUsed then
-									print("[AutoRaid] Boss dưới 50%, chuẩn bị dùng Thanos F!")
+									if _G.RaidUseThanos and BossHpPercent <= 50 and not _G.RaidThanosUsed then
+	print("[AutoRaid] Boss dưới 50%, chuẩn bị dùng Thanos F!")
+	_G.RaidThanosUsed = true
 
-									-- Xóa BodyPosition tạm
-									if hrp:FindFirstChild("AutoRaidBP") then
-										hrp.AutoRaidBP:Destroy()
-									end
+	-- Xóa BodyPosition tạm
+	if hrp:FindFirstChild("AutoRaidBP") then
+		hrp.AutoRaidBP:Destroy()
+	end
 
-									-- Equip Thanos
-									local ok, err = EquipThanosFromInventory()
-									print("[AutoRaid] Equip Thanos:", ok, err)
+	-- Bước 1: Equip Thanos
+	local ok, err = EquipThanosFromInventory()
+	print("[AutoRaid] Equip Thanos:", ok, err)
 
-									if ok then
-										-- Bay tới gần boss trước khi dùng F
-										local bossPos = bossHrp.Position
-										local myPos = hrp.Position
-										local dir = (myPos - bossPos).Unit
-										local attackPos = bossPos + (dir * 8) + Vector3.new(0, 5, 0)
-										hrp.CFrame = CFrame.new(attackPos, bossPos)
-										hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-										task.wait(0.3)
+	if ok then
+		-- Bước 2: Bay tới gần boss
+		local bossPos = bossHrp.Position
+		local myPos = hrp.Position
+		local dir = (myPos - bossPos).Unit
+		local attackPos = bossPos + (dir * 10) + Vector3.new(0, 5, 0)
+		hrp.CFrame = CFrame.new(attackPos, bossPos)
+		hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+		task.wait(0.5)
 
-										-- Dùng F
-										local used = UseThanosF()
-										print("[AutoRaid] Thanos F used:", used)
+		-- Bước 3: Dùng F (thử 3 lần)
+		local used = false
+		for i = 1, 3 do
+			used = UseThanosF()
+			print("[AutoRaid] Thanos F lần", i, ":", used)
+			task.wait(0.5)
+			-- Check boss HP giảm chưa
+			if BossBacon.Humanoid.Health < BossBacon.Humanoid.MaxHealth * 0.5 then
+				break
+			end
+		end
 
-										-- Nếu fire thất bại → thử lại
-										if not used then
-											task.wait(0.3)
-											UseThanosF()
-										end
+		task.wait(1.5)
 
-										_G.RaidThanosUsed = true
-										task.wait(1.5)
-									else
-										Library:Notify({
-											Title = "❌ Không dùng được Thanos",
-											Description = tostring(err),
-											Duration = 5
-										})
-									end
-								end
+		-- Equip lại vũ khí chính
+		EquipWeapon()
+	else
+		Library:Notify({
+			Title = "❌ Không dùng được Thanos",
+			Description = tostring(err),
+			Duration = 5
+		})
+	end
+end
 
 								print("[AutoRaid] Đánh Boss Bacon Sad")
 								SafeAttack(bossHrp, BossBacon, 40, 5)
