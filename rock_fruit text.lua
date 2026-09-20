@@ -2010,7 +2010,7 @@ task.spawn(function()
 								bp = Instance.new("BodyPosition")
 								bp.Name = "AutoRaidBP"
 								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-								bp.P = 5000   -- Thấp hơn → mượt hơn
+								bp.P = 3000   -- Thấp hơn → mượt hơn
 								bp.D = 500
 								bp.Parent = hrp
 							end
