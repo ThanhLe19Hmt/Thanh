@@ -396,8 +396,8 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
+local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -1954,14 +1954,13 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== AUTO RAID BOSS v10 - FIX PORTAL + THANOS =====
+-- ===== AUTO RAID BOSS v15 - SMOOTH ROTATION =====
 _G.RaidWaitingClear = false
 _G.RaidDying = false
-_G.RaidThanosUsed = false
 
 task.spawn(function()
-	print("[AutoRaid] ✅ task.spawn v10 đã khởi động!")
-	while task.wait(0.2) do
+	print("[AutoRaid] ✅ task.spawn v15 đã khởi động!")
+	while task.wait(0.3) do
 		if _G.AutoRaidRunning then
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
 			if Data and Data.Valid then
@@ -1971,15 +1970,14 @@ task.spawn(function()
 					local hrp = char and char:FindFirstChild("HumanoidRootPart")
 					if not hum or not hrp then return end
 
-					-- ===== CHECK CHẾT =====
 					if hum.Health <= 0 then
 						if not _G.RaidDying then
 							_G.RaidDying = true
 							_G.RaidWaitingClear = true
 							print("[AutoRaid] Nhân vật chết → đợi boss biến mất...")
-							if hrp:FindFirstChild("AutoRaidBP") then
-								hrp.AutoRaidBP:Destroy()
-							end
+							if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 						end
 						return
 					else
@@ -1989,7 +1987,6 @@ task.spawn(function()
 					local bf = workspace:FindFirstChild("Boss Fight")
 					local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
 
-					-- ===== ĐANG ĐỢI BOSS BIẾN MẤT =====
 					if _G.RaidWaitingClear then
 						if baconFolder then
 							print("[AutoRaid] Đợi boss biến mất...")
@@ -1998,7 +1995,6 @@ task.spawn(function()
 						else
 							print("[AutoRaid] Boss biến mất, mở raid mới!")
 							_G.RaidWaitingClear = false
-							_G.RaidThanosUsed = false
 							task.wait(1)
 						end
 					end
@@ -2006,8 +2002,62 @@ task.spawn(function()
 					if baconFolder then
 						-- ===== TRONG MAP BOSS =====
 
-						-- Hàm đánh an toàn bằng BodyPosition
-						local function SafeAttack(targetPart, targetModel, offsetY, offsetX)
+						-- Tạo AlignOrientation
+						local function SetupOrientation()
+							local ao = hrp:FindFirstChild("AutoRaidAO")
+							if not ao then
+								ao = Instance.new("AlignOrientation")
+								ao.Name = "AutoRaidAO"
+								ao.Mode = Enum.OrientationAlignmentMode.OneAttachment
+								ao.MaxTorque = math.huge
+								ao.Responsiveness = 30
+								ao.RigidityEnabled = false
+
+								local att = hrp:FindFirstChild("AutoRaidAtt")
+								if not att then
+									att = Instance.new("Attachment")
+									att.Name = "AutoRaidAtt"
+									att.Parent = hrp
+								end
+
+								ao.Attachment0 = att
+								ao.Parent = hrp
+							end
+						end
+
+						-- Hàm di chuyển mượt — KHÔNG set hrp.CFrame
+						local function MoveTo(targetPart, offsetY, offsetX)
+							if not hrp or not hrp.Parent or not targetPart then return end
+
+							local bp = hrp:FindFirstChild("AutoRaidBP")
+							if not bp then
+								bp = Instance.new("BodyPosition")
+								bp.Name = "AutoRaidBP"
+								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+								bp.P = 20000
+								bp.D = 800
+								bp.Parent = hrp
+							end
+
+							SetupOrientation()
+							local ao = hrp:FindFirstChild("AutoRaidAO")
+
+							local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
+							bp.Position = targetPos
+
+							if ao then
+								local lookAt = CFrame.lookAt(targetPos, targetPart.Position)
+								ao.CFrame = lookAt
+							end
+						end
+
+						local function CleanupBP()
+							if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
+						end
+
+						local function AttackTarget(targetPart, targetModel, offsetY, offsetX)
 							if not targetPart or not targetModel then return end
 							if not targetModel:FindFirstChild("Humanoid") then return end
 							if targetModel.Humanoid.Health <= 0 then return end
@@ -2015,48 +2065,34 @@ task.spawn(function()
 							targetModel.Humanoid.WalkSpeed = 0
 							targetModel.Humanoid.JumpPower = 0
 
-							local bp = hrp:FindFirstChild("AutoRaidBP")
-							if not bp then
-								bp = Instance.new("BodyPosition")
-								bp.Name = "AutoRaidBP"
-								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-								bp.P = 50000
-								bp.D = 1500
-								bp.Parent = hrp
-							end
-
-							repeat task.wait(0.05)
+							repeat task.wait(0.1)
 								if not _G.AutoRaidRunning then break end
 								if not targetModel.Parent then break end
 								if targetModel.Humanoid.Health <= 0 then break end
 								if hum.Health <= 0 then break end
 
-								local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
-								bp.Position = targetPos
-								hrp.CFrame = CFrame.new(targetPos, targetPart.Position)
+								MoveTo(targetPart, offsetY, offsetX)
 
 								EquipWeapon()
 								AutoSkill()
 								Attack()
 							until false
 
-							if hrp:FindFirstChild("AutoRaidBP") then
-								hrp.AutoRaidBP:Destroy()
-							end
+							CleanupBP()
 						end
 
 						-- ===== CỤC VÀNG 1 =====
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall1")
-							SafeAttack(A1:FindFirstChild("HumanoidRootPart"), A1, 25, 0)
+							AttackTarget(A1:FindFirstChild("HumanoidRootPart"), A1, 25, 0)
 						end
 
 						-- ===== CỤC VÀNG 2 =====
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall2")
-							SafeAttack(A2:FindFirstChild("HumanoidRootPart"), A2, 25, 0)
+							AttackTarget(A2:FindFirstChild("HumanoidRootPart"), A2, 25, 0)
 						end
 
 						-- ===== BOSS BACON =====
@@ -2064,70 +2100,21 @@ task.spawn(function()
 						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
 							local bossHrp = BossBacon:FindFirstChild("HumanoidRootPart")
 							if bossHrp then
-								-- ===== CHECK THANOS =====
-								local useThanos = BossBacon.Humanoid.Health <= 75000
-								if _G.RaidUseThanos and useThanos and not _G.RaidThanosUsed then
-									print("[AutoRaid] Boss dưới 75000 HP, dùng Thanos F!")
-									_G.RaidThanosUsed = true
-
-									-- Xóa BodyPosition tạm
-									if hrp:FindFirstChild("AutoRaidBP") then
-										hrp.AutoRaidBP:Destroy()
-									end
-
-									-- Bước 1: Equip Thanos
-									local ok, err = EquipThanosFromInventory()
-									print("[AutoRaid] Equip Thanos:", ok, err)
-
-									if ok then
-										-- Bước 2: Bay tới gần boss
-										local bossPos = bossHrp.Position
-										local myPos = hrp.Position
-										local dir = (myPos - bossPos).Unit
-										local attackPos = bossPos + (dir * 10) + Vector3.new(0, 5, 0)
-										hrp.CFrame = CFrame.new(attackPos, bossPos)
-										hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-										task.wait(0.5)
-
-										-- Bước 3: Dùng F (thử 5 lần)
-										local used = false
-										for i = 1, 5 do
-											used = UseThanosF()
-											print("[AutoRaid] Thanos F lần", i, ":", used)
-											task.wait(0.5)
-											if BossBacon.Humanoid.Health < 75000 then
-												break
-											end
-										end
-
-										task.wait(1.5)
-										EquipWeapon()
-									else
-										Library:Notify({
-											Title = "❌ Không dùng được Thanos",
-											Description = tostring(err),
-											Duration = 5
-										})
-									end
-								end
-
 								print("[AutoRaid] Đánh Boss Bacon Sad")
-								SafeAttack(bossHrp, BossBacon, 40, 5)
+								AttackTarget(bossHrp, BossBacon, 45, 5)
 							end
 						end
 
 						if _G.AutoRaidRunning then
 							task.wait(2)
 						end
-
 					else
 						-- ===== CHƯA VÀO MAP =====
 						print("[AutoRaid] Chưa vào map")
-						_G.RaidThanosUsed = false
 
-						if hrp:FindFirstChild("AutoRaidBP") then
-							hrp.AutoRaidBP:Destroy()
-						end
+						if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+						if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
+						if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 
 						if GetItemAmount("Portal Gun") < Data.PortalCost then
 							Library:Notify({
@@ -2139,7 +2126,6 @@ task.spawn(function()
 							return
 						end
 
-						-- ===== CHECK PORTAL CÓ SẴN =====
 						local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
 						if TPZone and TPZone:FindFirstChild("Hitbox") then
 							print("[AutoRaid] Vào portal (đợi vô hạn)")
@@ -2149,22 +2135,18 @@ task.spawn(function()
 							local LastPrint = 0
 							repeat task.wait(0.1)
 								if not _G.AutoRaidRunning then break end
-
 								if hrp.Parent then
 									hrp.CFrame = Hitbox.CFrame
 									hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 								end
-
 								if tick() - LastPrint > 3 then
 									LastPrint = tick()
 									print("[AutoRaid] Đang đợi portal teleport...")
 								end
-
 								if not TPZone.Parent then
 									print("[AutoRaid] Cổng biến mất, thoát loop")
 									break
 								end
-
 								if workspace:FindFirstChild("Boss Fight") then
 									print("[AutoRaid] Đã vào map!")
 									break
@@ -2177,11 +2159,9 @@ task.spawn(function()
 								print("[AutoRaid] Đã vào map, đợi 3s...")
 								task.wait(3)
 							else
-								print("[AutoRaid] Chưa vào map, thử lại...")
 								task.wait(1)
 							end
 						else
-							-- ===== FIRE MỞ PORTAL =====
 							print("[AutoRaid] Fire SpawnBossFight: " .. Data.Name)
 							local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
 							NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
@@ -2196,22 +2176,18 @@ task.spawn(function()
 								local LastPrint2 = 0
 								repeat task.wait(0.1)
 									if not _G.AutoRaidRunning then break end
-
 									if hrp.Parent then
 										hrp.CFrame = Hitbox2.CFrame
 										hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 									end
-
 									if tick() - LastPrint2 > 3 then
 										LastPrint2 = tick()
 										print("[AutoRaid] Đang đợi portal teleport...")
 									end
-
 									if not TPZone2.Parent then
 										print("[AutoRaid] Cổng biến mất, thoát loop")
 										break
 									end
-
 									if workspace:FindFirstChild("Boss Fight") then
 										print("[AutoRaid] Đã vào map!")
 										break
@@ -2232,6 +2208,24 @@ task.spawn(function()
 						end
 					end
 				end)
+			end
+		end
+	end
+end)
+
+-- Cleanup khi tắt AutoRaid
+task.spawn(function()
+	while task.wait(0.5) do
+		if not _G.AutoRaidRunning then
+			local char = LocalPlayer.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+				if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
+				if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
+				if hrp.Anchored and not workspace:FindFirstChild("Boss Fight") then
+					hrp.Anchored = false
+				end
 			end
 		end
 	end
