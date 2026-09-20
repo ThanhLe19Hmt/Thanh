@@ -482,7 +482,7 @@ RaidBossCard:Button({
 		if not Data then
 			Library:Notify({
 				Title = "❌ Chưa chọn Raid",
-				Description = "Please choose a Boss Raid!! Which one do you want to do?",
+				Description = "Raid Now!! Bacon of Gruld You DIE!!",
 				Duration = 3
 			})
 			return
