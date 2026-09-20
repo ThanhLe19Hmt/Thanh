@@ -519,7 +519,7 @@ local SelectedShopItem = nil
 local ShopItemDropdown = nil
 local LastShopItemsStr = ""
 
--- Dropdown chọn item để mua
+-- ===== 1. DROPDOWN CHỌN ITEM =====
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
 	if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
@@ -530,7 +530,7 @@ local function RefreshShopDropdown(items)
 	end
 
 	ShopItemDropdown = ShopRaidCard:Dropdown({
-		Title = "Chọn item để mua",
+		Title = "Chọn Items để mua",
 		Options = items,
 		Multi = false,
 		Callback = function(Value)
@@ -539,9 +539,9 @@ local function RefreshShopDropdown(items)
 	})
 end
 
--- Nút BUY
+-- ===== 2. NÚT BUY =====
 ShopRaidCard:Button({
-	Title = "BUY!",
+	Title = "BUY!!",
 	Callback = function()
 		if not SelectedShopItem then
 			Library:Notify({Title = "❌ Chưa chọn item", Description = "Vui lòng chọn item trước!", Duration = 3})
@@ -553,14 +553,50 @@ ShopRaidCard:Button({
 	end
 })
 
--- ===== AUTO BUY UI =====
+-- ===== AUTO BUY =====
 local AutoBuyItem = nil
 _G.AutoBuyRunning = false
+_G.AutoBuyLoaded = false
 
+local AutoBuyDropdown = nil
+local LastAllShopItemsStr = ""
+
+-- ===== 3. DROPDOWN AUTO BUY ITEMS =====
+local function RefreshAutoBuyDropdown(allItems)
+	local allItemsStr = table.concat(allItems, ",")
+	if allItemsStr == LastAllShopItemsStr and AutoBuyDropdown then return end
+	LastAllShopItemsStr = allItemsStr
+
+	if AutoBuyDropdown then
+		pcall(function() AutoBuyDropdown:Destroy() end)
+	end
+
+	AutoBuyDropdown = ShopRaidCard:Dropdown({
+		Title = "Auto Buy Items",
+		Options = allItems,
+		Multi = false,
+		Callback = function(Value)
+			AutoBuyItem = Value
+			print("[AutoBuy] Chọn:", Value)
+		end
+	})
+end
+
+-- Tạo dropdown lần đầu
+RefreshAutoBuyDropdown({"( đang load... )"})
+
+-- ===== 4. TOGGLE AUTO BUY =====
 ShopRaidCard:Toggle({
-	Title = "Auto Buy (tự mua khi có hàng)",
+	Title = "Auto Buy",
 	Value = false,
 	Callback = function(Value)
+		-- Không notify lần đầu (khi script load)
+		if not _G.AutoBuyLoaded then
+			_G.AutoBuyLoaded = true
+			_G.AutoBuyRunning = Value
+			return
+		end
+
 		if Value and not AutoBuyItem then
 			Library:Notify({Title = "❌ Chưa chọn item", Description = "Chọn item Auto Buy trước!", Duration = 3})
 			_G.AutoBuyRunning = false
@@ -644,7 +680,6 @@ task.spawn(function()
 	local LastRaidPoint = ""
 	local LastRestock = ""
 	local LastShopItemInfo = ""
-	local LastAllShopItemsStr = ""
 
 	while task.wait(0.5) do
 		pcall(function()
@@ -653,7 +688,6 @@ task.spawn(function()
 			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
 			if not shop then return end
 
-			-- Update RaidPoint + Restock
 			local rpLbl = shop:FindFirstChild("RaidPoint")
 			local resetLbl = shop:FindFirstChild("Reset")
 			if rpLbl and resetLbl then
@@ -669,7 +703,6 @@ task.spawn(function()
 
 			local sf = shop:FindFirstChild("ScrollingFrame")
 			if sf then
-				-- Update item list dropdown chính
 				local items = {}
 				for _, item in pairs(sf:GetChildren()) do
 					if item:IsA("Frame") then
@@ -684,7 +717,6 @@ task.spawn(function()
 					RefreshShopDropdown(items)
 				end
 
-				-- Update thông tin item đang chọn (giới hạn mua realtime)
 				if SelectedShopItem then
 					for _, item in pairs(sf:GetChildren()) do
 						if item:IsA("Frame") then
@@ -705,24 +737,9 @@ task.spawn(function()
 					end
 				end
 
-				-- Update dropdown Auto Buy
+				-- Update Auto Buy dropdown
 				local allItems = GetAllShopItems()
-				local allItemsStr = table.concat(allItems, ",")
-				if LastAllShopItemsStr ~= allItemsStr then
-					LastAllShopItemsStr = allItemsStr
-					if AutoBuyDropdown then
-						pcall(function() AutoBuyDropdown:Destroy() end)
-					end
-					AutoBuyDropdown = ShopRaidCard:Dropdown({
-						Title = "Auto Buy Item",
-						Options = allItems,
-						Multi = false,
-						Callback = function(Value)
-							AutoBuyItem = Value
-							print("[AutoBuy] Chọn:", Value)
-						end
-					})
-				end
+				RefreshAutoBuyDropdown(allItems)
 			end
 		end)
 	end
@@ -752,10 +769,8 @@ task.spawn(function()
 								local amtText = amountLbl.Text or ""
 								local cur = tonumber(amtText:match("^(%d+)"))
 								if cur and cur > 0 then
-									local ok = BuyShopItem(AutoBuyItem)
-									if ok then
-										print("[AutoBuy] Mua:", AutoBuyItem, "| Còn:", cur)
-									end
+									BuyShopItem(AutoBuyItem)
+									print("[AutoBuy] Mua:", AutoBuyItem, "| Còn:", cur)
 									task.wait(0.3)
 								end
 							end
@@ -2283,6 +2298,7 @@ task.spawn(function()
 						end
 
 						local function AttackTarget(targetPart, targetModel, offsetY, offsetX)
+						
 							if not targetPart or not targetModel then return end
 							if not targetModel:FindFirstChild("Humanoid") then return end
 							if targetModel.Humanoid.Health <= 0 then return end
@@ -2453,6 +2469,23 @@ task.spawn(function()
 					hrp.Anchored = false
 				end
 			end
+		end
+	end
+end)
+-- ===== CANCEL DASH CHO CIDBETA =====
+task.spawn(function()
+	while task.wait() do
+		if _G.AutoRaidRunning then
+			pcall(function()
+				local char = LocalPlayer.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					-- Giữ velocity chỉ theo trục Y (không cho lướt X/Z)
+					local v = hrp.AssemblyLinearVelocity
+					hrp.AssemblyLinearVelocity = Vector3.new(0, v.Y, 0)
+					hrp.AssemblyAngularVelocity = Vector3.zero
+				end
+			end)
 		end
 	end
 end)
