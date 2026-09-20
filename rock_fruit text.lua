@@ -2221,17 +2221,14 @@ task.spawn(function()
 	print("[AutoRaid] Boss dưới 50%, chuẩn bị dùng Thanos F!")
 	_G.RaidThanosUsed = true
 
-	-- Xóa BodyPosition tạm
 	if hrp:FindFirstChild("AutoRaidBP") then
 		hrp.AutoRaidBP:Destroy()
 	end
 
-	-- Bước 1: Equip Thanos
 	local ok, err = EquipThanosFromInventory()
 	print("[AutoRaid] Equip Thanos:", ok, err)
 
 	if ok then
-		-- Bước 2: Bay tới gần boss
 		local bossPos = bossHrp.Position
 		local myPos = hrp.Position
 		local dir = (myPos - bossPos).Unit
@@ -2240,7 +2237,6 @@ task.spawn(function()
 		hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 		task.wait(0.5)
 
-		-- Bước 3: Dùng F (thử 3 lần)
 		local used = false
 		for i = 1, 3 do
 			used = UseThanosF()
