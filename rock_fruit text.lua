@@ -411,6 +411,8 @@ local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
+local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid","Left")
+local ShopRaidInfoCard = RaidBossPage:CreateSection("📊 Shop Info","Right")
 
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
@@ -505,9 +507,6 @@ RaidBossCard:Button({
 		})
 	end
 })
--- ===== SHOP RAID UI =====
-local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid","Left")
-local ShopRaidInfoCard = RaidBossPage:CreateSection("📊 Shop Info","Right")
 
 -- Paragraph info RaidPoint + Restock
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
