@@ -1941,54 +1941,93 @@ task.spawn(function()
 				local Player = game.Players.LocalPlayer
 				local Character = Player.Character
 				if not Character then return end
+				
+				local hum = Character:FindFirstChild("Humanoid")
+				local hrp = Character:FindFirstChild("HumanoidRootPart")
+				if not hum or not hrp then return end
+
+				-- Check HP thấp → ngừng đánh, đợi hồi máu
+				local HpPercent = (hum.Health / hum.MaxHealth) * 100
+				if HpPercent < _G.HealthPercent then
+					-- Bay lên trời an toàn (cao hơn 200 studs)
+					hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + 200, hrp.Position.Z)
+					task.wait(0.5)
+					return
+				end
+
 				local Dungeon
 				local DungeonId = Character:GetAttribute("Dungeon")
 				local GuiService = game:GetService("GuiService")
-				local UserInputService = game:GetService("UserInputService")
 				local VirtualInputManager = game:GetService("VirtualInputManager")
-				if game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("WaveUI") and game:GetService("Players").LocalPlayer.PlayerGui.WaveUI.AutoSkip.BackgroundColor3 == Color3.fromRGB(255,69,69) then
-					GuiService.SelectedObject = game:GetService("Players").LocalPlayer.PlayerGui.WaveUI.AutoSkip
+
+				-- Auto skip wave
+				if Player.PlayerGui:FindFirstChild("WaveUI") and Player.PlayerGui.WaveUI.AutoSkip.BackgroundColor3 == Color3.fromRGB(255,69,69) then
+					GuiService.SelectedObject = Player.PlayerGui.WaveUI.AutoSkip
 					task.wait(0.1)
 					VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
 					VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
 					task.wait(0.1)
 					GuiService.SelectedObject = nil
 				end
+
 				if DungeonId then
 					Dungeon = workspace.DungeonMap:FindFirstChild("Dungeon_" .. DungeonId)
 				end
+
 				if Dungeon then
+					-- Tìm mob gần nhất
+					local Target, MinDist = nil, math.huge
 					for _, Mob in ipairs(workspace.Mob:GetChildren()) do
-						if Mob:IsA("Model") and Mob:FindFirstChild("Humanoid") and Mob:FindFirstChild("HumanoidRootPart") and Mob.Humanoid.Health > 0 then
-							local Distance = (Mob.HumanoidRootPart.Position - Dungeon:GetPivot().Position).Magnitude
-							if Distance <= 250 then
-								Mob.Humanoid.WalkSpeed = 0
-								Mob.Humanoid.JumpPower = 0
-								repeat
-									task.wait()
-									local Humanoid = Character:FindFirstChild("Humanoid")
-									if Humanoid and Humanoid.Health <= Humanoid.MaxHealth * (_G.HealthPercent or 30 / 80) then
-										repeat
-											task.wait()
-											Teleport(Dungeon:GetPivot() * CFrame.new(0,120,0))
-										until not _G.Auto_Dungeon or Humanoid.Health >= Humanoid.MaxHealth
-									end
-									EquipWeapon()
-									AutoSkill()
-									Attack()
-									Teleport(Mob.HumanoidRootPart.CFrame * MethodFarm)
-								until not _G.Auto_Dungeon or not Mob.Parent or Mob.Humanoid.Health <= 0
+						if Mob:IsA("Model") 
+							and Mob:FindFirstChild("Humanoid") 
+							and Mob:FindFirstChild("HumanoidRootPart") 
+							and Mob.Humanoid.Health > 0 then
+							local dist = (Mob.HumanoidRootPart.Position - Dungeon:GetPivot().Position).Magnitude
+							if dist <= 250 and dist < MinDist then
+								MinDist = dist
+								Target = Mob
 							end
 						end
 					end
+
+					if Target then
+						local tHrp = Target.HumanoidRootPart
+						Target.Humanoid.WalkSpeed = 0
+						Target.Humanoid.JumpPower = 0
+
+						-- Đánh mượt bằng CFrame trực tiếp
+						local bp = hrp:FindFirstChild("DungeonBP")
+						if not bp then
+							bp = Instance.new("BodyPosition")
+							bp.Name = "DungeonBP"
+							bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+							bp.P = 100000
+							bp.D = 3000
+							bp.Parent = hrp
+						end
+
+						local targetPos = tHrp.Position + Vector3.new(0, 25, 0)
+						bp.Position = targetPos
+						hrp.CFrame = CFrame.new(targetPos, tHrp.Position)
+
+						EquipWeapon()
+						AutoSkill()
+						Attack()
+					else
+						-- Không có mob → xóa BP
+						if hrp:FindFirstChild("DungeonBP") then
+							hrp.DungeonBP:Destroy()
+						end
+					end
 				else
+					-- Chưa vào dungeon
 					local TeleportZone = workspace:FindFirstChild("TeleportDungeonZone")
 					if TeleportZone and TeleportZone:FindFirstChild("Hitbox") then
-						Teleport(TeleportZone.Hitbox.CFrame)
+						hrp.CFrame = TeleportZone.Hitbox.CFrame
 					else
 						if GetItemAmount("Orb Dungeon") >= _G.Dungeon_UseValue then
 							local NPC = workspace.NpcPrompt["Open Dungeon"].HumanoidRootPart
-							Teleport(NPC.CFrame * CFrame.new(0,5,0))
+							hrp.CFrame = NPC.CFrame * CFrame.new(0,5,0)
 							game:GetService("ReplicatedStorage").Modules.NetworkFramework.NetworkEvent:FireServer("fire",nil,"SpawnDungeon",_G.Dungeon_UseValue)
 						else
 							local Diamond = Player:GetAttribute("Diamond") or 0
@@ -2009,25 +2048,20 @@ task.spawn(function()
 								if not Frame.Visible then
 									local npc = quest.Quest:FindFirstChild("HumanoidRootPart")
 									if npc then
-										Teleport(npc.CFrame * MethodFarm)
+										hrp.CFrame = npc.CFrame * MethodFarm
 										task.wait(0.3)
 										local pro = npc:FindFirstChildOfClass("ProximityPrompt")
-										if pro then
-											fireproximityprompt(pro)
-										end
+										if pro then fireproximityprompt(pro) end
 									end
 								else
 									for _, v in ipairs(workspace.Mob:GetChildren()) do
 										if v:IsA("Model") and v.Name == quest.Monster and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") and v.Humanoid.Health > 0 then
 											v.Humanoid.WalkSpeed = 0
 											v.Humanoid.JumpPower = 0
-											repeat
-												task.wait()
-												EquipWeapon()
-												AutoSkill()
-												Attack()
-												Teleport(v.HumanoidRootPart.CFrame * MethodFarm)
-											until not _G.Auto_Dungeon or v.Humanoid.Health <= 0
+											hrp.CFrame = v.HumanoidRootPart.CFrame * MethodFarm
+											EquipWeapon()
+											AutoSkill()
+											Attack()
 											break
 										end
 									end
@@ -2040,7 +2074,6 @@ task.spawn(function()
 		end, print)
 	end
 end)
-
 
 task.spawn(function()
 	while task.wait() do
