@@ -411,7 +411,6 @@ local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
-local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings","Right")
 
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
@@ -504,34 +503,6 @@ RaidBossCard:Button({
 			Duration = 3
 		})
 	end
-})
-
--- Toggle I AM Thanos
-RaidSettingsCard:Toggle({
-	Title = "I AM Thanos",
-	Value = false,
-	Callback = function(Value)
-		local HttpService = game:GetService("HttpService")
-		local Inv = HttpService:JSONDecode(game.Players.LocalPlayer:GetAttribute("Inventory") or "{}")
-		local Have = Inv["Thanos"] and (Inv["Thanos"].amount or Inv["Thanos"].Amount or 0) > 0
-		if Value and not Have then
-			Library:Notify({
-				Title = "❌ Không có Thanos",
-				Description = "Bạn không có Special Thanos trong Inventory nên tính năng này không thể sử dụng.",
-				Duration = 5
-			})
-			_G.RaidUseThanos = false
-			return
-		end
-		_G.RaidUseThanos = Value
-		print("[RaidSettings] I AM Thanos =", Value)
-	end
-})
-
--- Info Paragraph I AM Thanos
-RaidSettingsCard:Paragraph({
-	Title = "",
-	Content = "Use the F ability to finish off the target when they are below 50% HP."
 })
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
