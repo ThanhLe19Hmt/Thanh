@@ -2218,7 +2218,6 @@ task.spawn(function()
 								-- ===== THANOS =====
 								local BossHpPercent = (BossBacon.Humanoid.Health / BossBacon.Humanoid.MaxHealth) * 100
 								if _G.RaidUseThanos and BossHpPercent <= 50 and not _G.RaidThanosUsed then
-									if _G.RaidUseThanos and BossHpPercent <= 50 and not _G.RaidThanosUsed then
 	print("[AutoRaid] Boss dưới 50%, chuẩn bị dùng Thanos F!")
 	_G.RaidThanosUsed = true
 
@@ -2247,15 +2246,12 @@ task.spawn(function()
 			used = UseThanosF()
 			print("[AutoRaid] Thanos F lần", i, ":", used)
 			task.wait(0.5)
-			-- Check boss HP giảm chưa
 			if BossBacon.Humanoid.Health < BossBacon.Humanoid.MaxHealth * 0.5 then
 				break
 			end
 		end
 
 		task.wait(1.5)
-
-		-- Equip lại vũ khí chính
 		EquipWeapon()
 	else
 		Library:Notify({
@@ -2266,8 +2262,8 @@ task.spawn(function()
 	end
 end
 
-								print("[AutoRaid] Đánh Boss Bacon Sad")
-								SafeAttack(bossHrp, BossBacon, 40, 5)
+print("[AutoRaid] Đánh Boss Bacon Sad")
+SafeAttack(bossHrp, BossBacon, 40, 5)
 							end
 						end
 
