@@ -511,56 +511,68 @@ local ShopItemList = {}
 local SelectedShopItem = nil
 
 local ShopItemDropdown = ShopRaidCard:Dropdown({
-    Title = "Chọn item để mua",
-    Options = ShopItemList,
-    Multi = false,
-    Callback = function(Value)
-        SelectedShopItem = Value
-    end
+	Title = "Chọn item để mua",
+	Options = {"( đang load... )"},
+	Multi = false,
+	Callback = function(Value)
+		SelectedShopItem = Value
+	end
 })
-
--- Button BUY
 ShopRaidCard:Button({
-    Title = "BUY!",
-    Callback = function()
-        if not SelectedShopItem then
-            Library:Notify({
-                Title = "❌ Chưa chọn item",
-                Description = "Chọn item trước khi mua!",
-                Duration = 3
-            })
-            return
-        end
-        -- Tìm và fire nút Purchase
-        local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-        if hud and hud:FindFirstChild("Main") then
-            local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-            if shop then
-                local sf = shop:FindFirstChild("ScrollingFrame")
-                if sf then
-                    for _, item in pairs(sf:GetChildren()) do
-                        if item:IsA("Frame") and item.Name == SelectedShopItem then
-                            local purchase = item:FindFirstChild("Purchase")
-                            if purchase and purchase:IsA("TextButton") then
-                                if firesignal then
-                                    firesignal(purchase.MouseButton1Click)
-                                else
-                                    -- Fallback
-                                    purchase:Activate()
-                                end
-                                Library:Notify({
-                                    Title = "✅ Đã mua",
-                                    Description = SelectedShopItem,
-                                    Duration = 3
-                                })
-                            end
-                            break
-                        end
-                    end
-                end
-            end
-        end
-    end
+	Title = "BUY!",
+	Callback = function()
+		if not SelectedShopItem or SelectedShopItem == "( đang load... )" then
+			Library:Notify({
+				Title = "❌ Chưa chọn item",
+				Description = "Vui lòng chọn item trước!",
+				Duration = 3
+			})
+			return
+		end
+
+		-- Check hết hàng
+		local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+		if hud and hud:FindFirstChild("Main") then
+			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
+			if shop then
+				local sf = shop:FindFirstChild("ScrollingFrame")
+				if sf then
+					for _, item in pairs(sf:GetChildren()) do
+						if item:IsA("Frame") then
+							local label = item:FindFirstChild("Label")
+							if label and label.Text == SelectedShopItem then
+								local outstock = item:FindFirstChild("Outstock")
+								if outstock and outstock.Visible then
+									Library:Notify({
+										Title = "❌ Hết hàng",
+										Description = SelectedShopItem .. " đã hết hàng!",
+										Duration = 3
+									})
+									return
+								end
+								break
+							end
+						end
+					end
+				end
+			end
+		end
+
+		-- Fire Remote mua
+		local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
+		NetworkEvent:FireServer("fire", nil, "buy_raidshop", SelectedShopItem)
+		print("[ShopRaid] BUY:", SelectedShopItem)
+
+		Library:Notify({
+			Title = "✅ Đã mua",
+			Description = SelectedShopItem,
+			Duration = 3
+		})
+	end
+})
+local ShopInfoPara = ShopRaidInfoCard:Paragraph({
+	Title = "RaidPoint: ( đang load... )",
+	Content = "Restock In: ( đang load... )"
 })
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
@@ -2252,43 +2264,48 @@ task.spawn(function()
 	end
 end)
 task.spawn(function()
-    while task.wait(3) do
-        pcall(function()
-            local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-            if hud and hud:FindFirstChild("Main") then
-                local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-                if shop then
-                    -- Update info
-                    local rpLbl = shop:FindFirstChild("RaidPoint")
-                    local resetLbl = shop:FindFirstChild("Reset")
-                    if rpLbl and resetLbl then
-                        ShopInfoPara:SetTitle(rpLbl.Text)
-                        ShopInfoPara:SetContent(resetLbl.Text)
-                    end
-                    
-                    -- Update item list
-                    local sf = shop:FindFirstChild("ScrollingFrame")
-                    if sf then
-                        local items = {}
-                        for _, item in pairs(sf:GetChildren()) do
-                            if item:IsA("Frame") then
-                                local label = item:FindFirstChild("Label")
-                                local price = item:FindFirstChild("Price")
-                                local amount = item:FindFirstChild("Amount")
-                                if label and price and amount then
-                                    table.insert(items, label.Text .. " | " .. price.Text .. " | " .. amount.Text)
-                                end
-                            end
-                        end
-                        -- Update dropdown
-                        -- (không chắc library hỗ trợ update options, cần test)
-                    end
-                end
-            end
-        end)
-    end
+	while task.wait(3) do
+		pcall(function()
+			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+			if not hud or not hud:FindFirstChild("Main") then return end
+			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
+			if not shop then return end
+
+			-- Update RaidPoint + Restock
+			local rpLbl = shop:FindFirstChild("RaidPoint")
+			local resetLbl = shop:FindFirstChild("Reset")
+			if rpLbl and resetLbl then
+				ShopInfoPara:SetTitle(rpLbl.Text)
+				ShopInfoPara:SetContent(resetLbl.Text)
+			end
+
+			-- Update item list
+			local sf = shop:FindFirstChild("ScrollingFrame")
+			if sf then
+				local items = {}
+				for _, item in pairs(sf:GetChildren()) do
+					if item:IsA("Frame") then
+						local label = item:FindFirstChild("Label")
+						if label and label.Text and label.Text ~= "" and label.Text ~= "Item" then
+							table.insert(items, label.Text)
+						end
+					end
+				end
+
+				-- Update dropdown nếu có thay đổi
+				if #items > 0 then
+					local cur = table.concat(items, ",")
+					if _G.ShopItemListStr ~= cur then
+						_G.ShopItemListStr = cur
+						pcall(function()
+							ShopItemDropdown:UpdateOptions(items)
+						end)
+					end
+				end
+			end
+		end)
+	end
 end)
--- Loop create buttons
 local CreatedButtons = {}
 
 task.spawn(function()
