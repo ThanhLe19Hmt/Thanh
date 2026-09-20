@@ -2125,6 +2125,7 @@ task.spawn(function()
 	print("[AutoRaid] ✅ task.spawn v10 đã khởi động!")
 	while task.wait(0.2) do
 		if _G.AutoRaidRunning then
+			print("[AutoRaid DEBUG] AutoRaidRunning=true, Who=", _G.AutoRaidWho, "UseThanos=", _G.RaidUseThanos, "ThanosUsed=", _G.RaidThanosUsed)
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
 			if Data and Data.Valid then
 				pcall(function()
