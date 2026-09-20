@@ -393,10 +393,10 @@ local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 
-local Tab2 = Window:CreateTab("Main", false, false)
+local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop Raid!!")
+local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!")
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
@@ -411,8 +411,6 @@ local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
-local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid","Left")
-local ShopRaidInfoCard = RaidBossPage:CreateSection("📊 Shop Info","Right")
 
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
@@ -449,6 +447,7 @@ local RaidBossData = {
 
 _G.AutoRaidWho = nil
 _G.AutoRaidRunning = false
+_G.RaidUseThanos = false
 
 -- Info Paragraph
 local RaidBossInfo = RaidBossInfoCard:Paragraph({
@@ -501,122 +500,6 @@ RaidBossCard:Button({
 		Library:Notify({
 			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
 			Description = Data.Name,
-			Duration = 3
-		})
-	end
-})
-
-local ShopInfoPara = ShopRaidInfoCard:Paragraph({
-	Title = "RaidPoint: ( đang load... )",
-	Content = "Restock In: ( đang load... )"
-})
-
--- Paragraph info item đã chọn
-local ShopItemInfo = ShopRaidInfoCard:Paragraph({
-	Title = "Item: ( chưa chọn )",
-	Content = "Chọn item từ dropdown để xem thông tin"
-})
-local SelectedShopItem = nil
-local ShopItemDropdown = nil
-local LastShopItemsStr = ""
-local function RefreshShopDropdown(items)
-	local itemsStr = table.concat(items, ",")
-	if itemsStr == LastShopItemsStr and ShopItemDropdown then
-		return
-	end
-	LastShopItemsStr = itemsStr
-
-	if ShopItemDropdown then
-		pcall(function()
-			ShopItemDropdown:Destroy()
-		end)
-	end
-
-	ShopItemDropdown = ShopRaidCard:Dropdown({
-		Title = "Chọn item để mua",
-		Options = items,
-		Multi = false,
-		Callback = function(Value)
-			SelectedShopItem = Value
-
-			-- Update thông tin item
-			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-			if hud and hud:FindFirstChild("Main") then
-				local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-				if shop then
-					local sf = shop:FindFirstChild("ScrollingFrame")
-					if sf then
-						for _, item in pairs(sf:GetChildren()) do
-							if item:IsA("Frame") then
-								local label = item:FindFirstChild("Label")
-								if label and label.Text == Value then
-									local priceLbl = item:FindFirstChild("Price")
-									local amountLbl = item:FindFirstChild("Amount")
-									local price = priceLbl and priceLbl.Text or "?"
-									local amount = amountLbl and amountLbl.Text or "?"
-									ShopItemInfo:SetTitle("Item: " .. Value)
-									ShopItemInfo:SetContent(
-										"Price: " .. price ..
-										"\nPurchase limit: " .. amount
-									)
-									return
-								end
-							end
-						end
-					end
-				end
-			end
-		end
-	})
-end
-ShopRaidCard:Button({
-	Title = "BUY!",
-	Callback = function()
-		if not SelectedShopItem then
-			Library:Notify({
-				Title = "❌ Chưa chọn item",
-				Description = "Vui lòng chọn item trước!",
-				Duration = 3
-			})
-			return
-		end
-
-		-- Check hết hàng
-		local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-		if hud and hud:FindFirstChild("Main") then
-			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-			if shop then
-				local sf = shop:FindFirstChild("ScrollingFrame")
-				if sf then
-					for _, item in pairs(sf:GetChildren()) do
-						if item:IsA("Frame") then
-							local label = item:FindFirstChild("Label")
-							if label and label.Text == SelectedShopItem then
-								local outstock = item:FindFirstChild("Outstock")
-								if outstock and outstock.Visible then
-									Library:Notify({
-										Title = "❌ Hết hàng",
-										Description = SelectedShopItem .. " đã hết hàng!",
-										Duration = 3
-									})
-									return
-								end
-								break
-							end
-						end
-					end
-				end
-			end
-		end
-
-		-- Fire Remote mua
-		local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
-		NetworkEvent:FireServer("fire", nil, "buy_raidshop", SelectedShopItem)
-		print("[ShopRaid] BUY:", SelectedShopItem)
-
-		Library:Notify({
-			Title = "✅ Đã mua",
-			Description = SelectedShopItem,
 			Duration = 3
 		})
 	end
@@ -2308,52 +2191,6 @@ task.spawn(function()
 				end
 			end
 		end
-	end
-end)
-task.spawn(function()
-	local LastRaidPoint = ""
-	local LastRestock = ""
-
-	while task.wait(0.5) do
-		pcall(function()
-			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-			if not hud or not hud:FindFirstChild("Main") then return end
-			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-			if not shop then return end
-
-			-- Update RaidPoint + Restock (chỉ khi đổi)
-			local rpLbl = shop:FindFirstChild("RaidPoint")
-			local resetLbl = shop:FindFirstChild("Reset")
-			if rpLbl and resetLbl then
-				local rp = rpLbl.Text
-				local rs = resetLbl.Text
-				if rp ~= LastRaidPoint or rs ~= LastRestock then
-					LastRaidPoint = rp
-					LastRestock = rs
-					ShopInfoPara:SetTitle(rp)
-					ShopInfoPara:SetContent(rs)
-				end
-			end
-
-			-- Update item list (chỉ khi đổi)
-			local sf = shop:FindFirstChild("ScrollingFrame")
-			if sf then
-				local items = {}
-				for _, item in pairs(sf:GetChildren()) do
-					if item:IsA("Frame") then
-						local label = item:FindFirstChild("Label")
-						if label and label.Text and label.Text ~= "" and label.Text ~= "Item" then
-							table.insert(items, label.Text)
-						end
-					end
-				end
-
-				if #items > 0 then
-					table.sort(items)
-					RefreshShopDropdown(items)
-				end
-			end
-		end)
 	end
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
