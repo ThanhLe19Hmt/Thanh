@@ -2011,7 +2011,7 @@ task.spawn(function()
 								bp.Name = "AutoRaidBP"
 								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
 								bp.P = 5000   -- Thấp hơn → mượt hơn
-								bp.D = 100
+								bp.D = 500
 								bp.Parent = hrp
 							end
 
