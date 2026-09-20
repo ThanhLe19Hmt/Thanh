@@ -396,8 +396,8 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
+local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -2034,8 +2034,8 @@ task.spawn(function()
 								bp = Instance.new("BodyPosition")
 								bp.Name = "AutoRaidBP"
 								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-								bp.P = 100000   -- CAO để giữ vị trí
-								bp.D = 3000     -- CAO để không rung
+								bp.P = 200000
+                                bp.D = 5000
 								bp.Parent = hrp
 							end
 
@@ -2043,7 +2043,7 @@ task.spawn(function()
 							local ao = hrp:FindFirstChild("AutoRaidAO")
 
 							-- Vị trí: trên đầu mục tiêu, offset X để lệch mép
-							local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
+							local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 35, 0)
 							bp.Position = targetPos
 
 							if ao then
