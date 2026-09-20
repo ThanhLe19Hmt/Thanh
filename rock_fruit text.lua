@@ -396,8 +396,8 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
+local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -1954,12 +1954,12 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== AUTO RAID BOSS v16 - FIX RƠI =====
+-- ===== AUTO RAID BOSS v17 - FIX BOSS DI CHUYỂN =====
 _G.RaidWaitingClear = false
 _G.RaidDying = false
 
 task.spawn(function()
-	print("[AutoRaid] ✅ task.spawn v16 đã khởi động!")
+	print("[AutoRaid] ✅ task.spawn v17 đã khởi động!")
 	while task.wait(0.3) do
 		if _G.AutoRaidRunning then
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
@@ -1976,6 +1976,7 @@ task.spawn(function()
 							_G.RaidWaitingClear = true
 							print("[AutoRaid] Nhân vật chết → đợi boss biến mất...")
 							if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
 							if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
 							if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 						end
@@ -2002,58 +2003,30 @@ task.spawn(function()
 					if baconFolder then
 						-- ===== TRONG MAP BOSS =====
 
-						-- Tạo AlignOrientation
-						local function SetupOrientation()
-							local ao = hrp:FindFirstChild("AutoRaidAO")
-							if not ao then
-								ao = Instance.new("AlignOrientation")
-								ao.Name = "AutoRaidAO"
-								ao.Mode = Enum.OrientationAlignmentMode.OneAttachment
-								ao.MaxTorque = math.huge
-								ao.Responsiveness = 30
-								ao.RigidityEnabled = false
-
-								local att = hrp:FindFirstChild("AutoRaidAtt")
-								if not att then
-									att = Instance.new("Attachment")
-									att.Name = "AutoRaidAtt"
-									att.Parent = hrp
-								end
-
-								ao.Attachment0 = att
-								ao.Parent = hrp
-							end
-						end
-
-						-- Hàm di chuyển — P/D CAO để không rơi
-						local function MoveTo(targetPart, offsetY, offsetX)
+						-- ===== HÀM DI CHUYỂN MƯỢT BẰNG CFramee TRỰC TIẾP =====
+						-- Cách này đơn giản, mượt, chính xác 100% vì set position trực tiếp
+						local function TeleportTo(targetPart, offsetY, offsetX)
 							if not hrp or not hrp.Parent or not targetPart then return end
 
-							local bp = hrp:FindFirstChild("AutoRaidBP")
-							if not bp then
-								bp = Instance.new("BodyPosition")
-								bp.Name = "AutoRaidBP"
-								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-								bp.P = 200000
-                                bp.D = 5000
-								bp.Parent = hrp
-							end
+							-- Xóa BodyPosition cũ (nếu có) vì ta dùng CFrame trực tiếp
+							if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
 
-							SetupOrientation()
-							local ao = hrp:FindFirstChild("AutoRaidAO")
+							-- Vị trí mong muốn
+							local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
 
-							-- Vị trí: trên đầu mục tiêu, offset X để lệch mép
-							local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 35, 0)
-							bp.Position = targetPos
+							-- Set CFrame trực tiếp: vị trí + nhìn xuống mục tiêu
+							local targetCF = CFrame.new(targetPos, targetPart.Position)
 
-							if ao then
-								local lookAt = CFrame.lookAt(targetPos, targetPart.Position)
-								ao.CFrame = lookAt
-							end
+							-- Set vị trí (chính xác 100%)
+							hrp.CFrame = targetCF
+							hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+							hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 						end
 
 						local function CleanupBP()
 							if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
 							if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
 							if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 						end
@@ -2066,17 +2039,15 @@ task.spawn(function()
 							targetModel.Humanoid.WalkSpeed = 0
 							targetModel.Humanoid.JumpPower = 0
 
-							-- Tạo BodyPosition + AlignOrientation ngay từ đầu
-							MoveTo(targetPart, offsetY, offsetX)
-
-							repeat task.wait(0.1)
+							repeat task.wait(0.05)
 								if not _G.AutoRaidRunning then break end
 								if not targetModel.Parent then break end
 								if targetModel.Humanoid.Health <= 0 then break end
 								if hum.Health <= 0 then break end
+								if not targetPart.Parent then break end
 
-								-- Update vị trí (mỗi frame, nhưng AlignOrientation giữ rotation mượt)
-								MoveTo(targetPart, offsetY, offsetX)
+								-- Teleport trực tiếp mỗi 0.05s → mượt + chính xác
+								TeleportTo(targetPart, offsetY, offsetX)
 
 								EquipWeapon()
 								AutoSkill()
@@ -2118,6 +2089,7 @@ task.spawn(function()
 						print("[AutoRaid] Chưa vào map")
 
 						if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+						if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
 						if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
 						if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 
@@ -2226,6 +2198,7 @@ task.spawn(function()
 			local hrp = char and char:FindFirstChild("HumanoidRootPart")
 			if hrp then
 				if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+				if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
 				if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
 				if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 				if hrp.Anchored and not workspace:FindFirstChild("Boss Fight") then
