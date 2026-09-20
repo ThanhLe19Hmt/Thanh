@@ -398,7 +398,8 @@ local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
 local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!")
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
-local ShopDungeonPage = Tab2:CreatePage("Shop Dungeon")
+local ShopDunCard = RaidDun:CreateSection("🏪 Shop Dungeon","Left")
+local ShopDunInfoCard = RaidDun:CreateSection("📊 Shop Dungeon Info","Right")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -2075,44 +2076,89 @@ task.spawn(function()
 		end, print)
 	end
 end)
--- ===== SHOP DUNGEON UI =====
-local ShopDunCard = ShopDungeonPage:CreateSection("🏪 Shop Dungeon","Left")
-local ShopDunInfoCard = ShopDungeonPage:CreateSection("📊 Info","Right")
 
--- Info Paragraph
+-- ===== SHOP DUNGEON UI (CHỈ AUTO BUY) =====
 local ShopDunInfoPara = ShopDunInfoCard:Paragraph({
 	Title = "DungeonPoint: ( đang load... )",
-	Content = "Chọn item để xem thông tin"
+	Content = "Chọn item Auto Buy ở cột trái"
 })
 
--- Info Item Paragraph
 local ShopDunItemInfo = ShopDunInfoCard:Paragraph({
 	Title = "Item: ( chưa chọn )",
-	Content = "Chọn item từ dropdown"
+	Content = "Chọn item từ dropdown Auto Buy"
 })
 
--- Dropdown chọn item để mua
-local SelectedShopDunItem = nil
-local ShopDunDropdown = nil
-local LastShopDunItemsStr = ""
+-- Auto Buy
+local AutoBuyDunItem = nil
+_G.AutoBuyDunRunning = false
+_G.AutoBuyDunLoaded = false
+local AutoBuyDunDropdown = nil
+local LastAutoBuyDunStr = ""
 
-local function RefreshShopDunDropdown(items)
-	local itemsStr = table.concat(items, ",")
-	if itemsStr == LastShopDunItemsStr and ShopDunDropdown then return end
-	LastShopDunItemsStr = itemsStr
-
-	if ShopDunDropdown then
-		pcall(function() ShopDunDropdown:Destroy() end)
+-- Hàm lấy tất cả item Shop Dungeon
+local function GetAllShopDunItems()
+	local items = {}
+	local seen = {}
+	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+	if hud and hud:FindFirstChild("Main") then
+		local shop = hud.Main:FindFirstChild("Frame_ShopDungeon")
+		if shop then
+			local sf = shop:FindFirstChild("ShopScrollingFrame")
+			if sf then
+				for _, item in pairs(sf:GetChildren()) do
+					if item:IsA("Frame") then
+						local main = item:FindFirstChild("Main")
+						if main then
+							local titleLbl = main:FindFirstChild("TitleLabel")
+							if titleLbl and titleLbl.Text and titleLbl.Text ~= "" then
+								if not seen[titleLbl.Text] then
+									seen[titleLbl.Text] = true
+									table.insert(items, titleLbl.Text)
+								end
+							end
+						end
+					end
+				end
+			end
+		end
 	end
 
-	ShopDunDropdown = ShopDunCard:Dropdown({
-		Title = "Chọn Items để mua",
+	-- Item mặc định
+	local DefaultItems = {
+		"Plastic", "Rope", "Glue Elephant", "Cow leather", "Stopwatch",
+		"Banana Leaf", "Scarf Old", "Snake leather", "Crocodile leather",
+		"Microphone", "Trainer Notes"
+	}
+	for _, name in ipairs(DefaultItems) do
+		if not seen[name] then
+			seen[name] = true
+			table.insert(items, name)
+		end
+	end
+
+	table.sort(items)
+	return items
+end
+
+-- Dropdown Auto Buy Items
+local function RefreshAutoBuyDunDropdown(items)
+	local itemsStr = table.concat(items, ",")
+	if itemsStr == LastAutoBuyDunStr and AutoBuyDunDropdown then return end
+	LastAutoBuyDunStr = itemsStr
+
+	if AutoBuyDunDropdown then
+		pcall(function() AutoBuyDunDropdown:Destroy() end)
+	end
+
+	AutoBuyDunDropdown = ShopDunCard:Dropdown({
+		Title = "Auto Buy Items",
 		Options = items,
 		Multi = false,
 		Callback = function(Value)
-			SelectedShopDunItem = Value
+			AutoBuyDunItem = Value
+			print("[AutoBuyDun] Chọn:", Value)
 
-			-- Update info
+			-- Update item info
 			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
 			if hud and hud:FindFirstChild("Main") then
 				local shop = hud.Main:FindFirstChild("Frame_ShopDungeon")
@@ -2142,69 +2188,9 @@ local function RefreshShopDunDropdown(items)
 	})
 end
 
--- Nút BUY
-ShopDunCard:Button({
-	Title = "BUY!!",
-	Callback = function()
-		if not SelectedShopDunItem then
-			Library:Notify({Title = "❌ Chưa chọn item", Description = "Chọn item trước!", Duration = 3})
-			return
-		end
-
-		local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-		if hud and hud:FindFirstChild("Main") then
-			local shop = hud.Main:FindFirstChild("Frame_ShopDungeon")
-			if shop then
-				local sf = shop:FindFirstChild("ShopScrollingFrame")
-				if sf then
-					for _, item in pairs(sf:GetChildren()) do
-						if item:IsA("Frame") then
-							local main = item:FindFirstChild("Main")
-							if main then
-								local titleLbl = main:FindFirstChild("TitleLabel")
-								if titleLbl and titleLbl.Text == SelectedShopDunItem then
-									-- Fire mua
-									local NetworkEvent = ReplicatedStorage.Modules.NetworkEvent:FireServer("fire", nil, "BuyDungeonShop", SelectedShopDunItem)
-									Library:Notify({Title = "✅ Đã mua", Description = SelectedShopDunItem, Duration = 3})
-									return
-								end
-							end
-						end
-					end
-				end
-			end
-		end
-	end
-})
-
--- Auto Buy
-local AutoBuyDunItem = nil
-_G.AutoBuyDunRunning = false
-_G.AutoBuyDunLoaded = false
-local AutoBuyDunDropdown = nil
-local LastAutoBuyDunStr = ""
-
-local function RefreshAutoBuyDunDropdown(items)
-	local itemsStr = table.concat(items, ",")
-	if itemsStr == LastAutoBuyDunStr and AutoBuyDunDropdown then return end
-	LastAutoBuyDunStr = itemsStr
-
-	if AutoBuyDunDropdown then
-		pcall(function() AutoBuyDunDropdown:Destroy() end)
-	end
-
-	AutoBuyDunDropdown = ShopDunCard:Dropdown({
-		Title = "Auto Buy Items",
-		Options = items,
-		Multi = false,
-		Callback = function(Value)
-			AutoBuyDunItem = Value
-		end
-	})
-end
-
 RefreshAutoBuyDunDropdown({"( đang load... )"})
 
+-- Toggle Auto Buy
 ShopDunCard:Toggle({
 	Title = "Auto Buy",
 	Value = false,
@@ -2221,6 +2207,7 @@ ShopDunCard:Toggle({
 			return
 		end
 		_G.AutoBuyDunRunning = Value
+		print("[AutoBuyDun] Running:", Value)
 		Library:Notify({
 			Title = Value and "▶️ Bật Auto Buy" or "⏹️ Tắt Auto Buy",
 			Description = AutoBuyDunItem or "N/A",
@@ -2239,29 +2226,36 @@ task.spawn(function()
 			if not shop then return end
 
 			-- Update point
-			local ptAttr = LocalPlayer:GetAttribute("DungeonPoint") or LocalPlayer:GetAttribute("PointDungeon") or 0
+			local ptAttr = LocalPlayer:GetAttribute("DungeonPoint") 
+				or LocalPlayer:GetAttribute("PointDungeon") 
+				or LocalPlayer:GetAttribute("DungeonOrb")
+				or 0
 			ShopDunInfoPara:SetTitle("DungeonPoint: " .. tostring(ptAttr))
 
 			-- Update item list
-			local sf = shop:FindFirstChild("ShopScrollingFrame")
-			if sf then
-				local items = {}
-				for _, item in pairs(sf:GetChildren()) do
-					if item:IsA("Frame") then
-						local main = item:FindFirstChild("Main")
-						if main then
-							local titleLbl = main:FindFirstChild("TitleLabel")
-							if titleLbl and titleLbl.Text and titleLbl.Text ~= "" then
-								table.insert(items, titleLbl.Text)
+			local allItems = GetAllShopDunItems()
+			RefreshAutoBuyDunDropdown(allItems)
+
+			-- Update item info nếu đã chọn
+			if AutoBuyDunItem then
+				local sf = shop:FindFirstChild("ShopScrollingFrame")
+				if sf then
+					for _, item in pairs(sf:GetChildren()) do
+						if item:IsA("Frame") then
+							local main = item:FindFirstChild("Main")
+							if main then
+								local titleLbl = main:FindFirstChild("TitleLabel")
+								if titleLbl and titleLbl.Text == AutoBuyDunItem then
+									local btn = main:FindFirstChild("TextButton")
+									local priceLbl = btn and btn:FindFirstChild("TextLabel")
+									local price = priceLbl and priceLbl.Text or "?"
+									ShopDunItemInfo:SetTitle("Item: " .. AutoBuyDunItem)
+									ShopDunItemInfo:SetContent("Price: " .. price)
+									break
+								end
 							end
 						end
 					end
-				end
-
-				if #items > 0 then
-					table.sort(items)
-					RefreshShopDunDropdown(items)
-					RefreshAutoBuyDunDropdown(items)
 				end
 			end
 		end)
@@ -2286,8 +2280,8 @@ task.spawn(function()
 						if main then
 							local titleLbl = main:FindFirstChild("TitleLabel")
 							if titleLbl and titleLbl.Text == AutoBuyDunItem then
-								-- Fire mua
-								local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "BuyDungeonShop", AutoBuyDunItem)
+								local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
+								NetworkEvent:FireServer("fire", nil, "BuyDungeonShop", AutoBuyDunItem)
 								print("[AutoBuyDun] Mua:", AutoBuyDunItem)
 								task.wait(0.3)
 								break
@@ -2726,6 +2720,95 @@ task.spawn(function()
 			end
 		end)
 		task.wait()
+	end
+end)
+-- ===== AUTO CLOSE DUNGEON REWARD GUI =====
+task.spawn(function()
+	while task.wait(0.5) do
+		if _G.Auto_Dungeon then
+			pcall(function()
+				local playerGui = LocalPlayer.PlayerGui
+				
+				-- Tìm GUI nhận thưởng Dungeon
+				local rewardGui = playerGui:FindFirstChild("DungeonReward") 
+					or playerGui:FindFirstChild("RewardUI")
+					or playerGui:FindFirstChild("Reward")
+				
+				-- Hoặc trong HUD.Main
+				local hud = playerGui:FindFirstChild("HUD")
+				if hud and hud:FindFirstChild("Main") then
+					local main = hud.Main
+					for _, guiName in ipairs({"Frame_DungeonReward", "Frame_Reward", "DungeonReward"}) do
+						local gui = main:FindFirstChild(guiName)
+						if gui and gui.Visible then
+							-- Tìm nút Claim/Receive
+							for _, child in pairs(gui:GetDescendants()) do
+								if child:IsA("TextButton") or child:IsA("ImageButton") then
+									local txt = ""
+									pcall(function() txt = child.Text or "" end)
+									if txt:lower():find("claim") or txt:lower():find("receive") or txt:lower():find("nhận") then
+										pcall(function()
+											if firesignal then
+												firesignal(child.MouseButton1Click)
+											else
+												child:Activate()
+											end
+										end)
+										task.wait(0.5)
+										-- Đóng GUI sau khi claim
+										gui.Visible = false
+										break
+									end
+								end
+							end
+						end
+					end
+				end
+			end)
+		end
+	end
+end)
+-- ===== AUTO CLOSE RAID REWARD GUI =====
+task.spawn(function()
+	while task.wait(0.5) do
+		if _G.AutoRaidRunning then
+			pcall(function()
+				local playerGui = LocalPlayer.PlayerGui
+				
+				-- Tìm GUI nhận thưởng Raid
+				local rewardGui = playerGui:FindFirstChild("RaidReward")
+					or playerGui:FindFirstChild("BossReward")
+				
+				-- Trong HUD.Main
+				local hud = playerGui:FindFirstChild("HUD")
+				if hud and hud:FindFirstChild("Main") then
+					local main = hud.Main
+					for _, guiName in ipairs({"Frame_RaidReward", "Frame_BossReward", "Frame_Reward"}) do
+						local gui = main:FindFirstChild(guiName)
+						if gui and gui.Visible then
+							for _, child in pairs(gui:GetDescendants()) do
+								if child:IsA("TextButton") or child:IsA("ImageButton") then
+									local txt = ""
+									pcall(function() txt = child.Text or "" end)
+									if txt:lower():find("claim") or txt:lower():find("receive") or txt:lower():find("ok") then
+										pcall(function()
+											if firesignal then
+												firesignal(child.MouseButton1Click)
+											else
+												child:Activate()
+											end
+										end)
+										task.wait(0.5)
+										gui.Visible = false
+										break
+									end
+								end
+							end
+						end
+					end
+				end
+			end)
+		end
 	end
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
