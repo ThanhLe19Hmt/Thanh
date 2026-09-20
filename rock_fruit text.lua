@@ -2262,7 +2262,7 @@ task.spawn(function()
 											end
 										end
 
-										task.wait(1.5)
+										task.wait(0.5)
 										EquipWeapon()
 									else
 										Library:Notify({
