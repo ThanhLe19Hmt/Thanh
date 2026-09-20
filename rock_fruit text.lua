@@ -450,10 +450,6 @@ local RaidBossData = {
 _G.AutoRaidWho = nil
 _G.AutoRaidRunning = false
 
--- Section RAId BOSS (trên)
-local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
-local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
-
 -- Info Paragraph
 local RaidBossInfo = RaidBossInfoCard:Paragraph({
 	Title = "Name: ( chưa chọn )",
