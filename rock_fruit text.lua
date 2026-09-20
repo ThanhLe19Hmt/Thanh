@@ -94,7 +94,6 @@ _G.Select_Guarantee = nil
 _G.Auto_Guarantee = false
 _G.Select_Guarantee_Moon = nil
 _G.Auto_Guarantee_Moon = false
-_G.RaidUseThanos = false
 
 for ItemName in pairs(Economy) do
 	table.insert(SellItems,ItemName)
@@ -490,6 +489,7 @@ local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
+local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings","Right")
 
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
@@ -502,7 +502,6 @@ local MoonChest = RandomM:CreateSection("🌙 Moon Chest","Left")
 local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point","Left")
 
 local ConfigTab = Window:CreateTab("Config", false, false)
-
 -- ===== AUTO RAID BOSS UI =====
 local RaidBossData = {
 	["Bacon of Grudge"] = {
@@ -527,12 +526,15 @@ local RaidBossData = {
 
 _G.AutoRaidWho = nil
 _G.AutoRaidRunning = false
+_G.RaidUseThanos = false
 
+-- Info Paragraph
 local RaidBossInfo = RaidBossInfoCard:Paragraph({
 	Title = "Name: ( chưa chọn )",
 	Content = "Please choose a Boss Raid!!"
 })
 
+-- Dropdown chọn Raid
 RaidBossCard:Dropdown({
 	Title = "Auto Raid Who??",
 	Options = {"Bacon of Grudge", "??? (Raid 2)", "??? (Raid 3)"},
@@ -549,13 +551,14 @@ RaidBossCard:Dropdown({
 		end
 	end
 })
+
+-- Button Start Raid
 RaidBossCard:Button({
 	Title = "Please choose a Boss Raid!! Which one do you want to do?",
 	Callback = function()
 		print("[BUTTON] Clicked! AutoRaidWho =", _G.AutoRaidWho)
 		local Data = RaidBossData[_G.AutoRaidWho]
 		if not Data then
-			print("[BUTTON] Data = nil, không chọn được")
 			Library:Notify({
 				Title = "❌ Chưa chọn Raid",
 				Description = "Please choose a Boss Raid!! Which one do you want to do?",
@@ -564,7 +567,6 @@ RaidBossCard:Button({
 			return
 		end
 		if not Data.Valid then
-			print("[BUTTON] Data invalid")
 			Library:Notify({
 				Title = "❌ Raid không hợp lệ",
 				Description = "NO RAID!!! Please select a valid cluster.",
@@ -581,6 +583,7 @@ RaidBossCard:Button({
 		})
 	end
 })
+
 -- Toggle I AM Thanos
 RaidSettingsCard:Toggle({
 	Title = "I AM Thanos",
@@ -603,7 +606,7 @@ RaidSettingsCard:Toggle({
 	end
 })
 
--- Info text bên dưới
+-- Info Paragraph I AM Thanos
 RaidSettingsCard:Paragraph({
 	Title = "",
 	Content = "Use the F ability to finish off the target when they are below 50% HP."
