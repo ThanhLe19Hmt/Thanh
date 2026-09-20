@@ -396,7 +396,7 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss!!!")
+local RaidBossPage = Tab2:CreatePage("Raid Boss!!")
 local RaidDun = Tab2:CreatePage("Dungeon / Weapon")
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
@@ -1924,12 +1924,12 @@ task.spawn(function()
 		end)
 	end)
 end)  
+-- ===== Devil Boat =====
 task.spawn(function()
 	while task.wait() do
 		if _G.Auto_DevilBoat then
 			pcall(function()
 				local Target
-				-- Tìm cả "Devil Boat" và "DevilBoat"
 				for _, v in pairs(workspace.Mob:GetChildren()) do
 					if v:IsA("Model") 
 						and (v.Name == "Devil Boat" or v.Name == "DevilBoat")
@@ -1954,7 +1954,7 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== AUTO RAID BOSS v17 - FIX BOSS DI CHUYỂN =====
+-- ===== AUTO RAID BOSS v17 - FIX BOSS MOVE AND FINA =====
 _G.RaidWaitingClear = false
 _G.RaidDying = false
 
@@ -2001,24 +2001,12 @@ task.spawn(function()
 					end
 
 					if baconFolder then
-						-- ===== TRONG MAP BOSS =====
-
-						-- ===== HÀM DI CHUYỂN MƯỢT BẰNG CFramee TRỰC TIẾP =====
-						-- Cách này đơn giản, mượt, chính xác 100% vì set position trực tiếp
 						local function TeleportTo(targetPart, offsetY, offsetX)
 							if not hrp or not hrp.Parent or not targetPart then return end
-
-							-- Xóa BodyPosition cũ (nếu có) vì ta dùng CFrame trực tiếp
 							if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
 							if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
-
-							-- Vị trí mong muốn
 							local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
-
-							-- Set CFrame trực tiếp: vị trí + nhìn xuống mục tiêu
 							local targetCF = CFrame.new(targetPos, targetPart.Position)
-
-							-- Set vị trí (chính xác 100%)
 							hrp.CFrame = targetCF
 							hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 							hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
@@ -2045,33 +2033,29 @@ task.spawn(function()
 								if targetModel.Humanoid.Health <= 0 then break end
 								if hum.Health <= 0 then break end
 								if not targetPart.Parent then break end
-
-								-- Teleport trực tiếp mỗi 0.05s → mượt + chính xác
 								TeleportTo(targetPart, offsetY, offsetX)
-
 								EquipWeapon()
 								AutoSkill()
 								Attack()
 							until false
-
 							CleanupBP()
 						end
 
-						-- ===== CỤC VÀNG 1 =====
+						-- ===== Ball 1 =====
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall1")
 							AttackTarget(A1:FindFirstChild("HumanoidRootPart"), A1, 25, 0)
 						end
 
-						-- ===== CỤC VÀNG 2 =====
+						-- ===== Ball 2 =====
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall2")
 							AttackTarget(A2:FindFirstChild("HumanoidRootPart"), A2, 25, 0)
 						end
 
-						-- ===== BOSS BACON =====
+						-- ===== BOSS BACON OF GRULD =====
 						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
 						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
 							local bossHrp = BossBacon:FindFirstChild("HumanoidRootPart")
@@ -2085,7 +2069,7 @@ task.spawn(function()
 							task.wait(2)
 						end
 					else
-	-- ===== CHƯA VÀO MAP =====
+
 	print("[AutoRaid] Chưa vào map")
 
 	if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
@@ -2093,11 +2077,9 @@ task.spawn(function()
 	if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
 	if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 
-	-- ===== CHECK PORTAL CÓ SẴN TRƯỚC =====
 	local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
 
 	if TPZone and TPZone:FindFirstChild("Hitbox") then
-		-- Đã có cổng → KHÔNG check Portal Gun, vào luôn
 		print("[AutoRaid] Vào portal (đợi vô hạn)")
 		local Hitbox = TPZone.Hitbox
 		hrp.Anchored = true
@@ -2132,7 +2114,6 @@ task.spawn(function()
 			task.wait(1)
 		end
 	else
-		-- CHƯA CÓ CỔNG → check Portal Gun rồi fire
 		if GetItemAmount("Portal Gun") < Data.PortalCost then
 			Library:Notify({
 				Title = "❌ Không đủ Portal Gun",
