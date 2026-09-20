@@ -1954,12 +1954,12 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== AUTO RAID BOSS v12 =====
+-- ===== AUTO RAID BOSS v13 - ALIGNPOSITION =====
 _G.RaidWaitingClear = false
 _G.RaidDying = false
 
 task.spawn(function()
-	print("[AutoRaid] ✅ task.spawn v12 đã khởi động!")
+	print("[AutoRaid] ✅ task.spawn v13 đã khởi động!")
 	while task.wait(0.3) do
 		if _G.AutoRaidRunning then
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
@@ -1970,15 +1970,13 @@ task.spawn(function()
 					local hrp = char and char:FindFirstChild("HumanoidRootPart")
 					if not hum or not hrp then return end
 
-					-- ===== CHECK CHẾT =====
 					if hum.Health <= 0 then
 						if not _G.RaidDying then
 							_G.RaidDying = true
 							_G.RaidWaitingClear = true
 							print("[AutoRaid] Nhân vật chết → đợi boss biến mất...")
-							if hrp:FindFirstChild("AutoRaidBP") then
-								hrp.AutoRaidBP:Destroy()
-							end
+							if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 						end
 						return
 					else
@@ -1988,7 +1986,6 @@ task.spawn(function()
 					local bf = workspace:FindFirstChild("Boss Fight")
 					local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
 
-					-- ===== ĐỢI BOSS BIẾN MẤT =====
 					if _G.RaidWaitingClear then
 						if baconFolder then
 							print("[AutoRaid] Đợi boss biến mất...")
@@ -2004,37 +2001,40 @@ task.spawn(function()
 					if baconFolder then
 						-- ===== TRONG MAP BOSS =====
 
-						-- Hàm teleport mượt bằng BodyPosition (KHÔNG set CFrame)
 						local function SmoothMoveTo(targetCFrame)
 							if not hrp or not hrp.Parent then return end
 
-							local bp = hrp:FindFirstChild("AutoRaidBP")
-							if not bp then
-								bp = Instance.new("BodyPosition")
-								bp.Name = "AutoRaidBP"
-								bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-								bp.P = 30000
-								bp.D = 1000
-								bp.Parent = hrp
+							local ap = hrp:FindFirstChild("AutoRaidAP")
+							if not ap then
+								ap = Instance.new("AlignPosition")
+								ap.Name = "AutoRaidAP"
+								ap.Mode = Enum.PositionAlignmentMode.OneAttachment
+								ap.MaxForce = math.huge
+								ap.Responsiveness = 25
+								ap.Position = targetCFrame.Position
+
+								local att = Instance.new("Attachment")
+								att.Name = "AutoRaidAtt"
+								att.Parent = hrp
+								ap.Attachment0 = att
+
+								ap.Parent = hrp
 							end
 
-							bp.Position = targetCFrame.Position
+							ap.Position = targetCFrame.Position
 
-							-- Chỉ set CFrame 1 lần đầu để xoay hướng nhìn
-							local curCF = hrp.CFrame
-							local targetPos = targetCFrame.Position
-							if (curCF.Position - targetPos).Magnitude > 5 then
-								hrp.CFrame = CFrame.new(targetPos, targetCFrame.Position + targetCFrame.LookVector)
+							local att = hrp:FindFirstChild("AutoRaidAtt")
+							if att then
+								att.WorldPosition = targetCFrame.Position
 							end
 						end
 
 						local function CleanupBP()
-							if hrp:FindFirstChild("AutoRaidBP") then
-								hrp.AutoRaidBP:Destroy()
-							end
+							if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
+							if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
+							if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
 						end
 
-						-- Hàm đánh mục tiêu — CHỈ TELEPORT KHI Ở XA
 						local function AttackTarget(targetPart, targetModel, offsetY, offsetX)
 							if not targetPart or not targetModel then return end
 							if not targetModel:FindFirstChild("Humanoid") then return end
@@ -2043,26 +2043,17 @@ task.spawn(function()
 							targetModel.Humanoid.WalkSpeed = 0
 							targetModel.Humanoid.JumpPower = 0
 
-							local LastMove = 0
-							repeat task.wait(0.15)
+							repeat task.wait(0.1)
 								if not _G.AutoRaidRunning then break end
 								if not targetModel.Parent then break end
 								if targetModel.Humanoid.Health <= 0 then break end
 								if hum.Health <= 0 then break end
 
-								-- Vị trí mong muốn
 								local targetCF = targetPart.CFrame
 								local desiredPos = targetCF.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
 								local desiredCF = CFrame.new(desiredPos, targetCF.Position)
 
-								-- CHỈ DI CHUYỂN khi cách xa hơn 15 studs
-								local curPos = hrp.Position
-								if (curPos - desiredPos).Magnitude > 15 then
-									if tick() - LastMove > 0.3 then
-										LastMove = tick()
-										SmoothMoveTo(desiredCF)
-									end
-								end
+								SmoothMoveTo(desiredCF)
 
 								EquipWeapon()
 								AutoSkill()
@@ -2072,21 +2063,18 @@ task.spawn(function()
 							CleanupBP()
 						end
 
-						-- ===== CỤC VÀNG 1 =====
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall1")
 							AttackTarget(A1:FindFirstChild("HumanoidRootPart"), A1, 25, 0)
 						end
 
-						-- ===== CỤC VÀNG 2 =====
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall2")
 							AttackTarget(A2:FindFirstChild("HumanoidRootPart"), A2, 25, 0)
 						end
 
-						-- ===== BOSS BACON =====
 						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
 						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
 							local bossHrp = BossBacon:FindFirstChild("HumanoidRootPart")
@@ -2099,14 +2087,13 @@ task.spawn(function()
 						if _G.AutoRaidRunning then
 							task.wait(2)
 						end
-
 					else
 						-- ===== CHƯA VÀO MAP =====
 						print("[AutoRaid] Chưa vào map")
 
-						if hrp:FindFirstChild("AutoRaidBP") then
-							hrp.AutoRaidBP:Destroy()
-						end
+						if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
+						if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
+						if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
 
 						if GetItemAmount("Portal Gun") < Data.PortalCost then
 							Library:Notify({
@@ -2127,22 +2114,18 @@ task.spawn(function()
 							local LastPrint = 0
 							repeat task.wait(0.1)
 								if not _G.AutoRaidRunning then break end
-
 								if hrp.Parent then
 									hrp.CFrame = Hitbox.CFrame
 									hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 								end
-
 								if tick() - LastPrint > 3 then
 									LastPrint = tick()
 									print("[AutoRaid] Đang đợi portal teleport...")
 								end
-
 								if not TPZone.Parent then
 									print("[AutoRaid] Cổng biến mất, thoát loop")
 									break
 								end
-
 								if workspace:FindFirstChild("Boss Fight") then
 									print("[AutoRaid] Đã vào map!")
 									break
@@ -2172,22 +2155,18 @@ task.spawn(function()
 								local LastPrint2 = 0
 								repeat task.wait(0.1)
 									if not _G.AutoRaidRunning then break end
-
 									if hrp.Parent then
 										hrp.CFrame = Hitbox2.CFrame
 										hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 									end
-
 									if tick() - LastPrint2 > 3 then
 										LastPrint2 = tick()
 										print("[AutoRaid] Đang đợi portal teleport...")
 									end
-
 									if not TPZone2.Parent then
 										print("[AutoRaid] Cổng biến mất, thoát loop")
 										break
 									end
-
 									if workspace:FindFirstChild("Boss Fight") then
 										print("[AutoRaid] Đã vào map!")
 										break
@@ -2208,6 +2187,24 @@ task.spawn(function()
 						end
 					end
 				end)
+			end
+		end
+	end
+end)
+
+-- Cleanup khi tắt AutoRaid
+task.spawn(function()
+	while task.wait(0.5) do
+		if not _G.AutoRaidRunning then
+			local char = LocalPlayer.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
+				if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
+				if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+				if hrp.Anchored and not workspace:FindFirstChild("Boss Fight") then
+					hrp.Anchored = false
+				end
 			end
 		end
 	end
