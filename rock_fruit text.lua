@@ -94,6 +94,7 @@ _G.Select_Guarantee = nil
 _G.Auto_Guarantee = false
 _G.Select_Guarantee_Moon = nil
 _G.Auto_Guarantee_Moon = false
+_G.RaidUseThanos = false
 
 for ItemName in pairs(Economy) do
 	table.insert(SellItems,ItemName)
@@ -164,6 +165,83 @@ for i,data in ipairs(Quest_Module) do
 		Monster = NPC:GetAttribute("Name"),
 		Quest = NPC
 	}
+end
+
+-- ===== HÀM EQUIP THANOS TỪ INVENTORY =====
+local function EquipThanosFromInventory()
+	local char = LocalPlayer.Character
+	if not char then return false end
+	local hum = char:FindFirstChild("Humanoid")
+	if not hum then return false end
+
+	-- Check Inventory có Thanos không
+	local HttpService = game:GetService("HttpService")
+	local ok, Inv = pcall(function()
+		return HttpService:JSONDecode(LocalPlayer:GetAttribute("Inventory") or "{}")
+	end)
+	Inv = ok and Inv or {}
+
+	if not (Inv["Thanos"] and (Inv["Thanos"].amount or Inv["Thanos"].Amount or 0) > 0) then
+		return false, "Không có Thanos trong Inventory"
+	end
+
+	-- Nếu đã equip rồi → return true
+	if LocalPlayer:GetAttribute("UseSpecial") == "Thanos" then
+		for _, v in pairs(char:GetChildren()) do
+			if v:IsA("Tool") and v.Name == "Thanos" then
+				return true
+			end
+		end
+	end
+
+	-- Fire Remote để game tạo Tool từ Inventory
+	ReplicatedStorage.Remotes.Inventory:FireServer("Thanos")
+	task.wait(0.5)
+
+	-- Đợi Tool xuất hiện trong Backpack
+	local tool = nil
+	local bp = LocalPlayer:FindFirstChild("Backpack")
+	for i = 1, 10 do
+		if bp then
+			for _, v in pairs(bp:GetChildren()) do
+				if v:IsA("Tool") and v.Name == "Thanos" then
+					tool = v
+					break
+				end
+			end
+		end
+		if tool then break end
+		task.wait(0.2)
+	end
+
+	-- Equip Tool
+	if tool then
+		hum:EquipTool(tool)
+		task.wait(0.3)
+		return true
+	end
+
+	-- Nếu Tool đã trên Character
+	for _, v in pairs(char:GetChildren()) do
+		if v:IsA("Tool") and v.Name == "Thanos" then
+			return true
+		end
+	end
+
+	return false, "Không thể equip Thanos"
+end
+
+-- ===== HÀM DÙNG SKILL F TRÊN THANOS =====
+local function UseThanosF()
+	local char = LocalPlayer.Character
+	if not char then return end
+	for _, tool in pairs(char:GetChildren()) do
+		if tool:IsA("Tool") and tool.Name == "Thanos" then
+			ReplicatedStorage.Remotes.Actions:FireServer("Thanos", "f")
+			return true
+		end
+	end
+	return false
 end
 
 local GetQuest_Level = function(My_level)
@@ -502,6 +580,33 @@ RaidBossCard:Button({
 			Duration = 3
 		})
 	end
+})
+-- Toggle I AM Thanos
+RaidSettingsCard:Toggle({
+	Title = "I AM Thanos",
+	Value = false,
+	Callback = function(Value)
+		local HttpService = game:GetService("HttpService")
+		local Inv = HttpService:JSONDecode(game.Players.LocalPlayer:GetAttribute("Inventory") or "{}")
+		local Have = Inv["Thanos"] and (Inv["Thanos"].amount or Inv["Thanos"].Amount or 0) > 0
+		if Value and not Have then
+			Library:Notify({
+				Title = "❌ Không có Thanos",
+				Description = "Bạn không có Special Thanos trong Inventory nên tính năng này không thể sử dụng.",
+				Duration = 5
+			})
+			_G.RaidUseThanos = false
+			return
+		end
+		_G.RaidUseThanos = Value
+		print("[RaidSettings] I AM Thanos =", Value)
+	end
+})
+
+-- Info text bên dưới
+RaidSettingsCard:Paragraph({
+	Title = "",
+	Content = "Use the F ability to finish off the target when they are below 50% HP."
 })
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
@@ -1953,11 +2058,9 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== AUTO RAID BOSS v5 - FIXED =====
--- ===== AUTO RAID BOSS v6 - FIXED PORTAL =====
--- ===== AUTO RAID BOSS v6 - FIXED =====
+-- ===== AUTO RAID BOSS v7 - FIXED TƯ THẾ + THANOS =====
 task.spawn(function()
-	print("[AutoRaid] ✅ task.spawn đã khởi động!")
+	print("[AutoRaid] ✅ task.spawn v7 đã khởi động!")
 	while task.wait(0.3) do
 		if _G.AutoRaidRunning then
 			local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
@@ -1975,9 +2078,6 @@ task.spawn(function()
 						-- ===== ĐANG Ở TRONG MAP BOSS =====
 						print("[AutoRaid] Trong map boss")
 
-						-- Vị trí an toàn: cao hơn sàn 15 studs
-						local SafeY = 15
-
 						-- ===== CỤC VÀNG 1 =====
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
@@ -1987,8 +2087,8 @@ task.spawn(function()
 								A1.Humanoid.WalkSpeed = 0
 								A1.Humanoid.JumpPower = 0
 								repeat task.wait()
-									-- Vị trí: gần cục vàng 1 nhưng vẫn trên sàn
-									local targetPos = a1hrp.Position - (a1hrp.CFrame.LookVector * 8) + Vector3.new(0, SafeY, 0)
+									-- Bay trên đầu cục vàng, nhìn xuống
+									local targetPos = a1hrp.Position + Vector3.new(0, 25, 0)
 									local targetCF = CFrame.new(targetPos, a1hrp.Position)
 									Teleport(targetCF)
 
@@ -2008,7 +2108,7 @@ task.spawn(function()
 								A2.Humanoid.WalkSpeed = 0
 								A2.Humanoid.JumpPower = 0
 								repeat task.wait()
-									local targetPos = a2hrp.Position - (a2hrp.CFrame.LookVector * 8) + Vector3.new(0, SafeY, 0)
+									local targetPos = a2hrp.Position + Vector3.new(0, 25, 0)
 									local targetCF = CFrame.new(targetPos, a2hrp.Position)
 									Teleport(targetCF)
 
@@ -2022,17 +2122,36 @@ task.spawn(function()
 						-- ===== BOSS BACON =====
 						local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
 						if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
-							print("[AutoRaid] Đánh Boss Bacon Sad")
 							local bossHrp = BossBacon:FindFirstChild("HumanoidRootPart")
 							if bossHrp then
+								-- ===== CHECK THANOS =====
+								local BossHpPercent = (BossBacon.Humanoid.Health / BossBacon.Humanoid.MaxHealth) * 100
+								if _G.RaidUseThanos and BossHpPercent <= 50 and not _G.RaidThanosUsed then
+									print("[AutoRaid] Boss dưới 50%, dùng Thanos F!")
+									_G.RaidThanosUsed = true
+
+									local ok, err = EquipThanosFromInventory()
+									if ok then
+										task.wait(0.5)
+										UseThanosF()
+										print("[AutoRaid] Đã dùng Thanos F!")
+										task.wait(1)
+									else
+										Library:Notify({
+											Title = "❌ Không dùng được Thanos",
+											Description = tostring(err),
+											Duration = 5
+										})
+									end
+								end
+
 								BossBacon.Humanoid.WalkSpeed = 0
 								BossBacon.Humanoid.JumpPower = 0
 								repeat task.wait()
-									-- Đứng cách boss 25 studs, trên sàn 15 studs
+									-- Bay trên mép đầu boss (lệch trục X), nhìn xuống boss
 									local bossPos = bossHrp.Position
-									local myPos = hrp.Position
-									local dir = (myPos - bossPos).Unit
-									local targetPos = bossPos + (dir * 25) + Vector3.new(0, SafeY, 0)
+									local offsetX = 5  -- lệch sang bên phải 5 studs (mép đầu)
+									local targetPos = bossPos + Vector3.new(offsetX, 40, 0)
 									local targetCF = CFrame.new(targetPos, bossPos)
 									Teleport(targetCF)
 
@@ -2050,8 +2169,8 @@ task.spawn(function()
 					else
 						-- ===== CHƯA VÀO MAP =====
 						print("[AutoRaid] Chưa vào map")
+						_G.RaidThanosUsed = false
 
-						-- Check Portal Gun
 						if GetItemAmount("Portal Gun") < Data.PortalCost then
 							Library:Notify({
 								Title = "❌ Không đủ Portal Gun",
@@ -2062,10 +2181,8 @@ task.spawn(function()
 							return
 						end
 
-						-- Check xem portal đã mở chưa
 						local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
 						if TPZone and TPZone:FindFirstChild("Hitbox") then
-							-- Đã có portal → đứng yên vào portal
 							print("[AutoRaid] Đã có portal, vào Hitbox!")
 							local Hitbox = TPZone.Hitbox
 							local StartTime = tick()
@@ -2076,13 +2193,11 @@ task.spawn(function()
 								or workspace:FindFirstChild("Boss Fight")
 								or tick() - StartTime > 10
 						else
-							-- ===== FIRE REMOTE MỞ RAID (KHÔNG CẦN NPC) =====
 							print("[AutoRaid] Fire SpawnBossFight trực tiếp: " .. Data.Name)
 							local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
 							NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
 							task.wait(1)
 
-							-- Đợi portal xuất hiện
 							local TPZone2 = workspace:FindFirstChild("TeleportBossFightZone")
 							if TPZone2 and TPZone2:FindFirstChild("Hitbox") then
 								print("[AutoRaid] Portal xuất hiện, vào Hitbox!")
@@ -2095,7 +2210,6 @@ task.spawn(function()
 									or workspace:FindFirstChild("Boss Fight")
 									or tick() - StartTime2 > 10
 							else
-								print("[AutoRaid] Portal chưa xuất hiện, đợi...")
 								task.wait(2)
 							end
 						end
