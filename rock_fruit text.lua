@@ -2085,105 +2085,109 @@ task.spawn(function()
 							task.wait(2)
 						end
 					else
-						-- ===== CHƯA VÀO MAP =====
-						print("[AutoRaid] Chưa vào map")
+	-- ===== CHƯA VÀO MAP =====
+	print("[AutoRaid] Chưa vào map")
 
-						if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
-						if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
-						if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
-						if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
+	if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+	if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
+	if hrp:FindFirstChild("AutoRaidAO") then hrp.AutoRaidAO:Destroy() end
+	if hrp:FindFirstChild("AutoRaidAtt") then hrp.AutoRaidAtt:Destroy() end
 
-						if GetItemAmount("Portal Gun") < Data.PortalCost then
-							Library:Notify({
-								Title = "❌ Không đủ Portal Gun",
-								Description = "Cần " .. Data.PortalCost .. " Portal Gun!",
-								Duration = 4
-							})
-							_G.AutoRaidRunning = false
-							return
-						end
+	-- ===== CHECK PORTAL CÓ SẴN TRƯỚC =====
+	local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
 
-						local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
-						if TPZone and TPZone:FindFirstChild("Hitbox") then
-							print("[AutoRaid] Vào portal (đợi vô hạn)")
-							local Hitbox = TPZone.Hitbox
-							hrp.Anchored = true
+	if TPZone and TPZone:FindFirstChild("Hitbox") then
+		-- Đã có cổng → KHÔNG check Portal Gun, vào luôn
+		print("[AutoRaid] Vào portal (đợi vô hạn)")
+		local Hitbox = TPZone.Hitbox
+		hrp.Anchored = true
 
-							local LastPrint = 0
-							repeat task.wait(0.1)
-								if not _G.AutoRaidRunning then break end
-								if hrp.Parent then
-									hrp.CFrame = Hitbox.CFrame
-									hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-								end
-								if tick() - LastPrint > 3 then
-									LastPrint = tick()
-									print("[AutoRaid] Đang đợi portal teleport...")
-								end
-								if not TPZone.Parent then
-									print("[AutoRaid] Cổng biến mất, thoát loop")
-									break
-								end
-								if workspace:FindFirstChild("Boss Fight") then
-									print("[AutoRaid] Đã vào map!")
-									break
-								end
-							until false
+		local LastPrint = 0
+		repeat task.wait(0.1)
+			if not _G.AutoRaidRunning then break end
+			if hrp.Parent then
+				hrp.CFrame = Hitbox.CFrame
+				hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+			end
+			if tick() - LastPrint > 3 then
+				LastPrint = tick()
+				print("[AutoRaid] Đang đợi portal teleport...")
+			end
+			if not TPZone.Parent then
+				print("[AutoRaid] Cổng biến mất, thoát loop")
+				break
+			end
+			if workspace:FindFirstChild("Boss Fight") then
+				print("[AutoRaid] Đã vào map!")
+				break
+			end
+		until false
 
-							hrp.Anchored = false
+		hrp.Anchored = false
 
-							if workspace:FindFirstChild("Boss Fight") then
-								print("[AutoRaid] Đã vào map, đợi 3s...")
-								task.wait(3)
-							else
-								task.wait(1)
-							end
-						else
-							print("[AutoRaid] Fire SpawnBossFight: " .. Data.Name)
-							local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
-							NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
-							task.wait(2)
+		if workspace:FindFirstChild("Boss Fight") then
+			print("[AutoRaid] Đã vào map, đợi 3s...")
+			task.wait(3)
+		else
+			task.wait(1)
+		end
+	else
+		-- CHƯA CÓ CỔNG → check Portal Gun rồi fire
+		if GetItemAmount("Portal Gun") < Data.PortalCost then
+			Library:Notify({
+				Title = "❌ Không đủ Portal Gun",
+				Description = "Cần " .. Data.PortalCost .. " Portal Gun!",
+				Duration = 4
+			})
+			_G.AutoRaidRunning = false
+			return
+		end
 
-							local TPZone2 = workspace:FindFirstChild("TeleportBossFightZone")
-							if TPZone2 and TPZone2:FindFirstChild("Hitbox") then
-								print("[AutoRaid] Portal xuất hiện, vào Hitbox!")
-								local Hitbox2 = TPZone2.Hitbox
-								hrp.Anchored = true
+		print("[AutoRaid] Fire SpawnBossFight: " .. Data.Name)
+		local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
+		NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
+		task.wait(2)
 
-								local LastPrint2 = 0
-								repeat task.wait(0.1)
-									if not _G.AutoRaidRunning then break end
-									if hrp.Parent then
-										hrp.CFrame = Hitbox2.CFrame
-										hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-									end
-									if tick() - LastPrint2 > 3 then
-										LastPrint2 = tick()
-										print("[AutoRaid] Đang đợi portal teleport...")
-									end
-									if not TPZone2.Parent then
-										print("[AutoRaid] Cổng biến mất, thoát loop")
-										break
-									end
-									if workspace:FindFirstChild("Boss Fight") then
-										print("[AutoRaid] Đã vào map!")
-										break
-									end
-								until false
+		local TPZone2 = workspace:FindFirstChild("TeleportBossFightZone")
+		if TPZone2 and TPZone2:FindFirstChild("Hitbox") then
+			print("[AutoRaid] Portal xuất hiện, vào Hitbox!")
+			local Hitbox2 = TPZone2.Hitbox
+			hrp.Anchored = true
 
-								hrp.Anchored = false
+			local LastPrint2 = 0
+			repeat task.wait(0.1)
+				if not _G.AutoRaidRunning then break end
+				if hrp.Parent then
+					hrp.CFrame = Hitbox2.CFrame
+					hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+				end
+				if tick() - LastPrint2 > 3 then
+					LastPrint2 = tick()
+					print("[AutoRaid] Đang đợi portal teleport...")
+				end
+				if not TPZone2.Parent then
+					print("[AutoRaid] Cổng biến mất, thoát loop")
+					break
+				end
+				if workspace:FindFirstChild("Boss Fight") then
+					print("[AutoRaid] Đã vào map!")
+					break
+				end
+			until false
 
-								if workspace:FindFirstChild("Boss Fight") then
-									print("[AutoRaid] Đã vào map, đợi 3s...")
-									task.wait(3)
-								else
-									task.wait(1)
-								end
-							else
-								task.wait(2)
-							end
-						end
-					end
+			hrp.Anchored = false
+
+			if workspace:FindFirstChild("Boss Fight") then
+				print("[AutoRaid] Đã vào map, đợi 3s...")
+				task.wait(3)
+			else
+				task.wait(1)
+			end
+		else
+			task.wait(2)
+		end
+	end
+end
 				end)
 			end
 		end
