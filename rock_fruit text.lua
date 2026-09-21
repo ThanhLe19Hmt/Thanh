@@ -2727,41 +2727,24 @@ task.spawn(function()
 	while task.wait(0.5) do
 		if _G.Auto_Dungeon then
 			pcall(function()
-				local playerGui = LocalPlayer.PlayerGui
-				
-				-- Tìm GUI nhận thưởng Dungeon
-				local rewardGui = playerGui:FindFirstChild("DungeonReward") 
-					or playerGui:FindFirstChild("RewardUI")
-					or playerGui:FindFirstChild("Reward")
-				
-				-- Hoặc trong HUD.Main
-				local hud = playerGui:FindFirstChild("HUD")
+				local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
 				if hud and hud:FindFirstChild("Main") then
-					local main = hud.Main
-					for _, guiName in ipairs({"Frame_DungeonReward", "Frame_Reward", "DungeonReward"}) do
-						local gui = main:FindFirstChild(guiName)
-						if gui and gui.Visible then
-							-- Tìm nút Claim/Receive
-							for _, child in pairs(gui:GetDescendants()) do
-								if child:IsA("TextButton") or child:IsA("ImageButton") then
-									local txt = ""
-									pcall(function() txt = child.Text or "" end)
-									if txt:lower():find("claim") or txt:lower():find("receive") or txt:lower():find("nhận") then
-										pcall(function()
-											if firesignal then
-												firesignal(child.MouseButton1Click)
-											else
-												child:Activate()
-											end
-										end)
-										task.wait(0.5)
-										-- Đóng GUI sau khi claim
-										gui.Visible = false
-										break
-									end
-								end
+					local fd = hud.Main:FindFirstChild("Frame_DungeonItem")
+					if fd and fd.Visible then
+						-- Đợi 2s cho user xem thưởng
+						task.wait(2)
+						-- Đóng GUI
+						local closeBtn = fd:FindFirstChild("Close_")
+						if closeBtn then
+							if firesignal then
+								firesignal(closeBtn.MouseButton1Click)
+							else
+								closeBtn:Activate()
 							end
+						else
+							fd.Visible = false
 						end
+						print("[AutoDungeon] Đã đóng GUI nhận thưởng")
 					end
 				end
 			end)
