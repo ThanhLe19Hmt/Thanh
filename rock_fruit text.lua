@@ -94,6 +94,8 @@ _G.Select_Guarantee = nil
 _G.Auto_Guarantee = false
 _G.Select_Guarantee_Moon = nil
 _G.Auto_Guarantee_Moon = false
+_G.RaidBossOffsetY = 55
+_G.RaidBallOffsetY = 25
 
 for ItemName in pairs(Economy) do
 	table.insert(SellItems,ItemName)
@@ -503,6 +505,26 @@ RaidBossCard:Button({
 			Description = Data.Name,
 			Duration = 3
 		})
+	end
+})
+RaidBossCard:Slider({
+	Title = "Bacon of Grudge Height",
+	Min = 0,
+	Max = 150,
+	Value = 55,
+	Callback = function(Value)
+		_G.RaidBossOffsetY = Value
+		print("[RaidSettings] Boss Height =", Value)
+	end
+})
+RaidBossCard:Slider({
+	Title = "Golden Ball Height",
+	Min = 0,
+	Max = 150,
+	Value = 25,
+	Callback = function(Value)
+		_G.RaidBallOffsetY = Value
+		print("[RaidSettings] Ball Height =", Value)
 	end
 })
 -- ===== SHOP RAID UI =====
@@ -2455,14 +2477,14 @@ task.spawn(function()
 						local A1 = baconFolder:FindFirstChild("ArmorBall1")
 						if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall1")
-							AttackTarget(A1:FindFirstChild("HumanoidRootPart"), A1, 25, 0)
+							AttackTarget(A1:FindFirstChild("HumanoidRootPart"), A1, _G.RaidBallOffsetY or 25, 0)
 						end
 
 						-- ===== Ball 2 =====
 						local A2 = baconFolder:FindFirstChild("ArmorBall2")
 						if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
 							print("[AutoRaid] Đánh ArmorBall2")
-							AttackTarget(A2:FindFirstChild("HumanoidRootPart"), A2, 25, 0)
+							AttackTarget(A2:FindFirstChild("HumanoidRootPart"), A2, _G.RaidBallOffsetY or 25, 0)
 						end
 
 						-- ===== BOSS BACON OF GRULD =====
@@ -2471,7 +2493,7 @@ task.spawn(function()
 							local bossHrp = BossBacon:FindFirstChild("HumanoidRootPart")
 							if bossHrp then
 								print("[AutoRaid] Đánh Boss Bacon Sad")
-								AttackTarget(bossHrp, BossBacon, 55, 5)
+								AttackTarget(bossHrp, BossBacon, _G.RaidBossOffsetY or 55, 5)
 							end
 						end
 
@@ -2584,8 +2606,6 @@ end
 		end
 	end
 end)
-
--- Cleanup khi tắt AutoRaid
 task.spawn(function()
 	while task.wait(0.5) do
 		if not _G.AutoRaidRunning then
@@ -2609,7 +2629,6 @@ task.spawn(function()
 			local char = LocalPlayer.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart")
 			if hrp then
-				-- Cancel dash: giữ velocity chỉ theo trục Y
 				local v = hrp.AssemblyLinearVelocity
 				hrp.AssemblyLinearVelocity = Vector3.new(0, v.Y, 0)
 			end
@@ -2617,75 +2636,45 @@ task.spawn(function()
 		task.wait()
 	end
 end)
+-- ===== AUTO CLOSE REWARD GUI =====
 task.spawn(function()
 	while task.wait(0.5) do
-		if _G.Auto_Dungeon then
-			pcall(function()
-				local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-				if hud and hud:FindFirstChild("Main") then
-					local fd = hud.Main:FindFirstChild("Frame_DungeonItem")
+		pcall(function()
+			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+			if not hud or not hud:FindFirstChild("Main") then return end
+
+			local closeList = {
+				{_G.Auto_Dungeon, "Frame_DungeonItem"},
+				{_G.AutoRaidRunning, "Frame_RaidbossItem"}
+			}
+
+			for _, entry in ipairs(closeList) do
+				if entry[1] then
+					local fd = hud.Main:FindFirstChild(entry[2])
 					if fd and fd.Visible then
-						-- Đợi 2s cho user xem thưởng
 						task.wait(2)
-						-- Đóng GUI
 						local closeBtn = fd:FindFirstChild("Close_")
+							or fd:FindFirstChild("Close")
+							or fd:FindFirstChild("CloseButton")
+							or fd:FindFirstChild("Exit")
+
 						if closeBtn then
-							if firesignal then
-								firesignal(closeBtn.MouseButton1Click)
-							else
-								closeBtn:Activate()
-							end
+							pcall(function()
+								if firesignal then
+									firesignal(closeBtn.MouseButton1Click)
+								else
+									closeBtn:Activate()
+								end
+							end)
+							print("[AutoClose] Đã đóng:", entry[2])
 						else
 							fd.Visible = false
-						end
-						print("[AutoDungeon] Đã đóng GUI nhận thưởng")
-					end
-				end
-			end)
-		end
-	end
-end)
--- ===== AUTO CLOSE RAID REWARD GUI =====
-task.spawn(function()
-	while task.wait(0.5) do
-		if _G.AutoRaidRunning then
-			pcall(function()
-				local playerGui = LocalPlayer.PlayerGui
-				
-				-- Tìm GUI nhận thưởng Raid
-				local rewardGui = playerGui:FindFirstChild("RaidReward")
-					or playerGui:FindFirstChild("BossReward")
-				
-				-- Trong HUD.Main
-				local hud = playerGui:FindFirstChild("HUD")
-				if hud and hud:FindFirstChild("Main") then
-					local main = hud.Main
-					for _, guiName in ipairs({"Frame_RaidReward", "Frame_BossReward", "Frame_Reward"}) do
-						local gui = main:FindFirstChild(guiName)
-						if gui and gui.Visible then
-							for _, child in pairs(gui:GetDescendants()) do
-								if child:IsA("TextButton") or child:IsA("ImageButton") then
-									local txt = ""
-									pcall(function() txt = child.Text or "" end)
-									if txt:lower():find("claim") or txt:lower():find("receive") or txt:lower():find("ok") then
-										pcall(function()
-											if firesignal then
-												firesignal(child.MouseButton1Click)
-											else
-												child:Activate()
-											end
-										end)
-										task.wait(0.5)
-										gui.Visible = false
-										break
-									end
-								end
-							end
+							print("[AutoClose] Đã ẩn:", entry[2])
 						end
 					end
 				end
-			end)
-		end
+			end
+		end)
 	end
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
