@@ -421,6 +421,11 @@ local DevilBoat = AllBoss:CreateSection("⛵ Devil Boat","Right")
 local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
 local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
 local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
+local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
+local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
+local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid","Left")
+local ShopRaidInfoCard = RaidBossPage:CreateSection("📊 Shop Info","Right")
+local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings","Right")
 
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
@@ -456,10 +461,6 @@ local RaidBossData = {
 }
 
 -- ===== CỘT TRÁI - AUTO RAID BOSS =====
-local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
-
--- Info Paragraph
-local RaidBossInfo = RaidBossPage:CreateSection("📋 Raid Info","Right")
 local RaidBossInfoPara = RaidBossInfo:Paragraph({
 	Title = "Name: ( chưa chọn )",
 	Content = "Please choose a Boss Raid!!"
@@ -512,9 +513,6 @@ RaidBossCard:Button({
 		})
 	end
 })
-
--- ===== CỘT PHẢI - RAID SETTINGS =====
-local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings","Right")
 
 -- Slider độ cao đánh Boss
 RaidSettingsCard:Slider({
@@ -569,8 +567,6 @@ RaidSettingsCard:Paragraph({
 })
 
 -- ===== SHOP RAID UI =====
-local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid","Left")
-local ShopRaidInfoCard = RaidBossPage:CreateSection("📊 Shop Info","Right")
 
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
 	Title = "RaidPoint: ( đang load... )",
