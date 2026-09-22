@@ -460,10 +460,6 @@ local RaidBossData = {
 }
 
 -- ===== CỘT TRÁI - AUTO RAID BOSS =====
-local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
-
--- Info Paragraph
-local RaidBossInfo = RaidBossPage:CreateSection("📋 Raid Info","Right")
 local RaidBossInfoPara = RaidBossInfo:Paragraph({
 	Title = "Name: ( chưa chọn )",
 	Content = "Please choose a Boss Raid!!"
