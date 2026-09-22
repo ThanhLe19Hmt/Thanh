@@ -943,14 +943,14 @@ local function UseThanosF()
 	end
 
 	-- Spam F 15 lần
-	for i = 1, 15 do
+	for i = 1, 30 do
 		pcall(function()
 			ReplicatedStorage.Remotes.Action:FireServer("Thanos", "f")
 		end)
 		pcall(function()
 			thanosTool:Activate()
 		end)
-		task.wait(0.05)
+		task.wait(0.03)
 	end
 
 	return true
