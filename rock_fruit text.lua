@@ -460,6 +460,10 @@ local RaidBossData = {
 }
 
 -- ===== CỘT TRÁI - AUTO RAID BOSS =====
+local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
+
+-- Info Paragraph
+local RaidBossInfo = RaidBossPage:CreateSection("📋 Raid Info","Right")
 local RaidBossInfoPara = RaidBossInfo:Paragraph({
 	Title = "Name: ( chưa chọn )",
 	Content = "Please choose a Boss Raid!!"
@@ -568,7 +572,6 @@ RaidSettingsCard:Paragraph({
 	Content = "Use the F ability to finish off the target when they are below 50% HP."
 })
 
--- ===== SHOP RAID UI =====
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
 	Title = "RaidPoint: ( đang load... )",
 	Content = "Restock In: ( đang load... )"
@@ -2656,6 +2659,7 @@ task.spawn(function()
 	end
 end)
 -- ===== AUTO RAID BOSS v17 - FIX BOSS MOVE AND FINA =====
+-- ===== AUTO RAID BOSS =====
 task.spawn(function()
 	print("[AutoRaid] ✅ task.spawn đã khởi động!")
 	while task.wait(0.3) do
