@@ -528,20 +528,24 @@ RaidBossCard:Slider({
 	end
 })
 -- ===== SHOP RAID UI =====
+-- Paragraph info RaidPoint + Restock
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
 	Title = "RaidPoint: ( đang load... )",
 	Content = "Restock In: ( đang load... )"
 })
 
+-- Paragraph info item đã chọn
 local ShopItemInfo = ShopRaidInfoCard:Paragraph({
 	Title = "Item: ( chưa chọn )",
 	Content = "Chọn item từ dropdown để xem thông tin"
 })
 
+-- Dropdown chọn item
 local SelectedShopItem = nil
 local ShopItemDropdown = nil
 local LastShopItemsStr = ""
 
+-- Hàm tạo lại dropdown
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
 	if itemsStr == LastShopItemsStr and ShopItemDropdown then
@@ -561,7 +565,8 @@ local function RefreshShopDropdown(items)
 		Multi = false,
 		Callback = function(Value)
 			SelectedShopItem = Value
-			
+
+			-- Update thông tin item
 			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
 			if hud and hud:FindFirstChild("Main") then
 				local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
@@ -592,8 +597,9 @@ local function RefreshShopDropdown(items)
 	})
 end
 
+-- Nút BUY
 ShopRaidCard:Button({
-	Title = "BUY!!",
+	Title = "BUY!",
 	Callback = function()
 		if not SelectedShopItem then
 			Library:Notify({
@@ -604,6 +610,7 @@ ShopRaidCard:Button({
 			return
 		end
 
+		-- Check hết hàng
 		local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
 		if hud and hud:FindFirstChild("Main") then
 			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
@@ -631,6 +638,7 @@ ShopRaidCard:Button({
 			end
 		end
 
+		-- Fire Remote mua
 		local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
 		NetworkEvent:FireServer("fire", nil, "buy_raidshop", SelectedShopItem)
 		print("[ShopRaid] BUY:", SelectedShopItem)
@@ -643,6 +651,7 @@ ShopRaidCard:Button({
 	end
 })
 
+-- Loop cập nhật LIÊN TỤC (0.5s) - CHỈ UPDATE KHI CÓ THAY ĐỔI
 task.spawn(function()
 	local LastRaidPoint = ""
 	local LastRestock = ""
@@ -654,6 +663,7 @@ task.spawn(function()
 			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
 			if not shop then return end
 
+			-- Update RaidPoint + Restock (chỉ khi đổi)
 			local rpLbl = shop:FindFirstChild("RaidPoint")
 			local resetLbl = shop:FindFirstChild("Reset")
 			if rpLbl and resetLbl then
@@ -667,6 +677,7 @@ task.spawn(function()
 				end
 			end
 
+			-- Update item list (chỉ khi đổi)
 			local sf = shop:FindFirstChild("ScrollingFrame")
 			if sf then
 				local items = {}
