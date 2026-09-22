@@ -452,7 +452,7 @@ local RaidBossData = {
 	},
 }
 
-local RaidBossInfoPara = RaidBossInfo:Paragraph({
+local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
 	Title = "Name: ( chưa chọn )",
 	Content = "Please choose a Boss Raid!!"
 })
