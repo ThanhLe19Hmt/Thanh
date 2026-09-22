@@ -439,6 +439,7 @@ local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point","Left"
 
 local ConfigTab = Window:CreateTab("Config", false, false)
 -- ===== AUTO RAID BOSS UI =====
+-- ===== AUTO RAID BOSS UI =====
 local RaidBossData = {
 	["Bacon of Grudge"] = {
 		Name = "Bacon of Grudge",
@@ -460,7 +461,7 @@ local RaidBossData = {
 	},
 }
 
--- ===== CỘT TRÁI - AUTO RAID BOSS =====
+-- Info Paragraph (SỬA RaidBossInfo → RaidBossInfoCard)
 local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
 	Title = "Name: ( chưa chọn )",
 	Content = "Please choose a Boss Raid!!"
@@ -567,7 +568,6 @@ RaidSettingsCard:Paragraph({
 })
 
 -- ===== SHOP RAID UI =====
-
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
 	Title = "RaidPoint: ( đang load... )",
 	Content = "Restock In: ( đang load... )"
@@ -582,7 +582,6 @@ local SelectedShopItem = nil
 local ShopItemDropdown = nil
 local LastShopItemsStr = ""
 
--- Dropdown chọn item
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
 	if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
@@ -602,7 +601,6 @@ local function RefreshShopDropdown(items)
 	})
 end
 
--- Nút BUY
 ShopRaidCard:Button({
 	Title = "BUY!!",
 	Callback = function()
@@ -616,7 +614,6 @@ ShopRaidCard:Button({
 	end
 })
 
--- Auto Buy
 local AutoBuyItem = nil
 _G.AutoBuyRunning = false
 _G.AutoBuyLoaded = false
@@ -729,7 +726,6 @@ local function BuyShopItem(itemName)
 	return false
 end
 
--- Loop update Shop
 task.spawn(function()
 	local LastRaidPoint = ""
 	local LastRestock = ""
@@ -798,7 +794,6 @@ task.spawn(function()
 	end
 end)
 
--- Loop Auto Buy
 task.spawn(function()
 	while task.wait(0.5) do
 		if _G.AutoBuyRunning and AutoBuyItem then
