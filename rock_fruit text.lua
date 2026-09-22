@@ -461,7 +461,7 @@ local RaidBossData = {
 }
 
 -- ===== CỘT TRÁI - AUTO RAID BOSS =====
-local RaidBossInfoPara = RaidBossInfo:Paragraph({
+local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
 	Title = "Name: ( chưa chọn )",
 	Content = "Please choose a Boss Raid!!"
 })
@@ -2997,7 +2997,7 @@ local NoVFX = function(State)
 	end
 end
 local AutoSkill = function()
-    if _G.RaidThanosSpamming then return end
+	if _G.RaidThanosSpamming then return end
 	local Character = LocalPlayer.Character
 	if not Character then return end
 	local Skills = {}
