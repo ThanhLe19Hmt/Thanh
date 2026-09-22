@@ -549,7 +549,7 @@ local LastShopItemsStr = ""
 -- Dropdown chọn item
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
-	if itemsStr == LastShopItemsStr and ShopItemDropdown and ShopItemDropdown._Parent then return end
+	if itemsStr == LastShopItemsStr and ShopItemDropdown and
 	LastShopItemsStr = itemsStr
 
 	if ShopItemDropdown then
