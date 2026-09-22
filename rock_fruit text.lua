@@ -434,127 +434,410 @@ local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point","Left"
 
 local ConfigTab = Window:CreateTab("Config", false, false)
 -- ===== AUTO RAID BOSS UI =====
--- ===== HÀM EQUIP THANOS =====
-local function EquipThanosFromInventory()
-	local char = LocalPlayer.Character
-	if not char then return false, "Không có Character" end
-	local hum = char:FindFirstChild("Humanoid")
-	if not hum then return false, "Không có Humanoid" end
+local RaidBossData = {
+	["Bacon of Grudge"] = {
+		Name = "Bacon of Grudge",
+		Reward = "Time Mystery Box x5, 7500 Diamond, Beli 50M, x3 Potion, Rroll Class + Raid Poiton x1",
+		PortalCost = 1,
+		Valid = true,
+	},
+	["??? (Raid 2)"] = {
+		Name = "???",
+		Reward = "SOON!! AND Just wait.",
+		PortalCost = 0,
+		Valid = false,
+	},
+	["??? (Raid 3)"] = {
+		Name = "???",
+		Reward = "SOON!! AND Just wait.",
+		PortalCost = 0,
+		Valid = false,
+	},
+}
 
-	local HttpService = game:GetService("HttpService")
-	local ok, Inv = pcall(function()
-		return HttpService:JSONDecode(LocalPlayer:GetAttribute("Inventory") or "{}")
-	end)
-	Inv = ok and Inv or {}
+-- ===== CỘT TRÁI - AUTO RAID BOSS =====
+local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 
-	if not (Inv["Thanos"] and (Inv["Thanos"].amount or Inv["Thanos"].Amount or 0) > 0) then
-		return false, "Không có Thanos trong Inventory"
+-- Info Paragraph
+local RaidBossInfo = RaidBossPage:CreateSection("📋 Raid Info","Right")
+local RaidBossInfoPara = RaidBossInfo:Paragraph({
+	Title = "Name: ( chưa chọn )",
+	Content = "Please choose a Boss Raid!!"
+})
+
+-- Dropdown chọn Raid
+RaidBossCard:Dropdown({
+	Title = "Auto Raid Who??",
+	Options = {"Bacon of Grudge", "??? (Raid 2)", "??? (Raid 3)"},
+	Multi = false,
+	Callback = function(Value)
+		_G.AutoRaidWho = Value
+		local Data = RaidBossData[Value]
+		if Data then
+			RaidBossInfoPara:SetTitle("Name: " .. Data.Name)
+			RaidBossInfoPara:SetContent(
+				"Reward: " .. Data.Reward ..
+				"\n- " .. Data.PortalCost .. " Portal Gun"
+			)
+		end
+	end
+})
+
+-- Button Start Raid
+RaidBossCard:Button({
+	Title = "Please choose a Boss Raid!! Which one do you want to do?",
+	Callback = function()
+		local Data = RaidBossData[_G.AutoRaidWho]
+		if not Data then
+			Library:Notify({
+				Title = "❌ Chưa chọn Raid",
+				Description = "Please choose a Boss Raid!! Which one do you want to do?",
+				Duration = 3
+			})
+			return
+		end
+		if not Data.Valid then
+			Library:Notify({
+				Title = "❌ Raid không hợp lệ",
+				Description = "NO RAID!!! Please select a valid cluster.",
+				Duration = 3
+			})
+			return
+		end
+		_G.AutoRaidRunning = not _G.AutoRaidRunning
+		Library:Notify({
+			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
+			Description = Data.Name,
+			Duration = 3
+		})
+	end
+})
+
+-- ===== CỘT PHẢI - RAID SETTINGS =====
+local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings","Right")
+
+-- Slider độ cao đánh Boss
+RaidSettingsCard:Slider({
+	Title = "Bacon of Grudge Height",
+	Min = 0,
+	Max = 150,
+	Value = 55,
+	Callback = function(Value)
+		_G.RaidBossOffsetY = Value
+		print("[RaidSettings] Boss Height =", Value)
+	end
+})
+
+-- Slider độ cao đánh cục vàng
+RaidSettingsCard:Slider({
+	Title = "Golden Ball Height",
+	Min = 0,
+	Max = 150,
+	Value = 25,
+	Callback = function(Value)
+		_G.RaidBallOffsetY = Value
+		print("[RaidSettings] Ball Height =", Value)
+	end
+})
+
+-- Toggle I AM Thanos
+RaidSettingsCard:Toggle({
+	Title = "I AM Thanos",
+	Value = false,
+	Callback = function(Value)
+		local HttpService = game:GetService("HttpService")
+		local Inv = HttpService:JSONDecode(game.Players.LocalPlayer:GetAttribute("Inventory") or "{}")
+		local Have = Inv["Thanos"] and (Inv["Thanos"].amount or Inv["Thanos"].Amount or 0) > 0
+		if Value and not Have then
+			Library:Notify({
+				Title = "❌ Không có Thanos",
+				Description = "Bạn không có Special Thanos trong Inventory nên tính năng này không thể sử dụng.",
+				Duration = 5
+			})
+			_G.RaidUseThanos = false
+			return
+		end
+		_G.RaidUseThanos = Value
+		print("[RaidSettings] I AM Thanos =", Value)
+	end
+})
+
+-- Info Thanos
+RaidSettingsCard:Paragraph({
+	Title = "",
+	Content = "Use the F ability to finish off the target when they are below 50% HP."
+})
+
+-- ===== SHOP RAID UI =====
+local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid","Left")
+local ShopRaidInfoCard = RaidBossPage:CreateSection("📊 Shop Info","Right")
+
+local ShopInfoPara = ShopRaidInfoCard:Paragraph({
+	Title = "RaidPoint: ( đang load... )",
+	Content = "Restock In: ( đang load... )"
+})
+
+local ShopItemInfo = ShopRaidInfoCard:Paragraph({
+	Title = "Item: ( chưa chọn )",
+	Content = "Chọn item từ dropdown để xem thông tin"
+})
+
+local SelectedShopItem = nil
+local ShopItemDropdown = nil
+local LastShopItemsStr = ""
+
+-- Dropdown chọn item
+local function RefreshShopDropdown(items)
+	local itemsStr = table.concat(items, ",")
+	if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
+	LastShopItemsStr = itemsStr
+
+	if ShopItemDropdown then
+		pcall(function() ShopItemDropdown:Destroy() end)
 	end
 
-	local UseSpecial = LocalPlayer:GetAttribute("UseSpecial") or ""
+	ShopItemDropdown = ShopRaidCard:Dropdown({
+		Title = "Chọn Items để mua",
+		Options = items,
+		Multi = false,
+		Callback = function(Value)
+			SelectedShopItem = Value
+		end
+	})
+end
 
-	if UseSpecial == "Thanos" then
-		for _, v in pairs(char:GetChildren()) do
-			if v:IsA("Tool") and v.Name == "Thanos" then
-				print("[Thanos] ✅ Đã equip sẵn")
+-- Nút BUY
+ShopRaidCard:Button({
+	Title = "BUY!!",
+	Callback = function()
+		if not SelectedShopItem then
+			Library:Notify({Title = "❌ Chưa chọn item", Description = "Vui lòng chọn item trước!", Duration = 3})
+			return
+		end
+		local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
+		NetworkEvent:FireServer("fire", nil, "buy_raidshop", SelectedShopItem)
+		Library:Notify({Title = "✅ Đã mua", Description = SelectedShopItem, Duration = 3})
+	end
+})
+
+-- Auto Buy
+local AutoBuyItem = nil
+_G.AutoBuyRunning = false
+_G.AutoBuyLoaded = false
+local AutoBuyDropdown = nil
+local LastAllShopItemsStr = ""
+
+local function GetAllShopItems()
+	local items = {}
+	local seen = {}
+	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+	if hud and hud:FindFirstChild("Main") then
+		local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
+		if shop then
+			local sf = shop:FindFirstChild("ScrollingFrame")
+			if sf then
+				for _, item in pairs(sf:GetChildren()) do
+					if item:IsA("Frame") then
+						local label = item:FindFirstChild("Label")
+						if label and label.Text and label.Text ~= "" and label.Text ~= "Item" then
+							if not seen[label.Text] then
+								seen[label.Text] = true
+								table.insert(items, label.Text)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	local DefaultItems = {
+		"Microphone", "Heart of Envy", "Evil Egg", "Stopwatch",
+		"X2 Rebirth 15min.", "Crocodile leather", "Chicken Ball",
+		"Orb Fried Chicken", "Chicken Nugget", "Chicken Bone"
+	}
+	for _, name in ipairs(DefaultItems) do
+		if not seen[name] then
+			seen[name] = true
+			table.insert(items, name)
+		end
+	end
+	table.sort(items)
+	return items
+end
+
+local function RefreshAutoBuyDropdown(allItems)
+	local allItemsStr = table.concat(allItems, ",")
+	if allItemsStr == LastAllShopItemsStr and AutoBuyDropdown then return end
+	LastAllShopItemsStr = allItemsStr
+
+	if AutoBuyDropdown then
+		pcall(function() AutoBuyDropdown:Destroy() end)
+	end
+
+	AutoBuyDropdown = ShopRaidCard:Dropdown({
+		Title = "Auto Buy Items",
+		Options = allItems,
+		Multi = false,
+		Callback = function(Value)
+			AutoBuyItem = Value
+			print("[AutoBuy] Chọn:", Value)
+		end
+	})
+end
+
+RefreshAutoBuyDropdown({"( đang load... )"})
+
+ShopRaidCard:Toggle({
+	Title = "Auto Buy",
+	Value = false,
+	Callback = function(Value)
+		if not _G.AutoBuyLoaded then
+			_G.AutoBuyLoaded = true
+			_G.AutoBuyRunning = Value
+			return
+		end
+		if Value and not AutoBuyItem then
+			Library:Notify({Title = "❌ Chưa chọn item", Description = "Chọn item Auto Buy trước!", Duration = 3})
+			_G.AutoBuyRunning = false
+			return
+		end
+		_G.AutoBuyRunning = Value
+		Library:Notify({
+			Title = Value and "▶️ Bật Auto Buy" or "⏹️ Tắt Auto Buy",
+			Description = AutoBuyItem or "N/A",
+			Duration = 3
+		})
+	end
+})
+
+local function BuyShopItem(itemName)
+	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+	if not hud or not hud:FindFirstChild("Main") then return false end
+	local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
+	if not shop then return false end
+	local sf = shop:FindFirstChild("ScrollingFrame")
+	if not sf then return false end
+
+	for _, item in pairs(sf:GetChildren()) do
+		if item:IsA("Frame") then
+			local label = item:FindFirstChild("Label")
+			if label and label.Text == itemName then
+				local outstock = item:FindFirstChild("Outstock")
+				if outstock and outstock.Visible then return false end
+				local NetworkEvent = ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
+				NetworkEvent:FireServer("fire", nil, "buy_raidshop", itemName)
 				return true
 			end
 		end
-		local bp = LocalPlayer:FindFirstChild("Backpack")
-		if bp then
-			for _, v in pairs(bp:GetChildren()) do
-				if v:IsA("Tool") and v.Name == "Thanos" then
-					hum:EquipTool(v)
-					task.wait(0.3)
-					print("[Thanos] ✅ Equip lại từ Backpack")
-					return true
-				end
-			end
-		end
 	end
-
-	if UseSpecial ~= "Thanos" then
-		print("[Thanos] Fire Inventory:FireServer('Thanos')")
-		pcall(function()
-			ReplicatedStorage.Remotes.Inventory:FireServer("Thanos")
-		end)
-		task.wait(0.5)
-	end
-
-	local bp = LocalPlayer:FindFirstChild("Backpack")
-	local tool = nil
-	for i = 1, 20 do
-		if bp then
-			for _, v in pairs(bp:GetChildren()) do
-				if v:IsA("Tool") and v.Name == "Thanos" then
-					tool = v
-					break
-				end
-			end
-		end
-		if tool then break end
-		task.wait(0.1)
-	end
-
-	if not tool then
-		return false, "Tool Thanos không vào Backpack"
-	end
-
-	local equipOK = pcall(function()
-		hum:EquipTool(tool)
-	end)
-	if not equipOK then
-		pcall(function()
-			tool.Parent = char
-		end)
-	end
-	task.wait(0.3)
-
-	for _, v in pairs(char:GetChildren()) do
-		if v:IsA("Tool") and v.Name == "Thanos" then
-			print("[Thanos] ✅ Đã equip thành công")
-			return true
-		end
-	end
-
-	return false, "Không thể equip Tool lên Character"
+	return false
 end
 
--- ===== HÀM DÙNG SKILL F THANOS =====
-local function UseThanosF()
-	local char = LocalPlayer.Character
-	if not char then return false end
+-- Loop update Shop
+task.spawn(function()
+	local LastRaidPoint = ""
+	local LastRestock = ""
+	local LastShopItemInfo = ""
 
-	local thanosTool = nil
-	for i = 1, 10 do
-		for _, v in pairs(char:GetChildren()) do
-			if v:IsA("Tool") and v.Name == "Thanos" then
-				thanosTool = v
-				break
+	while task.wait(0.5) do
+		pcall(function()
+			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+			if not hud or not hud:FindFirstChild("Main") then return end
+			local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
+			if not shop then return end
+
+			local rpLbl = shop:FindFirstChild("RaidPoint")
+			local resetLbl = shop:FindFirstChild("Reset")
+			if rpLbl and resetLbl then
+				local rp = rpLbl.Text
+				local rs = resetLbl.Text
+				if rp ~= LastRaidPoint or rs ~= LastRestock then
+					LastRaidPoint = rp
+					LastRestock = rs
+					ShopInfoPara:SetTitle(rp)
+					ShopInfoPara:SetContent(rs)
+				end
 			end
+
+			local sf = shop:FindFirstChild("ScrollingFrame")
+			if sf then
+				local items = {}
+				for _, item in pairs(sf:GetChildren()) do
+					if item:IsA("Frame") then
+						local label = item:FindFirstChild("Label")
+						if label and label.Text and label.Text ~= "" and label.Text ~= "Item" then
+							table.insert(items, label.Text)
+						end
+					end
+				end
+				if #items > 0 then
+					table.sort(items)
+					RefreshShopDropdown(items)
+				end
+
+				if SelectedShopItem then
+					for _, item in pairs(sf:GetChildren()) do
+						if item:IsA("Frame") then
+							local label = item:FindFirstChild("Label")
+							if label and label.Text == SelectedShopItem then
+								local priceLbl = item:FindFirstChild("Price")
+								local amountLbl = item:FindFirstChild("Amount")
+								local price = priceLbl and priceLbl.Text or "?"
+								local amount = amountLbl and amountLbl.Text or "?"
+								if LastShopItemInfo ~= (price .. "|" .. amount) then
+									LastShopItemInfo = price .. "|" .. amount
+									ShopItemInfo:SetTitle("Item: " .. SelectedShopItem)
+									ShopItemInfo:SetContent("Price: " .. price .. "\nPurchase limit: " .. amount)
+								end
+								break
+							end
+						end
+					end
+				end
+
+				local allItems = GetAllShopItems()
+				RefreshAutoBuyDropdown(allItems)
+			end
+		end)
+	end
+end)
+
+-- Loop Auto Buy
+task.spawn(function()
+	while task.wait(0.5) do
+		if _G.AutoBuyRunning and AutoBuyItem then
+			pcall(function()
+				local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+				if not hud or not hud:FindFirstChild("Main") then return end
+				local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
+				if not shop then return end
+				local sf = shop:FindFirstChild("ScrollingFrame")
+				if not sf then return end
+
+				for _, item in pairs(sf:GetChildren()) do
+					if item:IsA("Frame") then
+						local label = item:FindFirstChild("Label")
+						if label and label.Text == AutoBuyItem then
+							local outstock = item:FindFirstChild("Outstock")
+							if outstock and outstock.Visible then return end
+							local amountLbl = item:FindFirstChild("Amount")
+							if amountLbl then
+								local amtText = amountLbl.Text or ""
+								local cur = tonumber(amtText:match("^(%d+)"))
+								if cur and cur > 0 then
+									BuyShopItem(AutoBuyItem)
+									print("[AutoBuy] Mua:", AutoBuyItem, "| Còn:", cur)
+									task.wait(0.3)
+								end
+							end
+							break
+						end
+					end
+				end
+			end)
 		end
-		if thanosTool then break end
-		task.wait(0.1)
 	end
-
-	if not thanosTool then
-		print("[Thanos] ❌ Tool Thanos không trên Character")
-		return false
-	end
-
-	-- Spam F 15 lần
-	for i = 1, 15 do
-		pcall(function()
-			ReplicatedStorage.Remotes.Action:FireServer("Thanos", "f")
-		end)
-		pcall(function()
-			thanosTool:Activate()
-		end)
-		task.wait(0.05)
-	end
-
-	return true
-end
+end)
 -- ===== HÀM EQUIP THANOS =====
 local function EquipThanosFromInventory()
 	local char = LocalPlayer.Character
