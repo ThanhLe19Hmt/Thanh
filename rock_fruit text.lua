@@ -369,14 +369,6 @@ LocalPlayer.Idled:Connect(function()
 end)
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/znesr99/gui/refs/heads/main/MarvenRizLib.lua"))()
 local MySaveManager = Library.SaveManager
--- ===== DEBUG START =====
-task.spawn(function()
-	local dem = 0
-	while task.wait(2) do
-		dem = dem + 1
-		print("[DEBUG #" .. dem .. "] AutoRaidRunning =", _G.AutoRaidRunning, "| AutoRaidWho =", _G.AutoRaidWho)
-	end
-end)
 -- ===== DEBUG END =====
 local Window = Library:CreateWindow({
     Title = "MarvenRiz Hub",
@@ -438,7 +430,6 @@ local MoonChest = RandomM:CreateSection("🌙 Moon Chest","Left")
 local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point","Left")
 
 local ConfigTab = Window:CreateTab("Config", false, false)
--- ===== AUTO RAID BOSS UI =====
 -- ===== AUTO RAID BOSS UI =====
 local RaidBossData = {
 	["Bacon of Grudge"] = {
@@ -3056,9 +3047,10 @@ local EquipWeapon = function()
 end
 
 local Attack = function()
+	if _G.RaidThanosSpamming then return end
 	local Character = LocalPlayer.Character
 	if not Character then return end
-	for _,v in ipairs(Character:GetChildren()) do
+	for _,v in pairs(Character:GetChildren()) do
 		if v:IsA("Tool") then
 			ReplicatedStorage.Remotes.Action:FireServer(v.Name,"hit")
 		end
