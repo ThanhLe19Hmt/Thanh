@@ -645,8 +645,6 @@ local function RefreshAutoBuyDropdown(allItems)
 	})
 end
 
-RefreshAutoBuyDropdown({"( đang load... )"})
-
 ShopRaidCard:Toggle({
 	Title = "Auto Buy",
 	Value = false,
