@@ -363,15 +363,6 @@ LocalPlayer.Idled:Connect(function()
 end)
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/znesr99/gui/refs/heads/main/MarvenRizLib.lua"))()
 local MySaveManager = Library.SaveManager
--- ===== DEBUG START =====
-task.spawn(function()
-	local dem = 0
-	while task.wait(2) do
-		dem = dem + 1
-		print("[DEBUG #" .. dem .. "] AutoRaidRunning =", _G.AutoRaidRunning, "| AutoRaidWho =", _G.AutoRaidWho)
-	end
-end)
--- ===== DEBUG END =====
 local Window = Library:CreateWindow({
     Title = "MarvenRiz Hub",
     Subtitle = "Map : Rock Fruit",
