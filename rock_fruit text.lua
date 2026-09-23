@@ -3029,6 +3029,63 @@ task.spawn(function()
 		end
 	end
 end)
+-- ===== DEBUG CRAFT TABLE FULL V2 =====
+task.spawn(function()
+	while task.wait(3) do
+		pcall(function()
+			print("========== DEBUG CRAFT V2 ==========")
+			print("AutoCraftRunning:", _G.AutoCraftRunning)
+			print("AutoClaimGuarantee:", _G.AutoClaimGuarantee)
+			print("_G.SelectedCraftItem:", _G.SelectedCraftItem)  -- ← DÙNG _G
+			print("CraftDropdown:", CraftDropdown)
+
+			if _G.SelectedCraftItem then
+				print("")
+				print("--- UseItems[", _G.SelectedCraftItem, "] ---")
+				local Data = UseItems[_G.SelectedCraftItem]
+				if Data then
+					print("Type:", Data.Type)
+					print("Inventory exists:", Data.Inventory and "YES" or "NO")
+					if Data.Inventory then
+						for Item, Need in pairs(Data.Inventory) do
+							local Have = GetItemAmount(Item)
+							print("  ", Item, "Need:", Need, "Have:", Have, "OK:", Have >= Need)
+						end
+					end
+				else
+					print("❌ UseItems[", _G.SelectedCraftItem, "] = nil")
+				end
+			else
+				print("❌ _G.SelectedCraftItem = nil")
+			end
+
+			-- Check Craft GUI
+			print("")
+			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+			if hud and hud:FindFirstChild("Main") then
+				local craft = hud.Main:FindFirstChild("Frame_CraftTable")
+				print("CraftTable Visible:", craft and craft.Visible or "nil")
+				local guar = hud.Main:FindFirstChild("Frame_Guarantee")
+				print("Guarantee Visible:", guar and guar.Visible or "nil")
+				if guar and _G.SelectedCraftItem then
+					local sf = guar:FindFirstChild("ScrollingFrame")
+					if sf then
+						local itemFrame = sf:FindFirstChild(_G.SelectedCraftItem)
+						print("Guarantee item frame:", itemFrame and "CÓ" or "KHÔNG")
+						if itemFrame then
+							local main = itemFrame:FindFirstChild("Main")
+							if main then
+								local amtLbl = main:FindFirstChild("AmountLabel")
+								print("AmountLabel:", amtLbl and amtLbl.Text or "nil")
+							end
+						end
+					end
+				end
+			end
+			print("====================================")
+		end)
+	end
+end)
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
     task.wait(1)
