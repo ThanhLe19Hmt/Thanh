@@ -405,13 +405,13 @@ local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
 
 -- ===== CỘT TRÁI =====
 local DungeonCard = RaidDun:CreateSection("🏰 Auto Dungeon","Left")
-local DungeonSettingsCard = RaidDun:CreateSection("⚙️ Dungeon Settings","Left")
 local ShopDunCard = RaidDun:CreateSection("🏪 Shop Dungeon","Left")
+local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Left")
 
 -- ===== CỘT PHẢI =====
-local RaidCard = RaidDun:CreateSection("🌋 Auto Raid Moon","Right")
+local DungeonSettingsCard = RaidDun:CreateSection("⚙️ Dungeon Settings","Right")
 local ShopDunInfoCard = RaidDun:CreateSection("📊 Shop Dungeon Info","Right")
-local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
+local RaidCard = RaidDun:CreateSection("🌋 Auto Raid Moon","Right")
 
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
