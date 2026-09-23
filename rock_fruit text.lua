@@ -430,6 +430,7 @@ local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings","Righ
 local Tab3 = Window:CreateTab("Other", false, false)
 local SItem = Tab3:CreatePage("Sell Item / Status")
 local RandomM = Tab3:CreatePage("Random Chest")
+local CraftTablePage = Tab3:CreatePage("Craft Table")
 local SellCard = SItem:CreateSection("💰 Auto Sell","Left")
 local StatusCard = SItem:CreateSection("📊 Status","Right")
 local DiamondChest =RandomM:CreateSection("💎 Diamond Chest","Right")
@@ -2799,6 +2800,224 @@ task.spawn(function()
 				end
 			end
 		end)
+	end
+end)
+-- ===== CRAFT TABLE UI =====
+local CraftCard = CraftTablePage:CreateSection("🔨 Craft Table","Left")
+local CraftInfoCard = CraftTablePage:CreateSection("📋 Craft Info","Right")
+
+local CraftInfoPara = CraftInfoCard:Paragraph({
+	Title = "Items: ( chưa chọn )",
+	Content = "Consumables: ---\nCurrently Available: ---\nCrafted Item: ---"
+})
+
+local SelectedCraftItem = nil
+local CraftDropdown = nil
+local LastCraftItemsStr = ""
+
+local function GetCraftItemsFromGUI()
+	local items = {}
+	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+	if hud and hud:FindFirstChild("Main") then
+		local craft = hud.Main:FindFirstChild("Frame_CraftTable")
+		if craft then
+			local sf = craft:FindFirstChild("ItemScrollingFrame")
+			if sf then
+				for _, item in pairs(sf:GetChildren()) do
+					if item:IsA("TextButton") then
+						local main = item:FindFirstChild("Main")
+						if main then
+							local titleLbl = main:FindFirstChild("TitleLabel")
+							if titleLbl and titleLbl.Text and titleLbl.Text ~= "" then
+								table.insert(items, titleLbl.Text)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	table.sort(items)
+	return items
+end
+
+local CraftItemFallback = {
+	"Glass Tube", "Utility Knife Blade", "Hammer", "Utility Knife", "Portal Gun",
+	"Honey", "Horseshoe", "Boxing Shorts", "Gas Cylinder", "Rainbow Potion",
+	"Cursed Blade", "Cursed Chain", "Teio Shoes", "Mambo Shoes", "KFC",
+	"Gold Gauntlet", "Rainbow Carrot", "Tachyon Shoes"
+}
+
+local function RefreshCraftDropdown(items)
+	local itemsStr = table.concat(items, ",")
+	if itemsStr == LastCraftItemsStr and CraftDropdown then return end
+	LastCraftItemsStr = itemsStr
+
+	if CraftDropdown then
+		pcall(function() CraftDropdown:Destroy() end)
+		task.wait(0.05)
+	end
+
+	CraftDropdown = CraftCard:Dropdown({
+		Title = "Chọn Items để chế tạo",
+		Options = items,
+		Multi = false,
+		Callback = function(Value)
+			SelectedCraftItem = Value
+			UpdateCraftInfo(Value)
+		end
+	})
+end
+
+function UpdateCraftInfo(itemName)
+	if not itemName then return end
+	local Data = UseItems[itemName]
+	local ConsumText = ""
+	local AvailText = ""
+
+	if Data and Data.Inventory then
+		for Item, Need in pairs(Data.Inventory) do
+			local Have = GetItemAmount(Item)
+			ConsumText = ConsumText .. "\n  " .. Item .. " x" .. Need
+			AvailText = AvailText .. "\n  " .. Item .. " " .. Have
+		end
+	end
+
+	local CraftedText = "0/2"
+	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+	if hud and hud:FindFirstChild("Main") then
+		local guar = hud.Main:FindFirstChild("Frame_Guarantee")
+		if guar then
+			local sf = guar:FindFirstChild("ScrollingFrame")
+			if sf then
+				local itemFrame = sf:FindFirstChild(itemName)
+				if itemFrame then
+					local main = itemFrame:FindFirstChild("Main")
+					if main then
+						local amtLbl = main:FindFirstChild("AmountLabel")
+						if amtLbl then
+							CraftedText = amtLbl.Text
+						end
+					end
+				end
+			end
+		end
+	end
+
+	CraftInfoPara:SetTitle("Items: " .. itemName)
+	CraftInfoPara:SetContent(
+		"Consumables: " .. (ConsumText ~= "" and ConsumText or " ---") ..
+		"\nCurrently Available: " .. (AvailText ~= "" and AvailText or " ---") ..
+		"\nCrafted Item: " .. CraftedText
+	)
+end
+
+_G.AutoCraftRunning = false
+_G.AutoCraftLoaded = false
+
+CraftCard:Toggle({
+	Title = "Auto Chế Tạo",
+	Value = false,
+	Callback = function(Value)
+		if not _G.AutoCraftLoaded then
+			_G.AutoCraftLoaded = true
+			_G.AutoCraftRunning = Value
+			return
+		end
+		if Value and not SelectedCraftItem then
+			Library:Notify({Title = "❌ Chưa chọn item", Description = "Chọn item trước!", Duration = 3})
+			_G.AutoCraftRunning = false
+			return
+		end
+		_G.AutoCraftRunning = Value
+		Library:Notify({
+			Title = Value and "▶️ Bật Auto Craft" or "⏹️ Tắt Auto Craft",
+			Description = SelectedCraftItem or "N/A",
+			Duration = 3
+		})
+	end
+})
+
+task.spawn(function()
+	while task.wait(1) do
+		pcall(function()
+			local items = GetCraftItemsFromGUI()
+			if #items == 0 then
+				items = CraftItemFallback
+			end
+			RefreshCraftDropdown(items)
+		end)
+	end
+end)
+
+-- ===== LOOP AUTO CRAFT =====
+task.spawn(function()
+	while task.wait(0.5) do
+		if _G.AutoCraftRunning and SelectedCraftItem then
+			pcall(function()
+				local Data = UseItems[SelectedCraftItem]
+				if not Data then return end
+
+				local CanCraft = true
+				for Item, Need in pairs(Data.Inventory or {}) do
+					if GetItemAmount(Item) < Need then
+						CanCraft = false
+						break
+					end
+				end
+
+				if CanCraft then
+					ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", SelectedCraftItem, "Craft")
+					print("[AutoCraft] Craft:", SelectedCraftItem)
+					task.wait(0.5)
+				end
+			end)
+		end
+	end
+end)
+
+-- ===== AUTO CLAIM GUARANTEE =====
+_G.AutoClaimGuarantee = false
+
+CraftInfoCard:Toggle({
+	Title = "Auto Claim Guarantee",
+	Value = false,
+	Callback = function(Value)
+		_G.AutoClaimGuarantee = Value
+		print("[AutoClaim] Running:", Value)
+	end
+})
+
+task.spawn(function()
+	while task.wait(1) do
+		if _G.AutoClaimGuarantee and SelectedCraftItem then
+			pcall(function()
+				local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+				if not hud or not hud:FindFirstChild("Main") then return end
+				local guar = hud.Main:FindFirstChild("Frame_Guarantee")
+				if not guar then return end
+				local sf = guar:FindFirstChild("ScrollingFrame")
+				if not sf then return end
+
+				local itemFrame = sf:FindFirstChild(SelectedCraftItem)
+				if itemFrame then
+					local main = itemFrame:FindFirstChild("Main")
+					if main then
+						local amtLbl = main:FindFirstChild("AmountLabel")
+						if amtLbl then
+							local txt = amtLbl.Text or ""
+							local cur = tonumber(txt:match("^(%d+)"))
+							local max = tonumber(txt:match("/(%d+)"))
+							if cur and max and cur >= max then
+								ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", SelectedCraftItem, "Guarantee")
+								print("[AutoClaim] Claim:", SelectedCraftItem, txt)
+								task.wait(1)
+							end
+						end
+					end
+				end
+			end)
+		end
 	end
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
