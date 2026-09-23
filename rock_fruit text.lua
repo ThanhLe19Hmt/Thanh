@@ -399,10 +399,19 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!!")
+local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!")
 local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
+
+-- ===== CỘT TRÁI =====
+local DungeonCard = RaidDun:CreateSection("🏰 Auto Dungeon","Left")
+local DungeonSettingsCard = RaidDun:CreateSection("⚙️ Dungeon Settings","Left")
 local ShopDunCard = RaidDun:CreateSection("🏪 Shop Dungeon","Left")
+
+-- ===== CỘT PHẢI =====
+local RaidCard = RaidDun:CreateSection("🌋 Auto Raid Moon","Right")
 local ShopDunInfoCard = RaidDun:CreateSection("📊 Shop Dungeon Info","Right")
+local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
+
 local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm","Left")
 local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material","Right")
 local Boss = AllBoss:CreateSection("👹 Boss","Left")
@@ -411,9 +420,6 @@ local Piccolo = AllBoss:CreateSection("🐉 Piccolo","Left")
 local SpawnedT = AllBoss:CreateSection("🔍 Spawned Check","Right")
 local Duck = AllBoss:CreateSection("🦆 Duck","Right")
 local DevilBoat = AllBoss:CreateSection("⛵ Devil Boat","Right")
-local WeaponCraft = RaidDun:CreateSection("🔨 Weapon","Right")
-local RaidCard = RaidDun:CreateSection("🌋 Raid","Left")
-local DungeonCard = RaidDun:CreateSection("🏰 Dungeon","Left")
 local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss","Left")
 local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info","Right")
 local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid","Left")
@@ -549,16 +555,11 @@ local LastShopItemsStr = ""
 -- Dropdown chọn item
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
-	if itemsStr == LastShopItemsStr and ShopItemDropdown and ShopItemDropdown._Parent then return end
+	if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
 	LastShopItemsStr = itemsStr
 
 	if ShopItemDropdown then
-		pcall(function()
-			if ShopItemDropdown._Parent then
-				ShopItemDropdown:Destroy()
-			end
-		end)
-		task.wait(0.05)
+		pcall(function() ShopItemDropdown:Destroy() end)
 	end
 
 	ShopItemDropdown = ShopRaidCard:Dropdown({
@@ -570,7 +571,6 @@ local function RefreshShopDropdown(items)
 		end
 	})
 end
-
 -- Nút BUY
 ShopRaidCard:Button({
 	Title = "BUY!!",
