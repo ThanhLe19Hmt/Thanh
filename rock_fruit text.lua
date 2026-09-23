@@ -2802,7 +2802,8 @@ local CraftInfoPara = CraftInfoCard:Paragraph({
 	Content = "Consumables: ---\nCurrently Available: ---\nCrafted Item: ---"
 })
 
-local SelectedCraftItem = nil
+-- Lưu selection qua biến global
+_G.SelectedCraftItem = nil
 local CraftDropdown = nil
 local LastCraftItemsStr = ""
 
@@ -2852,16 +2853,27 @@ local function RefreshCraftDropdown(items)
 		task.wait(0.05)
 	end
 
+	local OldSelection = _G.SelectedCraftItem
+
 	CraftDropdown = CraftCard:Dropdown({
 		Title = "Chọn Items để chế tạo",
 		Options = items,
 		Multi = false,
 		Callback = function(Value)
-			SelectedCraftItem = Value
+			_G.SelectedCraftItem = Value
 			print("[CraftTable] Đã chọn:", Value)
 			UpdateCraftInfo(Value)
 		end
 	})
+
+	if OldSelection and table.find(items, OldSelection) then
+		pcall(function()
+			if CraftDropdown.Set then
+				CraftDropdown:Set(OldSelection)
+			end
+		end)
+		_G.SelectedCraftItem = OldSelection
+	end
 end
 
 function UpdateCraftInfo(itemName)
@@ -2907,7 +2919,7 @@ function UpdateCraftInfo(itemName)
 	)
 end
 
--- Load fallback NGAY LẬP TỨC
+-- Load fallback NGAY
 RefreshCraftDropdown(CraftItemFallback)
 
 _G.AutoCraftRunning = false
@@ -2922,7 +2934,7 @@ CraftCard:Toggle({
 			_G.AutoCraftRunning = Value
 			return
 		end
-		if Value and not SelectedCraftItem then
+		if Value and not _G.SelectedCraftItem then
 			Library:Notify({Title = "❌ Chưa chọn item", Description = "Chọn item trước!", Duration = 3})
 			_G.AutoCraftRunning = false
 			return
@@ -2930,7 +2942,7 @@ CraftCard:Toggle({
 		_G.AutoCraftRunning = Value
 		Library:Notify({
 			Title = Value and "▶️ Bật Auto Craft" or "⏹️ Tắt Auto Craft",
-			Description = SelectedCraftItem or "N/A",
+			Description = _G.SelectedCraftItem or "N/A",
 			Duration = 3
 		})
 	end
@@ -2950,9 +2962,9 @@ end)
 -- ===== LOOP AUTO CRAFT =====
 task.spawn(function()
 	while task.wait(0.5) do
-		if _G.AutoCraftRunning and SelectedCraftItem then
+		if _G.AutoCraftRunning and _G.SelectedCraftItem then
 			pcall(function()
-				local Data = UseItems[SelectedCraftItem]
+				local Data = UseItems[_G.SelectedCraftItem]
 				if not Data then return end
 
 				local CanCraft = true
@@ -2964,8 +2976,8 @@ task.spawn(function()
 				end
 
 				if CanCraft then
-					ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", SelectedCraftItem, "Craft")
-					print("[AutoCraft] Craft:", SelectedCraftItem)
+					ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", _G.SelectedCraftItem, "Craft")
+					print("[AutoCraft] Craft:", _G.SelectedCraftItem)
 					task.wait(0.5)
 				end
 			end)
@@ -2987,7 +2999,7 @@ CraftInfoCard:Toggle({
 
 task.spawn(function()
 	while task.wait(1) do
-		if _G.AutoClaimGuarantee and SelectedCraftItem then
+		if _G.AutoClaimGuarantee and _G.SelectedCraftItem then
 			pcall(function()
 				local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
 				if not hud or not hud:FindFirstChild("Main") then return end
@@ -2996,7 +3008,7 @@ task.spawn(function()
 				local sf = guar:FindFirstChild("ScrollingFrame")
 				if not sf then return end
 
-				local itemFrame = sf:FindFirstChild(SelectedCraftItem)
+				local itemFrame = sf:FindFirstChild(_G.SelectedCraftItem)
 				if itemFrame then
 					local main = itemFrame:FindFirstChild("Main")
 					if main then
@@ -3006,8 +3018,8 @@ task.spawn(function()
 							local cur = tonumber(txt:match("^(%d+)"))
 							local max = tonumber(txt:match("/(%d+)"))
 							if cur and max and cur >= max then
-								ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", SelectedCraftItem, "Guarantee")
-								print("[AutoClaim] Claim:", SelectedCraftItem, txt)
+								ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", _G.SelectedCraftItem, "Guarantee")
+								print("[AutoClaim] Claim:", _G.SelectedCraftItem, txt)
 								task.wait(1)
 							end
 						end
