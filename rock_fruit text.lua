@@ -438,105 +438,6 @@ local MoonChest = RandomM:CreateSection("🌙 Moon Chest","Left")
 local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point","Left")
 
 local ConfigTab = Window:CreateTab("Config", false, false)
--- ===== AUTO RAID BOSS UI =====
-local RaidBossData = {
-	["Bacon of Grudge"] = {
-		Name = "Bacon of Grudge",
-		Reward = "Time Mystery Box x5, 7500 Diamond, Beli 50M, x3 Potion, Rroll Class + Raid Poiton x1",
-		PortalCost = 1,
-		Valid = true,
-	},
-	["??? (Raid 2)"] = {
-		Name = "???",
-		Reward = "SOON!! AND Just wait.",
-		PortalCost = 0,
-		Valid = false,
-	},
-	["??? (Raid 3)"] = {
-		Name = "???",
-		Reward = "SOON!! AND Just wait.",
-		PortalCost = 0,
-		Valid = false,
-	},
-}
-
-local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
-	Title = "Name: ( chưa chọn )",
-	Content = "Please choose a Boss Raid!!"
-})
-
--- Dropdown chọn Raid
-RaidBossCard:Dropdown({
-	Title = "Auto Raid Who??",
-	Options = {"Bacon of Grudge", "??? (Raid 2)", "??? (Raid 3)"},
-	Multi = false,
-	Callback = function(Value)
-		_G.AutoRaidWho = Value
-		local Data = RaidBossData[Value]
-		if Data then
-			RaidBossInfoPara:SetTitle("Name: " .. Data.Name)
-			RaidBossInfoPara:SetContent(
-				"Reward: " .. Data.Reward ..
-				"\n- " .. Data.PortalCost .. " Portal Gun"
-			)
-		end
-	end
-})
-
--- Button Start Raid
-RaidBossCard:Button({
-	Title = "Please choose a Boss Raid!! Which one do you want to do?",
-	Callback = function()
-		local Data = RaidBossData[_G.AutoRaidWho]
-		if not Data then
-			Library:Notify({
-				Title = "❌ Chưa chọn Raid",
-				Description = "Please choose a Boss Raid!! Which one do you want to do?",
-				Duration = 3
-			})
-			return
-		end
-		if not Data.Valid then
-			Library:Notify({
-				Title = "❌ Raid không hợp lệ",
-				Description = "NO RAID!!! Please select a valid cluster.",
-				Duration = 3
-			})
-			return
-		end
-		_G.AutoRaidRunning = not _G.AutoRaidRunning
-		Library:Notify({
-			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
-			Description = Data.Name,
-			Duration = 3
-		})
-	end
-})
-
--- Slider độ cao đánh Boss
-RaidSettingsCard:Slider({
-	Title = "Bacon of Grudge Height",
-	Min = 0,
-	Max = 150,
-	Value = 55,
-	Callback = function(Value)
-		_G.RaidBossOffsetY = Value
-		print("[RaidSettings] Boss Height =", Value)
-	end
-})
-
--- Slider độ cao đánh cục vàng
-RaidSettingsCard:Slider({
-	Title = "Golden Ball Height",
-	Min = 0,
-	Max = 150,
-	Value = 25,
-	Callback = function(Value)
-		_G.RaidBallOffsetY = Value
-		print("[RaidSettings] Ball Height =", Value)
-	end
-})
-
 -- ===== SHOP RAID UI =====
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
 	Title = "RaidPoint: ( đang load... )",
@@ -548,12 +449,10 @@ local ShopItemInfo = ShopRaidInfoCard:Paragraph({
 	Content = "Chọn item từ dropdown để xem thông tin"
 })
 
--- Biến
 local SelectedShopItem = nil
 local ShopItemDropdown = nil
 local LastShopItemsStr = ""
 
--- (1) Hàm Refresh dropdown Chọn Items
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
 	if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
@@ -572,7 +471,6 @@ local function RefreshShopDropdown(items)
 	})
 end
 
--- (2) Button BUY
 ShopRaidCard:Button({
 	Title = "BUY!!",
 	Callback = function()
@@ -586,22 +484,70 @@ ShopRaidCard:Button({
 	end
 })
 
--- (3) Auto Buy Items
 local AutoBuyItem = nil
 _G.AutoBuyRunning = false
 _G.AutoBuyLoaded = false
 local AutoBuyDropdown = nil
 local LastAllShopItemsStr = ""
 
-local function GetAllShopItems() ... end
-local function RefreshAutoBuyDropdown(allItems) ... end
+local function GetAllShopItems()
+	local items = {}
+	local seen = {}
+	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+	if hud and hud:FindFirstChild("Main") then
+		local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
+		if shop then
+			local sf = shop:FindFirstChild("ScrollingFrame")
+			if sf then
+				for _, item in pairs(sf:GetChildren()) do
+					if item:IsA("Frame") then
+						local label = item:FindFirstChild("Label")
+						if label and label.Text and label.Text ~= "" and label.Text ~= "Item" then
+							if not seen[label.Text] then
+								seen[label.Text] = true
+								table.insert(items, label.Text)
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	local DefaultItems = {
+		"Microphone", "Heart of Envy", "Evil Egg", "Stopwatch",
+		"X2 Rebirth 15min.", "Crocodile leather", "Chicken Ball",
+		"Orb Fried Chicken", "Chicken Nugget", "Chicken Bone"
+	}
+	for _, name in ipairs(DefaultItems) do
+		if not seen[name] then
+			seen[name] = true
+			table.insert(items, name)
+		end
+	end
+	table.sort(items)
+	return items
+end
 
--- (4) Toggle Auto Buy
-ShopRaidCard:Toggle({
-	Title = "Auto Buy",
-	Value = false,
-	Callback = function(Value) ... end
-})
+local function RefreshAutoBuyDropdown(allItems)
+	local allItemsStr = table.concat(allItems, ",")
+	if allItemsStr == LastAllShopItemsStr and AutoBuyDropdown then return end
+	LastAllShopItemsStr = allItemsStr
+
+	if AutoBuyDropdown then
+		pcall(function() AutoBuyDropdown:Destroy() end)
+		task.wait(0.05)
+	end
+
+	AutoBuyDropdown = ShopRaidCard:Dropdown({
+		Title = "Auto Buy Items",
+		Options = allItems,
+		Multi = false,
+		Callback = function(Value)
+			AutoBuyItem = Value
+			print("[AutoBuy] Chọn:", Value)
+		end
+	})
+end
 
 ShopRaidCard:Toggle({
 	Title = "Auto Buy",
@@ -649,7 +595,6 @@ local function BuyShopItem(itemName)
 	return false
 end
 
--- Loop update Shop
 task.spawn(function()
 	local LastRaidPoint = ""
 	local LastRestock = ""
@@ -718,7 +663,6 @@ task.spawn(function()
 	end
 end)
 
--- Loop Auto Buy
 task.spawn(function()
 	while task.wait(0.3) do
 		if _G.AutoBuyRunning and AutoBuyItem then
