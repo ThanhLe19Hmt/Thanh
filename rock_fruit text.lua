@@ -2962,9 +2962,9 @@ end)
 -- ===== LOOP AUTO CRAFT =====
 task.spawn(function()
 	while task.wait(0.5) do
-		if _G.AutoCraftRunning and _G.SelectedCraftItem then
+		if _G.AutoCraftRunning and _G.SelectedCraftItem and CraftModule then
 			pcall(function()
-				local Data = UseItems[_G.SelectedCraftItem]
+				local Data = CraftModule[_G.SelectedCraftItem]
 				if not Data then return end
 
 				local CanCraft = true
@@ -3085,6 +3085,33 @@ task.spawn(function()
 			print("====================================")
 		end)
 	end
+end)
+-- ===== TEST DEBUG =====
+task.spawn(function()
+	task.wait(5)
+	print("========== DEBUG FROM SCRIPT ==========")
+	print("UseItems:", UseItems)
+	if UseItems then
+		print("Portal Gun in UseItems:", UseItems["Portal Gun"])
+		local count = 0
+		for name, data in pairs(UseItems) do
+			count = count + 1
+			if count <= 5 then
+				print("  ", name, "- Type:", data.Type)
+			end
+		end
+		print("Tổng số item trong UseItems:", count)
+	end
+
+	print("")
+	print("ReplicatedStorage.Modules:")
+	local Modules = ReplicatedStorage:FindFirstChild("Modules")
+	if Modules then
+		for _, v in pairs(Modules:GetChildren()) do
+			print("  ", v.Name, "-", v.ClassName)
+		end
+	end
+	print("========================================")
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
