@@ -2232,8 +2232,6 @@ local function RefreshAutoBuyDunDropdown(items)
 	})
 end
 
-RefreshAutoBuyDunDropdown({"( đang load... )"})
-
 -- Toggle Auto Buy
 ShopDunCard:Toggle({
 	Title = "Auto Buy",
