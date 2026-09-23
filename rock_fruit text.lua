@@ -96,6 +96,7 @@ _G.Select_Guarantee_Moon = nil
 _G.Auto_Guarantee_Moon = false
 _G.RaidBossOffsetY = 55
 _G.RaidBallOffsetY = 25
+_G.DungeonHeight = 25
 
 
 for ItemName in pairs(Economy) do
@@ -537,7 +538,6 @@ RaidSettingsCard:Slider({
 })
 
 -- ===== SHOP RAID UI =====
-
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
 	Title = "RaidPoint: ( đang load... )",
 	Content = "Restock In: ( đang load... )"
@@ -548,20 +548,20 @@ local ShopItemInfo = ShopRaidInfoCard:Paragraph({
 	Content = "Chọn item từ dropdown để xem thông tin"
 })
 
+-- Biến
 local SelectedShopItem = nil
 local ShopItemDropdown = nil
 local LastShopItemsStr = ""
 
--- Dropdown chọn item
+-- (1) Hàm Refresh dropdown Chọn Items
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
 	if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
 	LastShopItemsStr = itemsStr
-
 	if ShopItemDropdown then
 		pcall(function() ShopItemDropdown:Destroy() end)
+		task.wait(0.05)
 	end
-
 	ShopItemDropdown = ShopRaidCard:Dropdown({
 		Title = "Chọn Items để mua",
 		Options = items,
@@ -571,7 +571,8 @@ local function RefreshShopDropdown(items)
 		end
 	})
 end
--- Nút BUY
+
+-- (2) Button BUY
 ShopRaidCard:Button({
 	Title = "BUY!!",
 	Callback = function()
@@ -585,70 +586,22 @@ ShopRaidCard:Button({
 	end
 })
 
--- Auto Buy
+-- (3) Auto Buy Items
 local AutoBuyItem = nil
 _G.AutoBuyRunning = false
 _G.AutoBuyLoaded = false
 local AutoBuyDropdown = nil
 local LastAllShopItemsStr = ""
 
-local function GetAllShopItems()
-	local items = {}
-	local seen = {}
-	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-	if hud and hud:FindFirstChild("Main") then
-		local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-		if shop then
-			local sf = shop:FindFirstChild("ScrollingFrame")
-			if sf then
-				for _, item in pairs(sf:GetChildren()) do
-					if item:IsA("Frame") then
-						local label = item:FindFirstChild("Label")
-						if label and label.Text and label.Text ~= "" and label.Text ~= "Item" then
-							if not seen[label.Text] then
-								seen[label.Text] = true
-								table.insert(items, label.Text)
-							end
-						end
-					end
-				end
-			end
-		end
-	end
-	local DefaultItems = {
-		"Microphone", "Heart of Envy", "Evil Egg", "Stopwatch",
-		"X2 Rebirth 15min.", "Crocodile leather", "Chicken Ball",
-		"Orb Fried Chicken", "Chicken Nugget", "Chicken Bone"
-	}
-	for _, name in ipairs(DefaultItems) do
-		if not seen[name] then
-			seen[name] = true
-			table.insert(items, name)
-		end
-	end
-	table.sort(items)
-	return items
-end
+local function GetAllShopItems() ... end
+local function RefreshAutoBuyDropdown(allItems) ... end
 
-local function RefreshAutoBuyDropdown(allItems)
-	local allItemsStr = table.concat(allItems, ",")
-	if allItemsStr == LastAllShopItemsStr and AutoBuyDropdown then return end
-	LastAllShopItemsStr = allItemsStr
-
-	if AutoBuyDropdown then
-		pcall(function() AutoBuyDropdown:Destroy() end)
-	end
-
-	AutoBuyDropdown = ShopRaidCard:Dropdown({
-		Title = "Auto Buy Items",
-		Options = allItems,
-		Multi = false,
-		Callback = function(Value)
-			AutoBuyItem = Value
-			print("[AutoBuy] Chọn:", Value)
-		end
-	})
-end
+-- (4) Toggle Auto Buy
+ShopRaidCard:Toggle({
+	Title = "Auto Buy",
+	Value = false,
+	Callback = function(Value) ... end
+})
 
 ShopRaidCard:Toggle({
 	Title = "Auto Buy",
@@ -1082,6 +1035,16 @@ DungeonCard:Slider({
 	Value = 30,
 	Callback = function(vh)
 		_G.HealthPercent = vh
+	end
+})
+DungeonSettingsCard:Slider({
+	Title = "What height setting would you like to use when running the dungeon?",
+	Min = 0,
+	Max = 100,
+	Value = 25,
+	Callback = function(Value)
+		_G.DungeonHeight = Value
+		print("[DungeonSettings] Height =", Value)
 	end
 })
 DungeonCard:Toggle({
@@ -2040,7 +2003,7 @@ task.spawn(function()
 							bp.Parent = hrp
 						end
 
-						local targetPos = tHrp.Position + Vector3.new(0, 25, 0)
+						local targetPos = tHrp.Position + Vector3.new(0, _G.DungeonHeight or 25, 0)
 						bp.Position = targetPos
 						hrp.CFrame = CFrame.new(targetPos, tHrp.Position)
 
@@ -2109,7 +2072,7 @@ task.spawn(function()
 	end
 end)
 
--- ===== SHOP DUNGEON UI (CHỈ AUTO BUY) =====
+-- ===== SHOP DUNGEON UI =====
 local ShopDunInfoPara = ShopDunInfoCard:Paragraph({
 	Title = "DungeonPoint: ( đang load... )",
 	Content = "Chọn item Auto Buy ở cột trái"
@@ -2120,14 +2083,12 @@ local ShopDunItemInfo = ShopDunInfoCard:Paragraph({
 	Content = "Chọn item từ dropdown Auto Buy"
 })
 
--- Auto Buy
 local AutoBuyDunItem = nil
 _G.AutoBuyDunRunning = false
 _G.AutoBuyDunLoaded = false
 local AutoBuyDunDropdown = nil
 local LastAutoBuyDunStr = ""
 
--- Hàm lấy tất cả item Shop Dungeon
 local function GetAllShopDunItems()
 	local items = {}
 	local seen = {}
@@ -2154,8 +2115,6 @@ local function GetAllShopDunItems()
 			end
 		end
 	end
-
-	-- Item mặc định
 	local DefaultItems = {
 		"Plastic", "Rope", "Glue Elephant", "Cow leather", "Stopwatch",
 		"Banana Leaf", "Scarf Old", "Snake leather", "Crocodile leather",
@@ -2167,12 +2126,10 @@ local function GetAllShopDunItems()
 			table.insert(items, name)
 		end
 	end
-
 	table.sort(items)
 	return items
 end
 
--- Dropdown Auto Buy Items
 local function RefreshAutoBuyDunDropdown(items)
 	local itemsStr = table.concat(items, ",")
 	if itemsStr == LastAutoBuyDunStr and AutoBuyDunDropdown then return end
@@ -2180,6 +2137,7 @@ local function RefreshAutoBuyDunDropdown(items)
 
 	if AutoBuyDunDropdown then
 		pcall(function() AutoBuyDunDropdown:Destroy() end)
+		task.wait(0.05)
 	end
 
 	AutoBuyDunDropdown = ShopDunCard:Dropdown({
@@ -2189,8 +2147,6 @@ local function RefreshAutoBuyDunDropdown(items)
 		Callback = function(Value)
 			AutoBuyDunItem = Value
 			print("[AutoBuyDun] Chọn:", Value)
-
-			-- Update item info
 			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
 			if hud and hud:FindFirstChild("Main") then
 				local shop = hud.Main:FindFirstChild("Frame_ShopDungeon")
@@ -2220,9 +2176,7 @@ local function RefreshAutoBuyDunDropdown(items)
 	})
 end
 
-RefreshAutoBuyDunDropdown({"( đang load... )"})
-
--- Toggle Auto Buy
+-- Toggle Auto Buy (tạo trước, dropdown tạo sau)
 ShopDunCard:Toggle({
 	Title = "Auto Buy",
 	Value = false,
@@ -2232,14 +2186,12 @@ ShopDunCard:Toggle({
 			_G.AutoBuyDunRunning = Value
 			return
 		end
-
 		if Value and not AutoBuyDunItem then
 			Library:Notify({Title = "❌ Chưa chọn item", Description = "Chọn item Auto Buy trước!", Duration = 3})
 			_G.AutoBuyDunRunning = false
 			return
 		end
 		_G.AutoBuyDunRunning = Value
-		print("[AutoBuyDun] Running:", Value)
 		Library:Notify({
 			Title = Value and "▶️ Bật Auto Buy" or "⏹️ Tắt Auto Buy",
 			Description = AutoBuyDunItem or "N/A",
@@ -2257,18 +2209,15 @@ task.spawn(function()
 			local shop = hud.Main:FindFirstChild("Frame_ShopDungeon")
 			if not shop then return end
 
-			-- Update point
 			local ptAttr = LocalPlayer:GetAttribute("DungeonPoint") 
 				or LocalPlayer:GetAttribute("PointDungeon") 
 				or LocalPlayer:GetAttribute("DungeonOrb")
 				or 0
 			ShopDunInfoPara:SetTitle("DungeonPoint: " .. tostring(ptAttr))
 
-			-- Update item list
 			local allItems = GetAllShopDunItems()
 			RefreshAutoBuyDunDropdown(allItems)
 
-			-- Update item info nếu đã chọn
 			if AutoBuyDunItem then
 				local sf = shop:FindFirstChild("ShopScrollingFrame")
 				if sf then
