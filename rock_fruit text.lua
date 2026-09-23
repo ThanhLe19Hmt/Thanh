@@ -2836,7 +2836,10 @@ local CraftItemFallback = {
 	"Glass Tube", "Utility Knife Blade", "Hammer", "Utility Knife", "Portal Gun",
 	"Honey", "Horseshoe", "Boxing Shorts", "Gas Cylinder", "Rainbow Potion",
 	"Cursed Blade", "Cursed Chain", "Teio Shoes", "Mambo Shoes", "KFC",
-	"Gold Gauntlet", "Rainbow Carrot", "Tachyon Shoes"
+	"Gold Gauntlet", "Rainbow Carrot", "Tachyon Shoes",
+	"Wood", "Plastic", "Rope", "Glue Elephant", "Cow leather", "Stopwatch",
+	"Banana Leaf", "Scarf Old", "Snake leather", "Crocodile leather",
+	"Microphone", "Trainer Notes"
 }
 
 local function RefreshCraftDropdown(items)
@@ -2855,6 +2858,7 @@ local function RefreshCraftDropdown(items)
 		Multi = false,
 		Callback = function(Value)
 			SelectedCraftItem = Value
+			print("[CraftTable] Đã chọn:", Value)
 			UpdateCraftInfo(Value)
 		end
 	})
@@ -2903,6 +2907,9 @@ function UpdateCraftInfo(itemName)
 	)
 end
 
+-- Load fallback NGAY LẬP TỨC
+RefreshCraftDropdown(CraftItemFallback)
+
 _G.AutoCraftRunning = false
 _G.AutoCraftLoaded = false
 
@@ -2933,10 +2940,9 @@ task.spawn(function()
 	while task.wait(1) do
 		pcall(function()
 			local items = GetCraftItemsFromGUI()
-			if #items == 0 then
-				items = CraftItemFallback
+			if #items > 0 then
+				RefreshCraftDropdown(items)
 			end
-			RefreshCraftDropdown(items)
 		end)
 	end
 end)
