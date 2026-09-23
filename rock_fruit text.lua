@@ -549,16 +549,11 @@ local LastShopItemsStr = ""
 -- Dropdown chọn item
 local function RefreshShopDropdown(items)
 	local itemsStr = table.concat(items, ",")
-	if itemsStr == LastShopItemsStr and ShopItemDropdown and ShopItemDropdown._Parent then return end
+	if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
 	LastShopItemsStr = itemsStr
 
 	if ShopItemDropdown then
-		pcall(function()
-			if ShopItemDropdown._Parent then
-				ShopItemDropdown:Destroy()
-			end
-		end)
-		task.wait(0.05)
+		pcall(function() ShopItemDropdown:Destroy() end)
 	end
 
 	ShopItemDropdown = ShopRaidCard:Dropdown({
