@@ -927,22 +927,42 @@ Potion:Toggle({
 		_G.Auto_Use_Potion = Value
 	end
 })
--- ===== TOOL SKILLS UI =====
+-- ===== TOOL SKILLS UI (CHỈ TOOL ĐANG EQUIP) =====
 local ToolSkillCard = Tab_Page2:CreateSection("🎯 Tool Skills","Left")
 
--- Danh sách Tool quan trọng (có thể thêm/bớt)
-local ImportantTools = {
-	"Thanos", "CidBeta", "Agnes Tachyon", "Super Chicken",
-	"Mambo", "Hachimi", "Santa Demon", "Super Bacon",
-	"Michael Jackson", "Black Leg", "Rokushiki", "Ryusoken",
-	"Kaioken", "Blade of Chaos", "Kitetsu", "Shirasaya",
-	"Tanto", "Shisui", "Kiribachi",
-}
+local ToolSkillDropdowns = {}  -- Lưu dropdown để destroy khi cần
+local LastEquippedStr = ""
 
--- Tạo dropdown riêng cho từng Tool
-for _, toolName in ipairs(ImportantTools) do
-	if UseItems[toolName] then
-		ToolSkillCard:Dropdown({
+-- Hàm lấy Tool đang equip
+local function GetEquippedTools()
+	local tools = {}
+	local char = LocalPlayer.Character
+	if not char then return tools end
+	for _, v in pairs(char:GetChildren()) do
+		if v:IsA("Tool") then
+			table.insert(tools, v.Name)
+		end
+	end
+	table.sort(tools)
+	return tools
+end
+
+-- Hàm refresh dropdown
+local function RefreshToolSkillDropdowns()
+	local equipped = GetEquippedTools()
+	local equippedStr = table.concat(equipped, ",")
+	if equippedStr == LastEquippedStr then return end
+	LastEquippedStr = equippedStr
+
+	-- Destroy dropdown cũ
+	for _, dd in pairs(ToolSkillDropdowns) do
+		pcall(function() dd:Destroy() end)
+	end
+	ToolSkillDropdowns = {}
+
+	-- Tạo dropdown mới cho từng Tool equip
+	for _, toolName in ipairs(equipped) do
+		local dd = ToolSkillCard:Dropdown({
 			Title = toolName .. " Skills",
 			Options = {"z", "x", "c", "v", "f"},
 			Multi = true,
@@ -952,29 +972,28 @@ for _, toolName in ipairs(ImportantTools) do
 				print("[ToolSkill]", toolName, "=>", txt)
 			end
 		})
+		table.insert(ToolSkillDropdowns, dd)
 	end
+
+	-- Update paragraph
+	ToolSkillInfo:SetContent(
+		#equipped > 0
+			and ("Đang equip: " .. table.concat(equipped, ", "))
+			or "(chưa equip Tool nào)"
+	)
 end
 
--- Paragraph hiển thị cấu hình hiện tại
+-- Paragraph hiển thị Tool đang equip
 local ToolSkillInfo = ToolSkillCard:Paragraph({
 	Title = "Cấu hình hiện tại",
-	Content = "(chưa có)"
+	Content = "(đang load...)"
 })
 
--- Loop update paragraph
+-- Loop kiểm tra Tool equip mỗi 2s
 task.spawn(function()
 	while task.wait(2) do
 		pcall(function()
-			local txt = ""
-			local count = 0
-			for tool, skills in pairs(_G.ToolSkills) do
-				if type(skills) == "table" and #skills > 0 then
-					count = count + 1
-					txt = txt .. tool .. ": " .. table.concat(skills, ", ") .. "\n"
-				end
-			end
-			if txt == "" then txt = "(chưa có)" end
-			ToolSkillInfo:SetContent(txt)
+			RefreshToolSkillDropdowns()
 		end)
 	end
 end)
