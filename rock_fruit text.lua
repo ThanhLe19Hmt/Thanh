@@ -392,7 +392,7 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!!")
+local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!")
 local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
 
 -- ===== CỘT TRÁI =====
@@ -2991,6 +2991,50 @@ task.spawn(function()
 				end
 			end)
 		end
+	end
+end)
+-- ===== LOOP UPDATE CRAFT INFO (CHỈ KHI THAY ĐỔI) =====
+task.spawn(function()
+	local LastInfo = ""
+	while task.wait(0.5) do
+		pcall(function()
+			if not _G.SelectedCraftItem then return end
+			local Data = CraftingTable[_G.SelectedCraftItem]
+			if not Data or not Data.need then return end
+
+			-- Tạo key từ info hiện tại
+			local InfoKey = _G.SelectedCraftItem
+			for Item, Need in pairs(Data.need) do
+				InfoKey = InfoKey .. "|" .. Item .. ":" .. GetItemAmount(Item)
+			end
+
+			-- Check Guarantee
+			local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+			if hud and hud:FindFirstChild("Main") then
+				local guar = hud.Main:FindFirstChild("Frame_Guarantee")
+				if guar then
+					local sf = guar:FindFirstChild("ScrollingFrame")
+					if sf then
+						local itemFrame = sf:FindFirstChild(_G.SelectedCraftItem)
+						if itemFrame then
+							local main = itemFrame:FindFirstChild("Main")
+							if main then
+								local amtLbl = main:FindFirstChild("AmountLabel")
+								if amtLbl then
+									InfoKey = InfoKey .. "|G:" .. amtLbl.Text
+								end
+							end
+						end
+					end
+				end
+			end
+
+			-- Chỉ update nếu thay đổi
+			if InfoKey ~= LastInfo then
+				LastInfo = InfoKey
+				UpdateCraftInfo(_G.SelectedCraftItem)
+			end
+		end)
 	end
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
