@@ -810,93 +810,6 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== TOOL SKILLS UI =====
-local ToolSkillCard = Tab_Page1:CreateSection("🎯 Tool Skills","Right")
-
--- Danh sách Tool muốn cấu hình
-local ImportantTools = {
-	"Thanos", "CidBeta", "Agnes Tachyon", "Super Chicken",
-	"Mambo", "Hachimi", "Santa Demon", "Super Bacon",
-	"Michael Jackson", "Black Leg", "Rokushiki", "Ryusoken",
-	"Kaioken", "Blade of Chaos", "Kitetsu", "Shirasaya",
-	"Tanto", "Shisui", "Kiribachi",
-}
-
--- Tạo dropdown riêng cho từng Tool
-for _, toolName in ipairs(ImportantTools) do
-	if UseItems[toolName] then
-		ToolSkillCard:Dropdown({
-			Title = toolName .. " Skills",
-			Options = {"z", "x", "c", "v", "f"},
-			Multi = true,
-			Callback = function(Value)
-				_G.ToolSkills[toolName] = Value
-				local txt = #Value > 0 and table.concat(Value, ", ") or "(none)"
-				print("[ToolSkill]", toolName, "=>", txt)
-			end
-		})
-	end
-end
-
--- Dropdown multi chọn Tool
-local SelectedToolForSkill = nil
-
-ToolSkillCard:Dropdown({
-	Title = "Chọn Tool để cấu hình Skill",
-	Options = ToolNameList,
-	Multi = false,
-	Callback = function(Value)
-		SelectedToolForSkill = Value
-		print("[ToolSkill] Chọn Tool:", Value)
-	end
-})
-
--- Dropdown multi chọn Skill cho Tool đã chọn
-ToolSkillCard:Dropdown({
-	Title = "Chọn Skill cho Tool (Multi)",
-	Options = {"z", "x", "c", "v", "f"},
-	Multi = true,
-	Callback = function(Value)
-		if not SelectedToolForSkill then
-			Library:Notify({
-				Title = "❌ Chưa chọn Tool",
-				Description = "Chọn Tool trước!",
-				Duration = 3
-			})
-			return
-		end
-		_G.ToolSkills[SelectedToolForSkill] = Value
-		local txt = #Value > 0 and table.concat(Value, ", ") or "(none)"
-		print("[ToolSkill]", SelectedToolForSkill, "=>", txt)
-		Library:Notify({
-			Title = "✅ Đã set Skill",
-			Description = SelectedToolForSkill .. " => " .. txt,
-			Duration = 3
-		})
-	end
-})
-
--- Paragraph hiển thị cấu hình hiện tại
-local ToolSkillInfo = ToolSkillCard:Paragraph({
-	Title = "Cấu hình hiện tại",
-	Content = "(chưa có)"
-})
-
--- Loop update info
-task.spawn(function()
-	while task.wait(2) do
-		pcall(function()
-			local txt = ""
-			for tool, skills in pairs(_G.ToolSkills) do
-				if #skills > 0 then
-					txt = txt .. tool .. ": " .. table.concat(skills, ", ") .. "\n"
-				end
-			end
-			if txt == "" then txt = "(chưa có)" end
-			ToolSkillInfo:SetContent(txt)
-		end)
-	end
-end)
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
 	Options = TypeTool,
@@ -1014,7 +927,57 @@ Potion:Toggle({
 		_G.Auto_Use_Potion = Value
 	end
 })
+-- ===== TOOL SKILLS UI =====
+local ToolSkillCard = Tab_Page2:CreateSection("🎯 Tool Skills","Left")
 
+-- Danh sách Tool quan trọng (có thể thêm/bớt)
+local ImportantTools = {
+	"Thanos", "CidBeta", "Agnes Tachyon", "Super Chicken",
+	"Mambo", "Hachimi", "Santa Demon", "Super Bacon",
+	"Michael Jackson", "Black Leg", "Rokushiki", "Ryusoken",
+	"Kaioken", "Blade of Chaos", "Kitetsu", "Shirasaya",
+	"Tanto", "Shisui", "Kiribachi",
+}
+
+-- Tạo dropdown riêng cho từng Tool
+for _, toolName in ipairs(ImportantTools) do
+	if UseItems[toolName] then
+		ToolSkillCard:Dropdown({
+			Title = toolName .. " Skills",
+			Options = {"z", "x", "c", "v", "f"},
+			Multi = true,
+			Callback = function(Value)
+				_G.ToolSkills[toolName] = Value
+				local txt = #Value > 0 and table.concat(Value, ", ") or "(none)"
+				print("[ToolSkill]", toolName, "=>", txt)
+			end
+		})
+	end
+end
+
+-- Paragraph hiển thị cấu hình hiện tại
+local ToolSkillInfo = ToolSkillCard:Paragraph({
+	Title = "Cấu hình hiện tại",
+	Content = "(chưa có)"
+})
+
+-- Loop update paragraph
+task.spawn(function()
+	while task.wait(2) do
+		pcall(function()
+			local txt = ""
+			local count = 0
+			for tool, skills in pairs(_G.ToolSkills) do
+				if type(skills) == "table" and #skills > 0 then
+					count = count + 1
+					txt = txt .. tool .. ": " .. table.concat(skills, ", ") .. "\n"
+				end
+			end
+			if txt == "" then txt = "(chưa có)" end
+			ToolSkillInfo:SetContent(txt)
+		end)
+	end
+end)
 AutoFarmCard:Toggle({
 	Title = "Auto Level Farm",
 	Value = false,
@@ -3184,20 +3147,34 @@ local NoVFX = function(State)
 		end
 	end
 end
+
 local AutoSkill = function()
+	if _G.RaidThanosSpamming then return end
 	local Character = LocalPlayer.Character
 	if not Character then return end
-	local Skills = {}
-	if _G.AutoSkillZ then table.insert(Skills,"z") end
-	if _G.AutoSkillX then table.insert(Skills,"x") end
-	if _G.AutoSkillC then table.insert(Skills,"c") end
-	if _G.AutoSkillV then table.insert(Skills,"v") end
-	if _G.AutoSkillF then table.insert(Skills,"f") end
-	if #Skills == 0 then return end
-	local Skill = Skills[math.random(#Skills)]
-	for _,Tool in ipairs(Character:GetChildren()) do
+
+	for _, Tool in ipairs(Character:GetChildren()) do
 		if Tool:IsA("Tool") then
-			ReplicatedStorage.Remotes.Action:FireServer(Tool.Name,Skill)
+			-- Check xem Tool có skill riêng không
+			local ToolSkills = _G.ToolSkills and _G.ToolSkills[Tool.Name]
+			local SkillsToUse = {}
+
+			if ToolSkills and type(ToolSkills) == "table" and #ToolSkills > 0 then
+				-- Dùng skill riêng
+				SkillsToUse = ToolSkills
+			else
+				-- Dùng skill chung
+				if _G.AutoSkillZ then table.insert(SkillsToUse,"z") end
+				if _G.AutoSkillX then table.insert(SkillsToUse,"x") end
+				if _G.AutoSkillC then table.insert(SkillsToUse,"c") end
+				if _G.AutoSkillV then table.insert(SkillsToUse,"v") end
+				if _G.AutoSkillF then table.insert(SkillsToUse,"f") end
+			end
+
+			if #SkillsToUse > 0 then
+				local Skill = SkillsToUse[math.random(#SkillsToUse)]
+				ReplicatedStorage.Remotes.Action:FireServer(Tool.Name, Skill)
+			end
 		end
 	end
 end
