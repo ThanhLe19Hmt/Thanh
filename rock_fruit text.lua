@@ -98,8 +98,6 @@ _G.Auto_Guarantee_Moon = false
 _G.RaidBossOffsetY = 55
 _G.RaidBallOffsetY = 25
 _G.DungeonHeight = 25
-_G.ToolSkills = {}
-
 
 for ItemName in pairs(Economy) do
 	table.insert(SellItems,ItemName)
@@ -107,32 +105,19 @@ end
 table.sort(SellItems)
 
 local AutoSkill = function()
-	if _G.RaidThanosSpamming then return end
 	local Character = LocalPlayer.Character
 	if not Character then return end
-
-	for _, Tool in ipairs(Character:GetChildren()) do
+	local Skills = {}
+	if _G.AutoSkillZ then table.insert(Skills,"z") end
+	if _G.AutoSkillX then table.insert(Skills,"x") end
+	if _G.AutoSkillC then table.insert(Skills,"c") end
+	if _G.AutoSkillV then table.insert(Skills,"v") end
+	if _G.AutoSkillF then table.insert(Skills,"f") end
+	if #Skills == 0 then return end
+	local Skill = Skills[math.random(#Skills)]
+	for _,Tool in ipairs(Character:GetChildren()) do
 		if Tool:IsA("Tool") then
-			-- Check xem Tool có skill riêng không
-			local ToolSkills = _G.ToolSkills[Tool.Name]
-			local SkillsToUse = {}
-
-			if ToolSkills and #ToolSkills > 0 then
-				-- Dùng skill riêng
-				SkillsToUse = ToolSkills
-			else
-				-- Dùng skill chung
-				if _G.AutoSkillZ then table.insert(SkillsToUse,"z") end
-				if _G.AutoSkillX then table.insert(SkillsToUse,"x") end
-				if _G.AutoSkillC then table.insert(SkillsToUse,"c") end
-				if _G.AutoSkillV then table.insert(SkillsToUse,"v") end
-				if _G.AutoSkillF then table.insert(SkillsToUse,"f") end
-			end
-
-			if #SkillsToUse > 0 then
-				local Skill = SkillsToUse[math.random(#SkillsToUse)]
-				ReplicatedStorage.Remotes.Action:FireServer(Tool.Name, Skill)
-			end
+			ReplicatedStorage.Remotes.Action:FireServer(Tool.Name,Skill)
 		end
 	end
 end
@@ -492,7 +477,7 @@ RaidBossCard:Dropdown({
 
 -- Button Start Raid
 RaidBossCard:Button({
-	Title = "Please choose a Boss Raid!! Which one do you want to do?",
+	Title = "Start Raid Now!!",
 	Callback = function()
 		local Data = RaidBossData[_G.AutoRaidWho]
 		if not Data then
@@ -594,94 +579,6 @@ ShopRaidCard:Button({
 	end
 })
 
--- Auto Buy
-local AutoBuyItem = nil
-_G.AutoBuyRunning = false
-_G.AutoBuyLoaded = false
-local AutoBuyDropdown = nil
-local LastAllShopItemsStr = ""
-
-local function GetAllShopItems()
-	local items = {}
-	local seen = {}
-	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-	if hud and hud:FindFirstChild("Main") then
-		local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-		if shop then
-			local sf = shop:FindFirstChild("ScrollingFrame")
-			if sf then
-				for _, item in pairs(sf:GetChildren()) do
-					if item:IsA("Frame") then
-						local label = item:FindFirstChild("Label")
-						if label and label.Text and label.Text ~= "" and label.Text ~= "Item" then
-							if not seen[label.Text] then
-								seen[label.Text] = true
-								table.insert(items, label.Text)
-							end
-						end
-					end
-				end
-			end
-		end
-	end
-	local DefaultItems = {
-		"Microphone", "Heart of Envy", "Evil Egg", "Stopwatch",
-		"X2 Rebirth 15min.", "Crocodile leather", "Chicken Ball",
-		"Orb Fried Chicken", "Chicken Nugget", "Chicken Bone"
-	}
-	for _, name in ipairs(DefaultItems) do
-		if not seen[name] then
-			seen[name] = true
-			table.insert(items, name)
-		end
-	end
-	table.sort(items)
-	return items
-end
-
-local function RefreshAutoBuyDropdown(allItems)
-	local allItemsStr = table.concat(allItems, ",")
-	if allItemsStr == LastAllShopItemsStr and AutoBuyDropdown then return end
-	LastAllShopItemsStr = allItemsStr
-
-	if AutoBuyDropdown then
-		pcall(function() AutoBuyDropdown:Destroy() end)
-	end
-
-	AutoBuyDropdown = ShopRaidCard:Dropdown({
-		Title = "Auto Buy Items",
-		Options = allItems,
-		Multi = false,
-		Callback = function(Value)
-			AutoBuyItem = Value
-			print("[AutoBuy] Chọn:", Value)
-		end
-	})
-end
-
-ShopRaidCard:Toggle({
-	Title = "Auto Buy",
-	Value = false,
-	Callback = function(Value)
-		if not _G.AutoBuyLoaded then
-			_G.AutoBuyLoaded = true
-			_G.AutoBuyRunning = Value
-			return
-		end
-		if Value and not AutoBuyItem then
-			Library:Notify({Title = "❌ Chưa chọn item", Description = "Chọn item Auto Buy trước!", Duration = 3})
-			_G.AutoBuyRunning = false
-			return
-		end
-		_G.AutoBuyRunning = Value
-		Library:Notify({
-			Title = Value and "▶️ Bật Auto Buy" or "⏹️ Tắt Auto Buy",
-			Description = AutoBuyItem or "N/A",
-			Duration = 3
-		})
-	end
-})
-
 local function BuyShopItem(itemName)
 	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
 	if not hud or not hud:FindFirstChild("Main") then return false end
@@ -771,43 +668,6 @@ task.spawn(function()
 				RefreshAutoBuyDropdown(allItems)
 			end
 		end)
-	end
-end)
-
--- Loop Auto Buy
-task.spawn(function()
-	while task.wait(0.3) do
-		if _G.AutoBuyRunning and AutoBuyItem then
-			pcall(function()
-				local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-				if not hud or not hud:FindFirstChild("Main") then return end
-				local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
-				if not shop then return end
-				local sf = shop:FindFirstChild("ScrollingFrame")
-				if not sf then return end
-
-				for _, item in pairs(sf:GetChildren()) do
-					if item:IsA("Frame") then
-						local label = item:FindFirstChild("Label")
-						if label and label.Text == AutoBuyItem then
-							local outstock = item:FindFirstChild("Outstock")
-							if outstock and outstock.Visible then return end
-							local amountLbl = item:FindFirstChild("Amount")
-							if amountLbl then
-								local amtText = amountLbl.Text or ""
-								local cur = tonumber(amtText:match("^(%d+)"))
-								if cur and cur > 0 then
-									BuyShopItem(AutoBuyItem)
-									print("[AutoBuy] Mua:", AutoBuyItem, "| Còn:", cur)
-									task.wait(0.3)
-								end
-							end
-							break
-						end
-					end
-				end
-			end)
-		end
 	end
 end)
 Weapon:Dropdown({
@@ -927,154 +787,7 @@ Potion:Toggle({
 		_G.Auto_Use_Potion = Value
 	end
 })
--- ===== TOOL SKILLS UI (FIX CHỒNG CHẤT) =====
-local ToolSkillPage = Tab_Page2
-local ToolSkillSection = nil
-local ToolSkillInfo = nil
-local LastEquippedStr = ""
 
-local function GetEquippedTools()
-	local tools = {}
-	local char = LocalPlayer.Character
-	if not char then return tools end
-	for _, v in pairs(char:GetChildren()) do
-		if v:IsA("Tool") then
-			table.insert(tools, v.Name)
-		end
-	end
-	table.sort(tools)
-	return tools
-end
-
-local function DestroyToolSkillSection()
-	if ToolSkillSection then
-		pcall(function()
-			-- Cách 1: Destroy trực tiếp
-			if ToolSkillSection.Destroy then
-				ToolSkillSection:Destroy()
-			end
-			-- Cách 2: Xóa UI Frame khỏi parent
-			if ToolSkillSection.Frame then
-				ToolSkillSection.Frame:Destroy()
-			end
-			if ToolSkillSection.Container then
-				ToolSkillSection.Container:Destroy()
-			end
-			if ToolSkillSection.UIElement then
-				ToolSkillSection.UIElement:Destroy()
-			end
-			-- Cách 3: Duyệt tất cả field
-			for k, v in pairs(ToolSkillSection) do
-				if typeof(v) == "Instance" then
-					pcall(function() v:Destroy() end)
-				end
-			end
-		end)
-		ToolSkillSection = nil
-	end
-	ToolSkillInfo = nil
-end
-
-local function RefreshToolSkillDropdowns()
-	local equipped = GetEquippedTools()
-	local equippedStr = table.concat(equipped, ",")
-	if equippedStr == LastEquippedStr then return end
-	LastEquippedStr = equippedStr
-
-	-- Xóa section cũ
-	DestroyToolSkillSection()
-
-	-- Tạo section mới
-	ToolSkillSection = ToolSkillPage:CreateSection("🎯 Tool Skills","Left")
-
-	-- Tạo dropdown cho từng Tool equip
-	for _, toolName in ipairs(equipped) do
-		ToolSkillSection:Dropdown({
-			Title = toolName .. " Skills",
-			Options = {"z", "x", "c", "v", "f"},
-			Multi = true,
-			Callback = function(Value)
-				_G.ToolSkills[toolName] = Value
-				local txt = #Value > 0 and table.concat(Value, ", ") or "(none)"
-				print("[ToolSkill]", toolName, "=>", txt)
-			end
-		})
-	end
-
-	-- Paragraph trạng thái
-	ToolSkillInfo = ToolSkillSection:Paragraph({
-		Title = "Trạng thái",
-		Content = #equipped > 0
-			and ("Đang equip: " .. table.concat(equipped, ", "))
-			or "(chưa equip Tool nào)"
-	})
-end
-
-task.spawn(function()
-	while task.wait(1) do
-		pcall(function()
-			RefreshToolSkillDropdowns()
-		end)
-	end
-end)
-
--- ===== TEST DESTROY =====
-task.spawn(function()
-	task.wait(5)
-	pcall(function()
-		if ToolSkillSection then
-			print("=== ToolSkillSection fields ===")
-			for k, v in pairs(ToolSkillSection) do
-				print("  ", k, "-", typeof(v))
-			end
-		else
-			print("❌ ToolSkillSection = nil")
-		end
-	end)
-end)
--- ===== TEST DESTROY + COPY CLIPBOARD =====
--- Test tìm UI Frame của ToolSkillCard
-task.spawn(function()
-	task.wait(5)
-	local Log = {}
-	local function LogPrint(...)
-		local args = {...}
-		local str = ""
-		for i, v in ipairs(args) do
-			str = str .. tostring(v) .. (i < #args and " " or "")
-		end
-		table.insert(Log, str)
-		print(str)
-	end
-
-	LogPrint("========== TÌM UI FRAME ==========")
-
-	-- Tìm trong HUD.Main
-	local hud = game.Players.LocalPlayer.PlayerGui:FindFirstChild("HUD")
-	if hud and hud:FindFirstChild("Main") then
-		for _, v in pairs(hud.Main:GetDescendants()) do
-			if v:IsA("TextLabel") and v.Text == "🎯 Tool Skills" then
-				LogPrint("✅ Tìm thấy TitleLabel:", v:GetFullName())
-				-- In parent chain
-				local current = v
-				for i = 1, 5 do
-					if current and current.Parent then
-						LogPrint("  Parent " .. i .. ":", current.Parent.Name, "-", current.Parent.ClassName)
-						current = current.Parent
-					end
-				end
-			end
-		end
-	end
-
-	LogPrint("========== END ==========")
-
-	local fullText = table.concat(Log, "\n")
-	if setclipboard then
-		setclipboard(fullText)
-		print("✅ ĐÃ COPY! Ctrl+V.")
-	end
-end)
 AutoFarmCard:Toggle({
 	Title = "Auto Level Farm",
 	Value = false,
@@ -3244,34 +2957,20 @@ local NoVFX = function(State)
 		end
 	end
 end
-
 local AutoSkill = function()
-	if _G.RaidThanosSpamming then return end
 	local Character = LocalPlayer.Character
 	if not Character then return end
-
-	for _, Tool in ipairs(Character:GetChildren()) do
+	local Skills = {}
+	if _G.AutoSkillZ then table.insert(Skills,"z") end
+	if _G.AutoSkillX then table.insert(Skills,"x") end
+	if _G.AutoSkillC then table.insert(Skills,"c") end
+	if _G.AutoSkillV then table.insert(Skills,"v") end
+	if _G.AutoSkillF then table.insert(Skills,"f") end
+	if #Skills == 0 then return end
+	local Skill = Skills[math.random(#Skills)]
+	for _,Tool in ipairs(Character:GetChildren()) do
 		if Tool:IsA("Tool") then
-			-- Check xem Tool có skill riêng không
-			local ToolSkills = _G.ToolSkills and _G.ToolSkills[Tool.Name]
-			local SkillsToUse = {}
-
-			if ToolSkills and type(ToolSkills) == "table" and #ToolSkills > 0 then
-				-- Dùng skill riêng
-				SkillsToUse = ToolSkills
-			else
-				-- Dùng skill chung
-				if _G.AutoSkillZ then table.insert(SkillsToUse,"z") end
-				if _G.AutoSkillX then table.insert(SkillsToUse,"x") end
-				if _G.AutoSkillC then table.insert(SkillsToUse,"c") end
-				if _G.AutoSkillV then table.insert(SkillsToUse,"v") end
-				if _G.AutoSkillF then table.insert(SkillsToUse,"f") end
-			end
-
-			if #SkillsToUse > 0 then
-				local Skill = SkillsToUse[math.random(#SkillsToUse)]
-				ReplicatedStorage.Remotes.Action:FireServer(Tool.Name, Skill)
-			end
+			ReplicatedStorage.Remotes.Action:FireServer(Tool.Name,Skill)
 		end
 	end
 end
