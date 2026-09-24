@@ -9,6 +9,7 @@ local Character = LocalPlayer.Character
 local Npc_Quest = workspace:WaitForChild("NpcQuest")
 local Itemdrops = workspace:WaitForChild("Itemdrops")
 local UseItems = require(ReplicatedStorage.Modules.UseItems)
+local CraftingTable = require(ReplicatedStorage.Modules.CraftingTable)
 local Quest_Module = require(ReplicatedStorage.Modules.QuestModule)
 local ItemList = require(ReplicatedStorage.Modules.Itemlist)
 local SpawnBossList =require(ReplicatedStorage.Modules.SpawnBossList)
@@ -391,7 +392,7 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!")
+local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!")
 local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
 
 -- ===== CỘT TRÁI =====
@@ -2878,15 +2879,21 @@ end
 
 function UpdateCraftInfo(itemName)
 	if not itemName then return end
-	local Data = UseItems[itemName]
+	local Data = CraftingTable[itemName]
 	local ConsumText = ""
 	local AvailText = ""
 
-	if Data and Data.Inventory then
-		for Item, Need in pairs(Data.Inventory) do
-			local Have = GetItemAmount(Item)
-			ConsumText = ConsumText .. "\n  " .. Item .. " x" .. Need
-			AvailText = AvailText .. "\n  " .. Item .. " " .. Have
+	if Data then
+		-- Data có thể là: {["Green Fluid"] = 1, ["Plastic"] = 5}
+		-- hoặc {Inventory = {["Green Fluid"] = 1}, ...}
+		local RecipeTable = Data.Inventory or Data
+
+		for Item, Need in pairs(RecipeTable) do
+			if type(Need) == "number" then
+				local Have = GetItemAmount(Item)
+				ConsumText = ConsumText .. "\n  " .. Item .. " x" .. Need
+				AvailText = AvailText .. "\n  " .. Item .. " " .. Have
+			end
 		end
 	end
 
@@ -2962,16 +2969,20 @@ end)
 -- ===== LOOP AUTO CRAFT =====
 task.spawn(function()
 	while task.wait(0.5) do
-		if _G.AutoCraftRunning and _G.SelectedCraftItem and CraftModule then
+		if _G.AutoCraftRunning and _G.SelectedCraftItem then
 			pcall(function()
-				local Data = CraftModule[_G.SelectedCraftItem]
+				local Data = CraftingTable[_G.SelectedCraftItem]
 				if not Data then return end
 
+				local RecipeTable = Data.Inventory or Data
 				local CanCraft = true
-				for Item, Need in pairs(Data.Inventory or {}) do
-					if GetItemAmount(Item) < Need then
-						CanCraft = false
-						break
+
+				for Item, Need in pairs(RecipeTable) do
+					if type(Need) == "number" then
+						if GetItemAmount(Item) < Need then
+							CanCraft = false
+							break
+						end
 					end
 				end
 
