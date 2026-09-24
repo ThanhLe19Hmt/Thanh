@@ -927,12 +927,13 @@ Potion:Toggle({
 		_G.Auto_Use_Potion = Value
 	end
 })
--- ===== TOOL SKILLS UI (CHỈ TOOL ĐANG EQUIP) =====
+-- ===== TOOL SKILLS UI (TỰ ĐỘNG THEO TOOL EQUIP) =====
 local ToolSkillCard = Tab_Page2:CreateSection("🎯 Tool Skills","Left")
 
 local ToolSkillDropdowns = {}
 local LastEquippedStr = ""
 
+-- Hàm lấy Tool đang equip (cả Character + Backpack để chắc chắn)
 local function GetEquippedTools()
 	local tools = {}
 	local char = LocalPlayer.Character
@@ -958,11 +959,13 @@ local function RefreshToolSkillDropdowns()
 	if equippedStr == LastEquippedStr then return end
 	LastEquippedStr = equippedStr
 
+	-- Destroy dropdown cũ
 	for _, dd in pairs(ToolSkillDropdowns) do
 		pcall(function() dd:Destroy() end)
 	end
 	ToolSkillDropdowns = {}
 
+	-- Tạo dropdown mới cho từng Tool equip
 	for _, toolName in ipairs(equipped) do
 		local dd = ToolSkillCard:Dropdown({
 			Title = toolName .. " Skills",
@@ -977,15 +980,16 @@ local function RefreshToolSkillDropdowns()
 		table.insert(ToolSkillDropdowns, dd)
 	end
 
-	ToolSkillInfo:SetContent(
-		#equipped > 0
-			and ("Đang equip: " .. table.concat(equipped, ", "))
-			or "(chưa equip Tool nào)"
-	)
+	-- Update info
+	local txt = #equipped > 0
+		and ("Đang equip: " .. table.concat(equipped, ", "))
+		or "(chưa equip Tool nào)"
+	ToolSkillInfo:SetContent(txt)
 end
 
+-- Loop tự động cập nhật mỗi 0.5s
 task.spawn(function()
-	while task.wait(2) do
+	while task.wait(0.5) do
 		pcall(function()
 			RefreshToolSkillDropdowns()
 		end)
