@@ -391,7 +391,7 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!!")
+local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!")
 local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
 
 -- ===== CỘT TRÁI =====
@@ -3029,32 +3029,90 @@ task.spawn(function()
 		end
 	end
 end)
--- ===== TEST DEBUG =====
+-- ===== TEST DEBUG FROM SCRIPT + COPY CLIPBOARD =====
 task.spawn(function()
 	task.wait(5)
-	print("========== DEBUG FROM SCRIPT ==========")
-	print("UseItems:", UseItems)
+	local Log = {}
+	local function LogPrint(...)
+		local args = {...}
+		local str = ""
+		for i, v in ipairs(args) do
+			str = str .. tostring(v) .. (i < #args and " " or "")
+		end
+		table.insert(Log, str)
+		print(str)
+	end
+
+	LogPrint("========== DEBUG FROM SCRIPT ==========")
+
+	-- Check UseItems
+	LogPrint("UseItems:", UseItems)
 	if UseItems then
-		print("Portal Gun in UseItems:", UseItems["Portal Gun"])
+		LogPrint("")
+		LogPrint("=== Portal Gun trong UseItems? ===")
+		LogPrint("Portal Gun:", UseItems["Portal Gun"])
+
+		LogPrint("")
+		LogPrint("=== 20 item đầu trong UseItems ===")
 		local count = 0
 		for name, data in pairs(UseItems) do
 			count = count + 1
-			if count <= 5 then
-				print("  ", name, "- Type:", data.Type)
+			if count <= 20 then
+				LogPrint("  ", name, "- Type:", data.Type or "?")
 			end
 		end
-		print("Tổng số item trong UseItems:", count)
+		LogPrint("Tổng số item trong UseItems:", count)
+	else
+		LogPrint("❌ UseItems = nil")
 	end
 
-	print("")
-	print("ReplicatedStorage.Modules:")
+	-- Check ReplicatedStorage.Modules
+	LogPrint("")
+	LogPrint("=== ReplicatedStorage.Modules ===")
 	local Modules = ReplicatedStorage:FindFirstChild("Modules")
 	if Modules then
 		for _, v in pairs(Modules:GetChildren()) do
-			print("  ", v.Name, "-", v.ClassName)
+			LogPrint("  ", v.Name, "-", v.ClassName)
+		end
+	else
+		LogPrint("❌ Không có ReplicatedStorage.Modules")
+	end
+
+	-- Tìm module có chữ Craft
+	LogPrint("")
+	LogPrint("=== Module có chữ 'Craft' ===")
+	for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+		if (v:IsA("ModuleScript") or v:IsA("RemoteFunction") or v:IsA("RemoteEvent")) and v.Name:lower():find("craft") then
+			LogPrint("  ", v:GetFullName(), "-", v.ClassName)
 		end
 	end
-	print("========================================")
+
+	-- Tìm module có chữ "CraftTable"
+	LogPrint("")
+	LogPrint("=== Tất cả có chữ 'CraftTable' ===")
+	for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+		if v.Name:lower():find("crafttable") then
+			LogPrint("  ", v:GetFullName(), "-", v.ClassName)
+		end
+	end
+
+	LogPrint("")
+	LogPrint("========== END ==========")
+
+	-- Copy clipboard
+	local fullText = table.concat(Log, "\n")
+	if setclipboard then
+		setclipboard(fullText)
+		print("✅ ĐÃ COPY VÀO CLIPBOARD! Nhấn Ctrl+V.")
+	elseif syn and syn.write_clipboard then
+		syn.write_clipboard(fullText)
+		print("✅ ĐÃ COPY (syn)")
+	elseif toclipboard then
+		toclipboard(fullText)
+		print("✅ ĐÃ COPY")
+	else
+		print("⚠️ Không hỗ trợ clipboard, chụp màn hình Output nhé.")
+	end
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
