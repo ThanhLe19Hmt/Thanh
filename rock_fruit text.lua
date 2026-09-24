@@ -459,7 +459,7 @@ local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
 
 -- Dropdown chọn Raid
 RaidBossCard:Dropdown({
-	Title = "Auto Raid Who??",
+	Title = "Choose a boss to raid",
 	Options = {"Bacon of Grudge", "??? (Raid 2)", "??? (Raid 3)"},
 	Multi = false,
 	Callback = function(Value)
@@ -482,7 +482,7 @@ RaidBossCard:Button({
 		local Data = RaidBossData[_G.AutoRaidWho]
 		if not Data then
 			Library:Notify({
-				Title = "❌ Chưa chọn Raid",
+				Title = "❌ Raid not selected",
 				Description = "Please choose a Boss Raid!! Which one do you want to do?",
 				Duration = 3
 			})
@@ -498,7 +498,7 @@ RaidBossCard:Button({
 		end
 		_G.AutoRaidRunning = not _G.AutoRaidRunning
 		Library:Notify({
-			Title = _G.AutoRaidRunning and "▶️ Bắt đầu Raid" or "⏹️ Dừng Raid",
+			Title = _G.AutoRaidRunning and "▶️ Start Raid" or "⏹️ Stop Raid",
 			Description = Data.Name,
 			Duration = 3
 		})
@@ -556,7 +556,7 @@ local function RefreshShopDropdown(items)
 	end
 
 	ShopItemDropdown = ShopRaidCard:Dropdown({
-		Title = "Chọn Items để mua",
+		Title = "Select Items to Purchase",
 		Options = items,
 		Multi = false,
 		Callback = function(Value)
