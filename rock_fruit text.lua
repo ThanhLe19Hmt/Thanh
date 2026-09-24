@@ -992,16 +992,6 @@ task.spawn(function()
 		end)
 	end
 end)
--- Test xem Dropdown có Destroy không
-local testDrop = ToolSkillSection:Dropdown({
-	Title = "Test",
-	Options = {"a", "b"},
-	Multi = false,
-})
-print("testDrop.Destroy:", testDrop.Destroy)
-print("testDrop.Container:", testDrop.Container)
-print("testDrop.Frame:", testDrop.Frame)
-print("testDrop.UIElement:", testDrop.UIElement)
 AutoFarmCard:Toggle({
 	Title = "Auto Level Farm",
 	Value = false,
