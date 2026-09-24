@@ -930,10 +930,9 @@ Potion:Toggle({
 -- ===== TOOL SKILLS UI (CHỈ TOOL ĐANG EQUIP) =====
 local ToolSkillCard = Tab_Page2:CreateSection("🎯 Tool Skills","Left")
 
-local ToolSkillDropdowns = {}  -- Lưu dropdown để destroy khi cần
+local ToolSkillDropdowns = {}
 local LastEquippedStr = ""
 
--- Hàm lấy Tool đang equip
 local function GetEquippedTools()
 	local tools = {}
 	local char = LocalPlayer.Character
@@ -947,20 +946,23 @@ local function GetEquippedTools()
 	return tools
 end
 
--- Hàm refresh dropdown
+-- Paragraph hiển thị trạng thái
+local ToolSkillInfo = ToolSkillCard:Paragraph({
+	Title = "Trạng thái",
+	Content = "(đang load...)"
+})
+
 local function RefreshToolSkillDropdowns()
 	local equipped = GetEquippedTools()
 	local equippedStr = table.concat(equipped, ",")
 	if equippedStr == LastEquippedStr then return end
 	LastEquippedStr = equippedStr
 
-	-- Destroy dropdown cũ
 	for _, dd in pairs(ToolSkillDropdowns) do
 		pcall(function() dd:Destroy() end)
 	end
 	ToolSkillDropdowns = {}
 
-	-- Tạo dropdown mới cho từng Tool equip
 	for _, toolName in ipairs(equipped) do
 		local dd = ToolSkillCard:Dropdown({
 			Title = toolName .. " Skills",
@@ -975,7 +977,6 @@ local function RefreshToolSkillDropdowns()
 		table.insert(ToolSkillDropdowns, dd)
 	end
 
-	-- Update paragraph
 	ToolSkillInfo:SetContent(
 		#equipped > 0
 			and ("Đang equip: " .. table.concat(equipped, ", "))
@@ -983,13 +984,6 @@ local function RefreshToolSkillDropdowns()
 	)
 end
 
--- Paragraph hiển thị Tool đang equip
-local ToolSkillInfo = ToolSkillCard:Paragraph({
-	Title = "Cấu hình hiện tại",
-	Content = "(đang load...)"
-})
-
--- Loop kiểm tra Tool equip mỗi 2s
 task.spawn(function()
 	while task.wait(2) do
 		pcall(function()
