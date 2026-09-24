@@ -1033,9 +1033,9 @@ task.spawn(function()
 	end)
 end)
 -- ===== TEST DESTROY + COPY CLIPBOARD =====
+-- Test tìm UI Frame của ToolSkillCard
 task.spawn(function()
 	task.wait(5)
-
 	local Log = {}
 	local function LogPrint(...)
 		local args = {...}
@@ -1047,48 +1047,32 @@ task.spawn(function()
 		print(str)
 	end
 
-	pcall(function()
-		LogPrint("========== TEST DESTROY ==========")
-		if not ToolSkillSection then
-			LogPrint("❌ ToolSkillSection = nil")
-		else
-			LogPrint("=== ToolSkillSection info ===")
-			LogPrint("Destroy:", ToolSkillSection.Destroy)
-			LogPrint("Container:", ToolSkillSection.Container)
-			LogPrint("Frame:", ToolSkillSection.Frame)
-			LogPrint("UIElement:", ToolSkillSection.UIElement)
-			LogPrint("Parent:", ToolSkillSection.Parent)
-			LogPrint("")
+	LogPrint("========== TÌM UI FRAME ==========")
 
-			LogPrint("=== Tất cả field ===")
-			for k, v in pairs(ToolSkillSection) do
-				local vtype = typeof(v)
-				if vtype == "Instance" then
-					LogPrint("  ", k, "- Instance -", v.ClassName, "-", v.Name)
-				elseif vtype == "table" then
-					LogPrint("  ", k, "- table")
-				else
-					LogPrint("  ", k, "-", vtype, "-", tostring(v))
+	-- Tìm trong HUD.Main
+	local hud = game.Players.LocalPlayer.PlayerGui:FindFirstChild("HUD")
+	if hud and hud:FindFirstChild("Main") then
+		for _, v in pairs(hud.Main:GetDescendants()) do
+			if v:IsA("TextLabel") and v.Text == "🎯 Tool Skills" then
+				LogPrint("✅ Tìm thấy TitleLabel:", v:GetFullName())
+				-- In parent chain
+				local current = v
+				for i = 1, 5 do
+					if current and current.Parent then
+						LogPrint("  Parent " .. i .. ":", current.Parent.Name, "-", current.Parent.ClassName)
+						current = current.Parent
+					end
 				end
 			end
 		end
-		LogPrint("")
-		LogPrint("========== END ==========")
-	end)
+	end
 
-	-- Copy clipboard
+	LogPrint("========== END ==========")
+
 	local fullText = table.concat(Log, "\n")
 	if setclipboard then
 		setclipboard(fullText)
-		print("✅ ĐÃ COPY VÀO CLIPBOARD! Nhấn Ctrl+V.")
-	elseif syn and syn.write_clipboard then
-		syn.write_clipboard(fullText)
-		print("✅ ĐÃ COPY (syn)")
-	elseif toclipboard then
-		toclipboard(fullText)
-		print("✅ ĐÃ COPY")
-	else
-		print("⚠️ Không hỗ trợ clipboard, chụp màn hình Output nhé.")
+		print("✅ ĐÃ COPY! Ctrl+V.")
 	end
 end)
 AutoFarmCard:Toggle({
