@@ -928,12 +928,11 @@ Potion:Toggle({
 	end
 })
 -- ===== TOOL SKILLS UI (TỰ ĐỘNG THEO TOOL EQUIP) =====
-local ToolSkillCard = Tab_Page2:CreateSection("🎯 Tool Skills","Left")
-
-local ToolSkillDropdowns = {}
+local ToolSkillPage = Tab_Page2
+local ToolSkillSection = nil
+local ToolSkillInfo = nil
 local LastEquippedStr = ""
 
--- Hàm lấy Tool đang equip (cả Character + Backpack để chắc chắn)
 local function GetEquippedTools()
 	local tools = {}
 	local char = LocalPlayer.Character
@@ -947,27 +946,24 @@ local function GetEquippedTools()
 	return tools
 end
 
--- Paragraph hiển thị trạng thái
-local ToolSkillInfo = ToolSkillCard:Paragraph({
-	Title = "Trạng thái",
-	Content = "(đang load...)"
-})
-
 local function RefreshToolSkillDropdowns()
 	local equipped = GetEquippedTools()
 	local equippedStr = table.concat(equipped, ",")
 	if equippedStr == LastEquippedStr then return end
 	LastEquippedStr = equippedStr
 
-	-- Destroy dropdown cũ
-	for _, dd in pairs(ToolSkillDropdowns) do
-		pcall(function() dd:Destroy() end)
+	-- Xóa section cũ + tạo lại section mới
+	if ToolSkillSection then
+		pcall(function() ToolSkillSection:Destroy() end)
+		ToolSkillSection = nil
+		ToolSkillInfo = nil
 	end
-	ToolSkillDropdowns = {}
 
-	-- Tạo dropdown mới cho từng Tool equip
+	ToolSkillSection = ToolSkillPage:CreateSection("🎯 Tool Skills","Left")
+
+	-- Tạo dropdown cho từng Tool equip
 	for _, toolName in ipairs(equipped) do
-		local dd = ToolSkillCard:Dropdown({
+		ToolSkillSection:Dropdown({
 			Title = toolName .. " Skills",
 			Options = {"z", "x", "c", "v", "f"},
 			Multi = true,
@@ -977,24 +973,35 @@ local function RefreshToolSkillDropdowns()
 				print("[ToolSkill]", toolName, "=>", txt)
 			end
 		})
-		table.insert(ToolSkillDropdowns, dd)
 	end
 
-	-- Update info
-	local txt = #equipped > 0
-		and ("Đang equip: " .. table.concat(equipped, ", "))
-		or "(chưa equip Tool nào)"
-	ToolSkillInfo:SetContent(txt)
+	-- Paragraph hiển thị trạng thái
+	ToolSkillInfo = ToolSkillSection:Paragraph({
+		Title = "Trạng thái",
+		Content = #equipped > 0
+			and ("Đang equip: " .. table.concat(equipped, ", "))
+			or "(chưa equip Tool nào)"
+	})
 end
 
--- Loop tự động cập nhật mỗi 0.5s
+-- Loop tự động cập nhật mỗi 1s
 task.spawn(function()
-	while task.wait(0.5) do
+	while task.wait(1) do
 		pcall(function()
 			RefreshToolSkillDropdowns()
 		end)
 	end
 end)
+-- Test xem Dropdown có Destroy không
+local testDrop = ToolSkillSection:Dropdown({
+	Title = "Test",
+	Options = {"a", "b"},
+	Multi = false,
+})
+print("testDrop.Destroy:", testDrop.Destroy)
+print("testDrop.Container:", testDrop.Container)
+print("testDrop.Frame:", testDrop.Frame)
+print("testDrop.UIElement:", testDrop.UIElement)
 AutoFarmCard:Toggle({
 	Title = "Auto Level Farm",
 	Value = false,
