@@ -392,7 +392,7 @@ local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
 local Tab2 = Window:CreateTab("Main", false, false)
 local Farm = Tab2:CreatePage("Farm")
 local AllBoss = Tab2:CreatePage("Boss")
-local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!")
+local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop!!!")
 local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
 
 -- ===== CỘT TRÁI =====
@@ -2803,46 +2803,20 @@ local CraftInfoPara = CraftInfoCard:Paragraph({
 	Content = "Consumables: ---\nCurrently Available: ---\nCrafted Item: ---"
 })
 
--- Lưu selection qua biến global
 _G.SelectedCraftItem = nil
 local CraftDropdown = nil
 local LastCraftItemsStr = ""
 
-local function GetCraftItemsFromGUI()
+local function GetAllCraftItems()
 	local items = {}
-	local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-	if hud and hud:FindFirstChild("Main") then
-		local craft = hud.Main:FindFirstChild("Frame_CraftTable")
-		if craft then
-			local sf = craft:FindFirstChild("ItemScrollingFrame")
-			if sf then
-				for _, item in pairs(sf:GetChildren()) do
-					if item:IsA("TextButton") then
-						local main = item:FindFirstChild("Main")
-						if main then
-							local titleLbl = main:FindFirstChild("TitleLabel")
-							if titleLbl and titleLbl.Text and titleLbl.Text ~= "" then
-								table.insert(items, titleLbl.Text)
-							end
-						end
-					end
-				end
-			end
+	for name, data in pairs(CraftingTable) do
+		if data.need then
+			table.insert(items, name)
 		end
 	end
 	table.sort(items)
 	return items
 end
-
-local CraftItemFallback = {
-	"Glass Tube", "Utility Knife Blade", "Hammer", "Utility Knife", "Portal Gun",
-	"Honey", "Horseshoe", "Boxing Shorts", "Gas Cylinder", "Rainbow Potion",
-	"Cursed Blade", "Cursed Chain", "Teio Shoes", "Mambo Shoes", "KFC",
-	"Gold Gauntlet", "Rainbow Carrot", "Tachyon Shoes",
-	"Wood", "Plastic", "Rope", "Glue Elephant", "Cow leather", "Stopwatch",
-	"Banana Leaf", "Scarf Old", "Snake leather", "Crocodile leather",
-	"Microphone", "Trainer Notes"
-}
 
 local function RefreshCraftDropdown(items)
 	local itemsStr = table.concat(items, ",")
@@ -2883,17 +2857,11 @@ function UpdateCraftInfo(itemName)
 	local ConsumText = ""
 	local AvailText = ""
 
-	if Data then
-		-- Data có thể là: {["Green Fluid"] = 1, ["Plastic"] = 5}
-		-- hoặc {Inventory = {["Green Fluid"] = 1}, ...}
-		local RecipeTable = Data.Inventory or Data
-
-		for Item, Need in pairs(RecipeTable) do
-			if type(Need) == "number" then
-				local Have = GetItemAmount(Item)
-				ConsumText = ConsumText .. "\n  " .. Item .. " x" .. Need
-				AvailText = AvailText .. "\n  " .. Item .. " " .. Have
-			end
+	if Data and Data.need then
+		for Item, Need in pairs(Data.need) do
+			local Have = GetItemAmount(Item)
+			ConsumText = ConsumText .. "\n  " .. Item .. " x" .. Need
+			AvailText = AvailText .. "\n  " .. Item .. " " .. Have
 		end
 	end
 
@@ -2926,8 +2894,8 @@ function UpdateCraftInfo(itemName)
 	)
 end
 
--- Load fallback NGAY
-RefreshCraftDropdown(CraftItemFallback)
+-- Load ngay lập tức
+RefreshCraftDropdown(GetAllCraftItems())
 
 _G.AutoCraftRunning = false
 _G.AutoCraftLoaded = false
@@ -2955,34 +2923,19 @@ CraftCard:Toggle({
 	end
 })
 
-task.spawn(function()
-	while task.wait(1) do
-		pcall(function()
-			local items = GetCraftItemsFromGUI()
-			if #items > 0 then
-				RefreshCraftDropdown(items)
-			end
-		end)
-	end
-end)
-
 -- ===== LOOP AUTO CRAFT =====
 task.spawn(function()
 	while task.wait(0.5) do
 		if _G.AutoCraftRunning and _G.SelectedCraftItem then
 			pcall(function()
 				local Data = CraftingTable[_G.SelectedCraftItem]
-				if not Data then return end
+				if not Data or not Data.need then return end
 
-				local RecipeTable = Data.Inventory or Data
 				local CanCraft = true
-
-				for Item, Need in pairs(RecipeTable) do
-					if type(Need) == "number" then
-						if GetItemAmount(Item) < Need then
-							CanCraft = false
-							break
-						end
+				for Item, Need in pairs(Data.need) do
+					if GetItemAmount(Item) < Need then
+						CanCraft = false
+						break
 					end
 				end
 
@@ -3038,91 +2991,6 @@ task.spawn(function()
 				end
 			end)
 		end
-	end
-end)
--- ===== TEST DEBUG FROM SCRIPT + COPY CLIPBOARD =====
-task.spawn(function()
-	task.wait(5)
-	local Log = {}
-	local function LogPrint(...)
-		local args = {...}
-		local str = ""
-		for i, v in ipairs(args) do
-			str = str .. tostring(v) .. (i < #args and " " or "")
-		end
-		table.insert(Log, str)
-		print(str)
-	end
-
-	LogPrint("========== DEBUG FROM SCRIPT ==========")
-
-	-- Check UseItems
-	LogPrint("UseItems:", UseItems)
-	if UseItems then
-		LogPrint("")
-		LogPrint("=== Portal Gun trong UseItems? ===")
-		LogPrint("Portal Gun:", UseItems["Portal Gun"])
-
-		LogPrint("")
-		LogPrint("=== 20 item đầu trong UseItems ===")
-		local count = 0
-		for name, data in pairs(UseItems) do
-			count = count + 1
-			if count <= 20 then
-				LogPrint("  ", name, "- Type:", data.Type or "?")
-			end
-		end
-		LogPrint("Tổng số item trong UseItems:", count)
-	else
-		LogPrint("❌ UseItems = nil")
-	end
-
-	-- Check ReplicatedStorage.Modules
-	LogPrint("")
-	LogPrint("=== ReplicatedStorage.Modules ===")
-	local Modules = ReplicatedStorage:FindFirstChild("Modules")
-	if Modules then
-		for _, v in pairs(Modules:GetChildren()) do
-			LogPrint("  ", v.Name, "-", v.ClassName)
-		end
-	else
-		LogPrint("❌ Không có ReplicatedStorage.Modules")
-	end
-
-	-- Tìm module có chữ Craft
-	LogPrint("")
-	LogPrint("=== Module có chữ 'Craft' ===")
-	for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-		if (v:IsA("ModuleScript") or v:IsA("RemoteFunction") or v:IsA("RemoteEvent")) and v.Name:lower():find("craft") then
-			LogPrint("  ", v:GetFullName(), "-", v.ClassName)
-		end
-	end
-
-	-- Tìm module có chữ "CraftTable"
-	LogPrint("")
-	LogPrint("=== Tất cả có chữ 'CraftTable' ===")
-	for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-		if v.Name:lower():find("crafttable") then
-			LogPrint("  ", v:GetFullName(), "-", v.ClassName)
-		end
-	end
-
-	LogPrint("")
-	LogPrint("========== END ==========")
-
-	-- Copy clipboard
-	local fullText = table.concat(Log, "\n")
-	if setclipboard then
-		setclipboard(fullText)
-		print("✅ ĐÃ COPY VÀO CLIPBOARD! Nhấn Ctrl+V.")
-	elseif syn and syn.write_clipboard then
-		syn.write_clipboard(fullText)
-		print("✅ ĐÃ COPY (syn)")
-	elseif toclipboard then
-		toclipboard(fullText)
-		print("✅ ĐÃ COPY")
-	else
-		print("⚠️ Không hỗ trợ clipboard, chụp màn hình Output nhé.")
 	end
 end)
 MySaveManager:BuildConfigTab(ConfigTab)
