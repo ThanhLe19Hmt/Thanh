@@ -813,14 +813,30 @@ end)
 -- ===== TOOL SKILLS UI =====
 local ToolSkillCard = Tab_Page1:CreateSection("🎯 Tool Skills","Right")
 
--- Lấy danh sách Tool từ UseItems
-local ToolNameList = {}
-for name, data in pairs(UseItems) do
-	if data.Type then
-		table.insert(ToolNameList, name)
+-- Danh sách Tool muốn cấu hình
+local ImportantTools = {
+	"Thanos", "CidBeta", "Agnes Tachyon", "Super Chicken",
+	"Mambo", "Hachimi", "Santa Demon", "Super Bacon",
+	"Michael Jackson", "Black Leg", "Rokushiki", "Ryusoken",
+	"Kaioken", "Blade of Chaos", "Kitetsu", "Shirasaya",
+	"Tanto", "Shisui", "Kiribachi",
+}
+
+-- Tạo dropdown riêng cho từng Tool
+for _, toolName in ipairs(ImportantTools) do
+	if UseItems[toolName] then
+		ToolSkillCard:Dropdown({
+			Title = toolName .. " Skills",
+			Options = {"z", "x", "c", "v", "f"},
+			Multi = true,
+			Callback = function(Value)
+				_G.ToolSkills[toolName] = Value
+				local txt = #Value > 0 and table.concat(Value, ", ") or "(none)"
+				print("[ToolSkill]", toolName, "=>", txt)
+			end
+		})
 	end
 end
-table.sort(ToolNameList)
 
 -- Dropdown multi chọn Tool
 local SelectedToolForSkill = nil
