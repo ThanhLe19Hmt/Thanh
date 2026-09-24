@@ -927,7 +927,7 @@ Potion:Toggle({
 		_G.Auto_Use_Potion = Value
 	end
 })
--- ===== TOOL SKILLS UI (TỰ ĐỘNG THEO TOOL EQUIP) =====
+-- ===== TOOL SKILLS UI (FIX CHỒNG CHẤT) =====
 local ToolSkillPage = Tab_Page2
 local ToolSkillSection = nil
 local ToolSkillInfo = nil
@@ -946,19 +946,45 @@ local function GetEquippedTools()
 	return tools
 end
 
+local function DestroyToolSkillSection()
+	if ToolSkillSection then
+		pcall(function()
+			-- Cách 1: Destroy trực tiếp
+			if ToolSkillSection.Destroy then
+				ToolSkillSection:Destroy()
+			end
+			-- Cách 2: Xóa UI Frame khỏi parent
+			if ToolSkillSection.Frame then
+				ToolSkillSection.Frame:Destroy()
+			end
+			if ToolSkillSection.Container then
+				ToolSkillSection.Container:Destroy()
+			end
+			if ToolSkillSection.UIElement then
+				ToolSkillSection.UIElement:Destroy()
+			end
+			-- Cách 3: Duyệt tất cả field
+			for k, v in pairs(ToolSkillSection) do
+				if typeof(v) == "Instance" then
+					pcall(function() v:Destroy() end)
+				end
+			end
+		end)
+		ToolSkillSection = nil
+	end
+	ToolSkillInfo = nil
+end
+
 local function RefreshToolSkillDropdowns()
 	local equipped = GetEquippedTools()
 	local equippedStr = table.concat(equipped, ",")
 	if equippedStr == LastEquippedStr then return end
 	LastEquippedStr = equippedStr
 
-	-- Xóa section cũ + tạo lại section mới
-	if ToolSkillSection then
-		pcall(function() ToolSkillSection:Destroy() end)
-		ToolSkillSection = nil
-		ToolSkillInfo = nil
-	end
+	-- Xóa section cũ
+	DestroyToolSkillSection()
 
+	-- Tạo section mới
 	ToolSkillSection = ToolSkillPage:CreateSection("🎯 Tool Skills","Left")
 
 	-- Tạo dropdown cho từng Tool equip
@@ -975,7 +1001,7 @@ local function RefreshToolSkillDropdowns()
 		})
 	end
 
-	-- Paragraph hiển thị trạng thái
+	-- Paragraph trạng thái
 	ToolSkillInfo = ToolSkillSection:Paragraph({
 		Title = "Trạng thái",
 		Content = #equipped > 0
@@ -984,12 +1010,85 @@ local function RefreshToolSkillDropdowns()
 	})
 end
 
--- Loop tự động cập nhật mỗi 1s
 task.spawn(function()
 	while task.wait(1) do
 		pcall(function()
 			RefreshToolSkillDropdowns()
 		end)
+	end
+end)
+
+-- ===== TEST DESTROY =====
+task.spawn(function()
+	task.wait(5)
+	pcall(function()
+		if ToolSkillSection then
+			print("=== ToolSkillSection fields ===")
+			for k, v in pairs(ToolSkillSection) do
+				print("  ", k, "-", typeof(v))
+			end
+		else
+			print("❌ ToolSkillSection = nil")
+		end
+	end)
+end)
+-- ===== TEST DESTROY + COPY CLIPBOARD =====
+task.spawn(function()
+	task.wait(5)
+
+	local Log = {}
+	local function LogPrint(...)
+		local args = {...}
+		local str = ""
+		for i, v in ipairs(args) do
+			str = str .. tostring(v) .. (i < #args and " " or "")
+		end
+		table.insert(Log, str)
+		print(str)
+	end
+
+	pcall(function()
+		LogPrint("========== TEST DESTROY ==========")
+		if not ToolSkillSection then
+			LogPrint("❌ ToolSkillSection = nil")
+		else
+			LogPrint("=== ToolSkillSection info ===")
+			LogPrint("Destroy:", ToolSkillSection.Destroy)
+			LogPrint("Container:", ToolSkillSection.Container)
+			LogPrint("Frame:", ToolSkillSection.Frame)
+			LogPrint("UIElement:", ToolSkillSection.UIElement)
+			LogPrint("Parent:", ToolSkillSection.Parent)
+			LogPrint("")
+
+			LogPrint("=== Tất cả field ===")
+			for k, v in pairs(ToolSkillSection) do
+				local vtype = typeof(v)
+				if vtype == "Instance" then
+					LogPrint("  ", k, "- Instance -", v.ClassName, "-", v.Name)
+				elseif vtype == "table" then
+					LogPrint("  ", k, "- table")
+				else
+					LogPrint("  ", k, "-", vtype, "-", tostring(v))
+				end
+			end
+		end
+		LogPrint("")
+		LogPrint("========== END ==========")
+	end)
+
+	-- Copy clipboard
+	local fullText = table.concat(Log, "\n")
+	if setclipboard then
+		setclipboard(fullText)
+		print("✅ ĐÃ COPY VÀO CLIPBOARD! Nhấn Ctrl+V.")
+	elseif syn and syn.write_clipboard then
+		syn.write_clipboard(fullText)
+		print("✅ ĐÃ COPY (syn)")
+	elseif toclipboard then
+		toclipboard(fullText)
+		print("✅ ĐÃ COPY")
+	else
+		print("⚠️ Không hỗ trợ clipboard, chụp màn hình Output nhé.")
 	end
 end)
 AutoFarmCard:Toggle({
