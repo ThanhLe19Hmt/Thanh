@@ -383,7 +383,7 @@ local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon","Left")
 local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills","Left")
 local Method = Tab_Page1:CreateSection("🎯 Select Method Farm","Right")
 local Haki = Tab_Page1:CreateSection("👁️ Haki","Right")
-local VFX = Tab_Page1:CreateSection("✨ VFX test2","Right")
+local VFX = Tab_Page1:CreateSection("✨ VFX test3","Right")
 local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
@@ -670,10 +670,9 @@ task.spawn(function()
 		end)
 	end
 end)
--- ===== DEBUG VFX + COPY CLIPBOARD =====
+-- ===== TEST TOGGLE VFX =====
 task.spawn(function()
-	task.wait(10)
-
+	task.wait(3)
 	local Log = {}
 	local function LogPrint(...)
 		local args = {...}
@@ -685,94 +684,27 @@ task.spawn(function()
 		print(str)
 	end
 
-	LogPrint("========== DEBUG VFX ==========")
+	LogPrint("========== TEST TOGGLE VFX ==========")
+	LogPrint("NoVFX:", NoVFX)
+	LogPrint("VFX section:", VFX)
 	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
+	LogPrint("")
 
-	local char = LocalPlayer.Character
-	if char then
-		LogPrint("Character:", char.Name)
-
-		-- Check Aura
-		local aura = char:FindFirstChild("Aura Atomic")
-		LogPrint("Aura Atomic:", aura and "CÓ" or "KHÔNG")
-		if aura then
-			for _, v in pairs(aura:GetDescendants()) do
-				if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-					LogPrint("  ", v.Name, "-", v.ClassName, "- Enabled:", v.Enabled)
-				end
-			end
-		end
-
-		-- Check tất cả VFX trong Character
-		LogPrint("")
-		LogPrint("=== Tất cả VFX trong Character ===")
-		local vfxCount = 0
-		for _, v in pairs(char:GetDescendants()) do
-			if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-				vfxCount = vfxCount + 1
-				LogPrint("  ", v:GetFullName(), "- Enabled:", v.Enabled)
-			end
-		end
-		LogPrint("Tổng VFX trong Character:", vfxCount)
-
-		-- Check Stun
-		LogPrint("")
-		LogPrint("Stun folder:", char:FindFirstChild("Stun") and "CÓ" or "KHÔNG")
-		LogPrint("StunS folder:", char:FindFirstChild("StunS") and "CÓ" or "KHÔNG")
-		local stun = char:FindFirstChild("Stun")
-		if stun then
-			LogPrint("  Stun children:", #stun:GetChildren())
-		end
-		local stunS = char:FindFirstChild("StunS")
-		if stunS then
-			LogPrint("  StunS children:", #stunS:GetChildren())
-		end
-
-		-- Check Humanoid
-		local hum = char:FindFirstChild("Humanoid")
-		if hum then
-			LogPrint("")
-			LogPrint("=== Humanoid ===")
-			LogPrint("WalkSpeed:", hum.WalkSpeed)
-			LogPrint("JumpPower:", hum.JumpPower)
-			LogPrint("State:", tostring(hum:GetState()))
-		end
-
-		-- Check Animator
-		local hum2 = char:FindFirstChild("Humanoid")
-		if hum2 then
-			local animator = hum2:FindFirstChild("Animator")
-			if animator then
-				LogPrint("")
-				LogPrint("=== Animator Tracks ===")
-				local tracks = animator:GetPlayingAnimationTracks()
-				LogPrint("Số track:", #tracks)
-				for i, track in ipairs(tracks) do
-					if i <= 10 then
-						LogPrint("  ", track.Name or "?", "- Priority:", tostring(track.Priority))
-					end
-				end
-			end
-		end
+	-- Test gọi NoVFX thủ công
+	if NoVFX then
+		LogPrint("Gọi NoVFX(true)...")
+		NoVFX(true)
+		LogPrint("Sau khi gọi _G.VFXDisabled:", _G.VFXDisabled)
 	else
-		LogPrint("❌ Không có Character")
+		LogPrint("❌ NoVFX = nil")
 	end
 
 	LogPrint("========== END ==========")
 
-	-- Copy clipboard
 	local fullText = table.concat(Log, "\n")
 	if setclipboard then
 		setclipboard(fullText)
-		print("✅ ĐÃ COPY VÀO CLIPBOARD! Nhấn Ctrl+V.")
-	elseif syn and syn.write_clipboard then
-		syn.write_clipboard(fullText)
-		print("✅ ĐÃ COPY (syn)")
-	elseif toclipboard then
-		toclipboard(fullText)
-		print("✅ ĐÃ COPY")
-	else
-		print("⚠️ Không hỗ trợ clipboard, chụp màn hình Output nhé.")
+		print("✅ ĐÃ COPY! Ctrl+V.")
 	end
 end)
 Weapon:Dropdown({
@@ -859,6 +791,7 @@ VFX:Toggle({
 	Title = "Disable VFX",
 	Value = false,
 	Callback = function(Value)
+		_G.VFXDisabled = Value  -- ← THÊM DÒNG NÀY
 		NoVFX(Value)
 	end
 })
@@ -3047,23 +2980,22 @@ local Teleport = function(Pos)
 		Character:PivotTo(Pos)
 	end
 end
--- ===== NoVFX v7 - Loop liên tục =====
+-- ===== NoVFX v8 - Fix =====
 _G.VFXDisabled = false
 local VFXLoop = nil
 
 local NoVFX = function(State)
 	_G.VFXDisabled = State
-	print("[VFX] State:", State)
+	print("[VFX] NoVFX called with State:", State)
 
 	if State then
-		-- Bắt đầu loop
 		if VFXLoop then VFXLoop:Disconnect() end
 		VFXLoop = RunService.Heartbeat:Connect(function()
 			pcall(function()
 				local char = LocalPlayer.Character
 				if not char then return end
 
-				-- 1. Tắt VFX trong Character
+				-- Tắt VFX
 				for _, v in pairs(char:GetDescendants()) do
 					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
 						if v.Enabled then
@@ -3072,7 +3004,7 @@ local NoVFX = function(State)
 					end
 				end
 
-				-- 2. Tắt VFX trong Boss
+				-- Boss
 				local boss = workspace:FindFirstChild("Boss")
 				if boss then
 					for _, v in pairs(boss:GetDescendants()) do
@@ -3084,18 +3016,14 @@ local NoVFX = function(State)
 					end
 				end
 
-				-- 3. Giữ WalkSpeed + JumpPower
+				-- Giữ WalkSpeed
 				local hum = char:FindFirstChild("Humanoid")
 				if hum then
-					if hum.WalkSpeed < 16 then
-						hum.WalkSpeed = 16
-					end
-					if hum.JumpPower < 50 then
-						hum.JumpPower = 50
-					end
+					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+					if hum.JumpPower < 50 then hum.JumpPower = 50 end
 				end
 
-				-- 4. Xóa Stun
+				-- Xóa Stun
 				for _, folderName in ipairs({"Stun", "StunS"}) do
 					local folder = char:FindFirstChild(folderName)
 					if folder and #folder:GetChildren() > 0 then
@@ -3110,7 +3038,6 @@ local NoVFX = function(State)
 			VFXLoop = nil
 		end
 
-		-- Bật lại VFX
 		local char = LocalPlayer.Character
 		if char then
 			for _, v in pairs(char:GetDescendants()) do
