@@ -122,6 +122,57 @@ local AutoSkill = function()
 	end
 end
 
+-- ===== NoVFX v9 =====
+_G.VFXDisabled = false
+
+local NoVFX = function(State)
+	print("[VFX] State:", State)
+	_G.VFXDisabled = State
+
+	if State then
+		task.spawn(function()
+			while _G.VFXDisabled do
+				pcall(function()
+					local char = LocalPlayer.Character
+					if char then
+						-- Tắt VFX Character
+						for _, v in pairs(char:GetDescendants()) do
+							if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+								if v.Enabled then v.Enabled = false end
+							end
+						end
+
+						-- Tắt VFX Boss
+						local boss = workspace:FindFirstChild("Boss")
+						if boss then
+							for _, v in pairs(boss:GetDescendants()) do
+								if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+									if v.Enabled then v.Enabled = false end
+								end
+							end
+						end
+
+						-- Giữ WalkSpeed + JumpPower
+						local hum = char:FindFirstChild("Humanoid")
+						if hum then
+							if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+							if hum.JumpPower < 50 then hum.JumpPower = 50 end
+						end
+
+						-- Xóa Stun
+						for _, folderName in ipairs({"Stun", "StunS"}) do
+							local folder = char:FindFirstChild(folderName)
+							if folder and #folder:GetChildren() > 0 then
+								folder:ClearAllChildren()
+							end
+						end
+					end
+				end)
+				task.wait(0.1)
+			end
+		end)
+	end
+end
 for Item,Price in pairs(PointItemM) do
 	table.insert(Poitem,{Name = Item,Price = Price})
 end
@@ -339,45 +390,7 @@ local Attack = function()
 	end
 end
 
--- ===== NoVFX =====
-_G.VFXDisabled = false
-local VFXLoop = nil
 
-local NoVFX = function(State)
-	print("[VFX] State:", State)
-	_G.VFXDisabled = State
-
-	if State then
-		if VFXLoop then VFXLoop:Disconnect() end
-		VFXLoop = RunService.Heartbeat:Connect(function()
-			pcall(function()
-				local char = LocalPlayer.Character
-				if not char then return end
-				for _, v in pairs(char:GetDescendants()) do
-					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-						if v.Enabled then v.Enabled = false end
-					end
-				end
-				local hum = char:FindFirstChild("Humanoid")
-				if hum then
-					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-					if hum.JumpPower < 50 then hum.JumpPower = 50 end
-				end
-				for _, folderName in ipairs({"Stun", "StunS"}) do
-					local folder = char:FindFirstChild(folderName)
-					if folder and #folder:GetChildren() > 0 then
-						folder:ClearAllChildren()
-					end
-				end
-			end)
-		end)
-	else
-		if VFXLoop then
-			VFXLoop:Disconnect()
-			VFXLoop = nil
-		end
-	end
-end
 
 LocalPlayer.Idled:Connect(function()
 	VirtualUser:CaptureController()
@@ -405,7 +418,7 @@ local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon","Left")
 local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills","Left")
 local Method = Tab_Page1:CreateSection("🎯 Select Method Farm","Right")
 local Haki = Tab_Page1:CreateSection("👁️ Haki","Right")
-local VFX = Tab_Page1:CreateSection("✨ VFX test5","Right")
+local VFX = Tab_Page1:CreateSection("✨ VFX test2","Right")
 local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
@@ -692,9 +705,9 @@ task.spawn(function()
 		end)
 	end
 end)
--- ===== TEST TOGGLE VFX =====
+-- ===== DEBUG AURA =====
 task.spawn(function()
-	task.wait(3)
+	task.wait(10)
 	local Log = {}
 	local function LogPrint(...)
 		local args = {...}
@@ -706,23 +719,39 @@ task.spawn(function()
 		print(str)
 	end
 
-	LogPrint("========== TEST TOGGLE VFX ==========")
-	LogPrint("NoVFX:", NoVFX)
-	LogPrint("VFX section:", VFX)
+	LogPrint("========== DEBUG AURA ==========")
 	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
-	LogPrint("")
 
-	-- Test gọi NoVFX thủ công
-	if NoVFX then
-		LogPrint("Gọi NoVFX(true)...")
-		NoVFX(true)
-		LogPrint("Sau khi gọi _G.VFXDisabled:", _G.VFXDisabled)
-	else
-		LogPrint("❌ NoVFX = nil")
+	local char = LocalPlayer.Character
+	if char then
+		-- Check Aura
+		local aura = char:FindFirstChild("Aura Atomic")
+		LogPrint("Aura Atomic:", aura and "CÓ" or "KHÔNG")
+		if aura then
+			for _, v in pairs(aura:GetDescendants()) do
+				if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+					LogPrint("  ", v.Name, "- Enabled:", v.Enabled)
+				end
+			end
+		end
+
+		-- Check Humanoid
+		local hum = char:FindFirstChild("Humanoid")
+		if hum then
+			LogPrint("")
+			LogPrint("WalkSpeed:", hum.WalkSpeed)
+			LogPrint("JumpPower:", hum.JumpPower)
+			LogPrint("State:", tostring(hum:GetState()))
+		end
+
+		-- Check Stun
+		local stun = char:FindFirstChild("Stun")
+		LogPrint("Stun children:", stun and #stun:GetChildren() or "nil")
 	end
 
 	LogPrint("========== END ==========")
 
+	-- Copy clipboard
 	local fullText = table.concat(Log, "\n")
 	if setclipboard then
 		setclipboard(fullText)
@@ -813,6 +842,7 @@ VFX:Toggle({
 	Title = "Disable VFX",
 	Value = false,
 	Callback = function(Value)
+		_G.VFXDisabled = Value  -- ← THÊM DÒNG NÀY
 		NoVFX(Value)
 	end
 })
