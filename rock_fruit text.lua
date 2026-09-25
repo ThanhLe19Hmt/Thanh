@@ -2942,19 +2942,42 @@ local Teleport = function(Pos)
 		Character:PivotTo(Pos)
 	end
 end
--- ===== NoVFX với Camera Fix =====
+-- ===== NoVFX v2 - Chặn Animation + Camera =====
 local CameraLockConnection = nil
+local AnimConnection = nil
+local VFXConnection = nil
 local LastGoodCF = nil
 
 local NoVFX = function(State)
 	if State then
-		-- Xóa VFX
-		workspace:WaitForChild("VFX"):ClearAllChildren()
-		Connection = workspace:WaitForChild("VFX").DescendantAdded:Connect(function(v)
-			pcall(function() v:Destroy() end)
-		end)
+		-- 1. Xóa VFX
+		local vfx = workspace:FindFirstChild("VFX")
+		if vfx then
+			vfx:ClearAllChildren()
+			VFXConnection = vfx.DescendantAdded:Connect(function(v)
+				pcall(function() v:Destroy() end)
+			end)
+		end
 
-		-- Khóa Camera khi xuống dưới đất
+		-- 2. Chặn Animation (dừng track ngay khi play)
+		local char = LocalPlayer.Character
+		local hum = char and char:FindFirstChild("Humanoid")
+		if hum then
+			local animator = hum:FindFirstChild("Animator")
+			if animator then
+				AnimConnection = animator.AnimationPlayed:Connect(function(track)
+					pcall(function()
+						if _G.VFXDisabled then
+							task.wait(0.05)
+							track:Stop(0)
+							track:Destroy()
+						end
+					end)
+				end)
+			end
+		end
+
+		-- 3. Khóa Camera khi xuống dưới đất
 		local Camera = workspace.CurrentCamera
 		LastGoodCF = Camera.CFrame
 
@@ -2965,29 +2988,35 @@ local NoVFX = function(State)
 		CameraLockConnection = RunService.RenderStepped:Connect(function()
 			pcall(function()
 				local camY = Camera.CFrame.Position.Y
-				local char = LocalPlayer.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				local char2 = LocalPlayer.Character
+				local hrp = char2 and char2:FindFirstChild("HumanoidRootPart")
 
 				if hrp then
-					-- Nếu camera xuống dưới nhân vật 20 studs → reset
 					if camY < (hrp.Position.Y - 20) then
 						Camera.CFrame = LastGoodCF
 					else
-						-- Lưu vị trí tốt
 						LastGoodCF = Camera.CFrame
 					end
 				end
 			end)
 		end)
+
+		_G.VFXDisabled = true
 	else
-		if Connection then
-			Connection:Disconnect()
-			Connection = nil
+		-- Tắt VFX
+		if VFXConnection then
+			VFXConnection:Disconnect()
+			VFXConnection = nil
+		end
+		if AnimConnection then
+			AnimConnection:Disconnect()
+			AnimConnection = nil
 		end
 		if CameraLockConnection then
 			CameraLockConnection:Disconnect()
 			CameraLockConnection = nil
 		end
+		_G.VFXDisabled = false
 	end
 end
 local AutoSkill = function()
