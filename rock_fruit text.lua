@@ -122,22 +122,6 @@ local AutoSkill = function()
 	end
 end
 
-local NoVFX = function(State)
-	if State then
-		workspace:WaitForChild("VFX"):ClearAllChildren()
-		Connection = workspace:WaitForChild("VFX").DescendantAdded:Connect(function(v)
-			pcall(function()
-				v:Destroy()
-			end)
-		end)
-	else
-		if Connection then
-			Connection:Disconnect()
-			Connection = nil
-		end
-	end
-end
-
 for Item,Price in pairs(PointItemM) do
 	table.insert(Poitem,{Name = Item,Price = Price})
 end
@@ -383,7 +367,7 @@ local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon","Left")
 local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills","Left")
 local Method = Tab_Page1:CreateSection("🎯 Select Method Farm","Right")
 local Haki = Tab_Page1:CreateSection("👁️ Haki","Right")
-local VFX = Tab_Page1:CreateSection("✨ VFX test3","Right")
+local VFX = Tab_Page1:CreateSection("✨ VFX test4","Right")
 local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
@@ -791,7 +775,6 @@ VFX:Toggle({
 	Title = "Disable VFX",
 	Value = false,
 	Callback = function(Value)
-		_G.VFXDisabled = Value  -- ← THÊM DÒNG NÀY
 		NoVFX(Value)
 	end
 })
@@ -2980,13 +2963,13 @@ local Teleport = function(Pos)
 		Character:PivotTo(Pos)
 	end
 end
--- ===== NoVFX v8 - Fix =====
+-- ===== NoVFX (CHỈ KHAI BÁO 1 LẦN) =====
 _G.VFXDisabled = false
 local VFXLoop = nil
 
 local NoVFX = function(State)
 	_G.VFXDisabled = State
-	print("[VFX] NoVFX called with State:", State)
+	print("[VFX] State:", State)
 
 	if State then
 		if VFXLoop then VFXLoop:Disconnect() end
@@ -2995,28 +2978,24 @@ local NoVFX = function(State)
 				local char = LocalPlayer.Character
 				if not char then return end
 
-				-- Tắt VFX
+				-- Tắt VFX Character
 				for _, v in pairs(char:GetDescendants()) do
 					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-						if v.Enabled then
-							v.Enabled = false
-						end
+						if v.Enabled then v.Enabled = false end
 					end
 				end
 
-				-- Boss
+				-- Tắt VFX Boss
 				local boss = workspace:FindFirstChild("Boss")
 				if boss then
 					for _, v in pairs(boss:GetDescendants()) do
 						if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-							if v.Enabled then
-								v.Enabled = false
-							end
+							if v.Enabled then v.Enabled = false end
 						end
 					end
 				end
 
-				-- Giữ WalkSpeed
+				-- Giữ WalkSpeed + JumpPower
 				local hum = char:FindFirstChild("Humanoid")
 				if hum then
 					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
