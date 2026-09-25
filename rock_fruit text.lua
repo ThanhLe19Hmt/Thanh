@@ -383,7 +383,7 @@ local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon","Left")
 local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills","Left")
 local Method = Tab_Page1:CreateSection("🎯 Select Method Farm","Right")
 local Haki = Tab_Page1:CreateSection("👁️ Haki","Right")
-local VFX = Tab_Page1:CreateSection("✨ VFX v6","Right")
+local VFX = Tab_Page1:CreateSection("✨ VFX Test","Right")
 local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
@@ -668,6 +668,111 @@ task.spawn(function()
 				RefreshAutoBuyDropdown(allItems)
 			end
 		end)
+	end
+end)
+-- ===== DEBUG VFX + COPY CLIPBOARD =====
+task.spawn(function()
+	task.wait(10)
+
+	local Log = {}
+	local function LogPrint(...)
+		local args = {...}
+		local str = ""
+		for i, v in ipairs(args) do
+			str = str .. tostring(v) .. (i < #args and " " or "")
+		end
+		table.insert(Log, str)
+		print(str)
+	end
+
+	LogPrint("========== DEBUG VFX ==========")
+	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
+
+	local char = LocalPlayer.Character
+	if char then
+		LogPrint("Character:", char.Name)
+
+		-- Check Aura
+		local aura = char:FindFirstChild("Aura Atomic")
+		LogPrint("Aura Atomic:", aura and "CÓ" or "KHÔNG")
+		if aura then
+			for _, v in pairs(aura:GetDescendants()) do
+				if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+					LogPrint("  ", v.Name, "-", v.ClassName, "- Enabled:", v.Enabled)
+				end
+			end
+		end
+
+		-- Check tất cả VFX trong Character
+		LogPrint("")
+		LogPrint("=== Tất cả VFX trong Character ===")
+		local vfxCount = 0
+		for _, v in pairs(char:GetDescendants()) do
+			if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+				vfxCount = vfxCount + 1
+				LogPrint("  ", v:GetFullName(), "- Enabled:", v.Enabled)
+			end
+		end
+		LogPrint("Tổng VFX trong Character:", vfxCount)
+
+		-- Check Stun
+		LogPrint("")
+		LogPrint("Stun folder:", char:FindFirstChild("Stun") and "CÓ" or "KHÔNG")
+		LogPrint("StunS folder:", char:FindFirstChild("StunS") and "CÓ" or "KHÔNG")
+		local stun = char:FindFirstChild("Stun")
+		if stun then
+			LogPrint("  Stun children:", #stun:GetChildren())
+		end
+		local stunS = char:FindFirstChild("StunS")
+		if stunS then
+			LogPrint("  StunS children:", #stunS:GetChildren())
+		end
+
+		-- Check Humanoid
+		local hum = char:FindFirstChild("Humanoid")
+		if hum then
+			LogPrint("")
+			LogPrint("=== Humanoid ===")
+			LogPrint("WalkSpeed:", hum.WalkSpeed)
+			LogPrint("JumpPower:", hum.JumpPower)
+			LogPrint("State:", tostring(hum:GetState()))
+		end
+
+		-- Check Animator
+		local hum2 = char:FindFirstChild("Humanoid")
+		if hum2 then
+			local animator = hum2:FindFirstChild("Animator")
+			if animator then
+				LogPrint("")
+				LogPrint("=== Animator Tracks ===")
+				local tracks = animator:GetPlayingAnimationTracks()
+				LogPrint("Số track:", #tracks)
+				for i, track in ipairs(tracks) do
+					if i <= 10 then
+						LogPrint("  ", track.Name or "?", "- Priority:", tostring(track.Priority))
+					end
+				end
+			end
+		end
+	else
+		LogPrint("❌ Không có Character")
+	end
+
+	LogPrint("========== END ==========")
+
+	-- Copy clipboard
+	local fullText = table.concat(Log, "\n")
+	if setclipboard then
+		setclipboard(fullText)
+		print("✅ ĐÃ COPY VÀO CLIPBOARD! Nhấn Ctrl+V.")
+	elseif syn and syn.write_clipboard then
+		syn.write_clipboard(fullText)
+		print("✅ ĐÃ COPY (syn)")
+	elseif toclipboard then
+		toclipboard(fullText)
+		print("✅ ĐÃ COPY")
+	else
+		print("⚠️ Không hỗ trợ clipboard, chụp màn hình Output nhé.")
 	end
 end)
 Weapon:Dropdown({
