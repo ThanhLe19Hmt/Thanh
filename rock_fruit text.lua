@@ -122,35 +122,6 @@ local AutoSkill = function()
 	end
 end
 
--- ===== NoVFX v3 =====
-local VFXConnections = {}
-local CameraLockConnection = nil
-local LastGoodCF = nil
-local HooksInstalled = false
-
--- Hàm xóa VFX ở tất cả folder
-local function ClearAllVFX()
-	local foldersToCheck = {
-		workspace:FindFirstChild("VFX"),
-		workspace:FindFirstChild("Effects"),
-		workspace:FindFirstChild("Auras"),
-		workspace:FindFirstChild("VFX2"),
-		workspace:FindFirstChild("Effects2"),
-	}
-
-	for _, folder in pairs(foldersToCheck) do
-		if folder then
-			pcall(function() folder:ClearAllChildren() end)
-
-			-- Theo dõi VFX mới
-			local conn = folder.DescendantAdded:Connect(function(v)
-				pcall(function() v:Destroy() end)
-			end)
-			table.insert(VFXConnections, conn)
-		end
-	end
-end
-
 -- ===== NoVFX v10 - Kết hợp v3 + v9 =====
 _G.VFXDisabled = false
 local VFXLoop = nil
