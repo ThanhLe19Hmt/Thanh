@@ -729,7 +729,7 @@ task.spawn(function()
 		end)
 	end
 end)
--- ===== DEBUG NOVFX =====
+-- ===== TEST NOVFX TRONG SCRIPT =====
 task.spawn(function()
 	task.wait(5)
 	local Log = {}
@@ -743,40 +743,19 @@ task.spawn(function()
 		print(str)
 	end
 
-	LogPrint("========== DEBUG NOVFX ==========")
-	LogPrint("PlaceId:", game.PlaceId)
-	LogPrint("RunService:", RunService)
-	LogPrint("LocalPlayer:", LocalPlayer)
-	LogPrint("NoVFX:", NoVFX)
-	LogPrint("VFXLoop:", VFXLoop)
+	LogPrint("========== TEST NOVFX ==========")
 	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
+	LogPrint("VFXLoop:", VFXLoop)
+	LogPrint("NoVFX:", NoVFX)
+	LogPrint("RunService:", RunService)
 
 	if NoVFX then
-		LogPrint("")
 		LogPrint("Gọi NoVFX(true)...")
 		NoVFX(true)
-		task.wait(2)
-		LogPrint("Sau 2s:")
+		task.wait(1)
+		LogPrint("Sau 1s:")
 		LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
 		LogPrint("VFXLoop:", VFXLoop)
-
-		-- Check Aura
-		local char = LocalPlayer.Character
-		if char then
-			local aura = char:FindFirstChild("Aura Atomic")
-			if aura then
-				for _, v in pairs(aura:GetDescendants()) do
-					if v:IsA("ParticleEmitter") then
-						LogPrint("Aura", v.Name, "Enabled:", v.Enabled)
-					end
-				end
-			end
-			local hum = char:FindFirstChild("Humanoid")
-			if hum then
-				LogPrint("WalkSpeed:", hum.WalkSpeed)
-				LogPrint("JumpPower:", hum.JumpPower)
-			end
-		end
 	end
 
 	LogPrint("========== END ==========")
@@ -784,7 +763,7 @@ task.spawn(function()
 	local fullText = table.concat(Log, "\n")
 	if setclipboard then
 		setclipboard(fullText)
-		print("✅ ĐÃ COPY! Ctrl+V.")
+		print("✅ ĐÃ COPY!")
 	end
 end)
 Weapon:Dropdown({
