@@ -135,6 +135,10 @@ local NoVFX = function(State)
 		if VFXLoop then
 			VFXLoop:Disconnect()
 			VFXLoop = nil
+			-- ===== DEBUG NOVFX =====
+print("[DEBUG] NoVFX đã khai báo:", NoVFX)
+print("[DEBUG] RunService:", RunService)
+print("[DEBUG] LocalPlayer:", LocalPlayer)
 		end
 
 		-- Tạo loop mới
