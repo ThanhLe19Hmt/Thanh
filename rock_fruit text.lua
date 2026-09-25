@@ -3,6 +3,7 @@ if game.PlaceId == 119091355492870 then
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character
@@ -122,7 +123,7 @@ local AutoSkill = function()
 	end
 end
 
--- ===== NoVFX v10 - Kết hợp v3 + v9 =====
+-- ===== NoVFX v10 =====
 _G.VFXDisabled = false
 local VFXLoop = nil
 
@@ -131,30 +132,24 @@ local NoVFX = function(State)
 	_G.VFXDisabled = State
 
 	if State then
-		-- Disconnect loop cũ nếu có
 		if VFXLoop then
 			VFXLoop:Disconnect()
 			VFXLoop = nil
-			-- ===== DEBUG NOVFX =====
-print("[DEBUG] NoVFX đã khai báo:", NoVFX)
-print("[DEBUG] RunService:", RunService)
-print("[DEBUG] LocalPlayer:", LocalPlayer)
 		end
 
-		-- Tạo loop mới
 		VFXLoop = RunService.Heartbeat:Connect(function()
 			pcall(function()
 				local char = LocalPlayer.Character
 				if not char then return end
 
-				-- 1. Tắt VFX trong Character (Aura, Beam, Trail...)
+				-- 1. Tắt VFX Character
 				for _, v in pairs(char:GetDescendants()) do
 					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
 						if v.Enabled then v.Enabled = false end
 					end
 				end
 
-				-- 2. Tắt VFX trong Boss
+				-- 2. Tắt VFX Boss
 				local boss = workspace:FindFirstChild("Boss")
 				if boss then
 					for _, v in pairs(boss:GetDescendants()) do
@@ -164,20 +159,14 @@ print("[DEBUG] LocalPlayer:", LocalPlayer)
 					end
 				end
 
-				-- 3. Xóa workspace.VFX
-				local vfxFolder = workspace:FindFirstChild("VFX")
-				if vfxFolder and #vfxFolder:GetChildren() > 0 then
-					pcall(function() vfxFolder:ClearAllChildren() end)
-				end
-
-				-- 4. Giữ WalkSpeed + JumpPower
+				-- 3. Giữ WalkSpeed + JumpPower
 				local hum = char:FindFirstChild("Humanoid")
 				if hum then
 					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
 					if hum.JumpPower < 50 then hum.JumpPower = 50 end
 				end
 
-				-- 5. Xóa Stun
+				-- 4. Xóa Stun
 				for _, folderName in ipairs({"Stun", "StunS"}) do
 					local folder = char:FindFirstChild(folderName)
 					if folder and #folder:GetChildren() > 0 then
@@ -187,13 +176,12 @@ print("[DEBUG] LocalPlayer:", LocalPlayer)
 			end)
 		end)
 
-		print("[VFX] ✅ Đã bật - Loop chạy")
+		print("[VFX] ✅ Loop created:", VFXLoop)
 	else
-		-- Tắt loop
 		if VFXLoop then
 			VFXLoop:Disconnect()
 			VFXLoop = nil
-			print("[VFX] ❌ Đã tắt loop")
+			print("[VFX] ❌ Loop disconnected")
 		end
 	end
 end
@@ -442,7 +430,7 @@ local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon","Left")
 local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills","Left")
 local Method = Tab_Page1:CreateSection("🎯 Select Method Farm","Right")
 local Haki = Tab_Page1:CreateSection("👁️ Haki","Right")
-local VFX = Tab_Page1:CreateSection("✨ VFX test2","Right")
+local VFX = Tab_Page1:CreateSection("✨ VFX TESST","Right")
 local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
