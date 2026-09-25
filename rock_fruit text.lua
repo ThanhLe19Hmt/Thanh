@@ -383,7 +383,7 @@ local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon","Left")
 local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills","Left")
 local Method = Tab_Page1:CreateSection("🎯 Select Method Farm","Right")
 local Haki = Tab_Page1:CreateSection("👁️ Haki","Right")
-local VFX = Tab_Page1:CreateSection("✨ VFX Test","Right")
+local VFX = Tab_Page1:CreateSection("✨ VFX test2","Right")
 local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
@@ -3047,152 +3047,78 @@ local Teleport = function(Pos)
 		Character:PivotTo(Pos)
 	end
 end
--- ===== NoVFX v6 - Bypass Animation Lock =====
-local VFXConnections = {}
-local CameraLockConnection = nil
-local MovementConnection = nil
-local StunConnection = nil
-local LastGoodCF = nil
-
-local function DisableVFXIn(root)
-	if not root then return end
-	for _, v in pairs(root:GetDescendants()) do
-		if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail")
-			or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-			pcall(function() v.Enabled = false end)
-		end
-	end
-end
-
-local function EnableVFXIn(root)
-	if not root then return end
-	for _, v in pairs(root:GetDescendants()) do
-		if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail")
-			or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-			pcall(function() v.Enabled = true end)
-		end
-	end
-end
-
-local function HookVFXAdded(root)
-	if not root then return end
-	local conn = root.DescendantAdded:Connect(function(v)
-		if _G.VFXDisabled then
-			if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail")
-				or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-				task.wait(0.05)
-				pcall(function() v.Enabled = false end)
-			end
-		end
-	end)
-	table.insert(VFXConnections, conn)
-end
+-- ===== NoVFX v7 - Loop liên tục =====
+_G.VFXDisabled = false
+local VFXLoop = nil
 
 local NoVFX = function(State)
+	_G.VFXDisabled = State
+	print("[VFX] State:", State)
+
 	if State then
-		_G.VFXDisabled = true
-
-		-- 1. Tắt VFX
-		local char = LocalPlayer.Character
-		if char then
-			DisableVFXIn(char)
-			HookVFXAdded(char)
-		end
-		local boss = workspace:FindFirstChild("Boss")
-		if boss then
-			DisableVFXIn(boss)
-			HookVFXAdded(boss)
-		end
-		local vfxFolder = workspace:FindFirstChild("VFX")
-		if vfxFolder then
-			pcall(function() vfxFolder:ClearAllChildren() end)
-		end
-
-		-- 2. Camera Lock
-		local Camera = workspace.CurrentCamera
-		LastGoodCF = Camera.CFrame
-		if CameraLockConnection then CameraLockConnection:Disconnect() end
-		CameraLockConnection = RunService.RenderStepped:Connect(function()
+		-- Bắt đầu loop
+		if VFXLoop then VFXLoop:Disconnect() end
+		VFXLoop = RunService.Heartbeat:Connect(function()
 			pcall(function()
-				local camY = Camera.CFrame.Position.Y
-				local char2 = LocalPlayer.Character
-				local hrp = char2 and char2:FindFirstChild("HumanoidRootPart")
-				if hrp then
-					if camY < (hrp.Position.Y - 20) then
-						Camera.CFrame = LastGoodCF
-					else
-						LastGoodCF = Camera.CFrame
-					end
-				end
-			end)
-		end)
+				local char = LocalPlayer.Character
+				if not char then return end
 
-		-- 3. Bypass Animation Lock - Giữ WalkSpeed + JumpPower
-		if MovementConnection then MovementConnection:Disconnect() end
-		MovementConnection = RunService.Heartbeat:Connect(function()
-			pcall(function()
-				local char2 = LocalPlayer.Character
-				local hum = char2 and char2:FindFirstChild("Humanoid")
-				if hum then
-					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-					if hum.JumpPower < 50 then hum.JumpPower = 50 end
-
-					-- Reset state nếu bị lock
-					local state = hum:GetState()
-					if state == Enum.HumanoidStateType.Physics
-						or state == Enum.HumanoidStateType.PlatformStanding
-						or state == Enum.HumanoidStateType.FallingDown then
-						hum:ChangeState(Enum.HumanoidStateType.Running)
-					end
-				end
-			end)
-		end)
-
-		-- 4. Xóa Stun folder
-		if StunConnection then StunConnection:Disconnect() end
-		StunConnection = RunService.Heartbeat:Connect(function()
-			pcall(function()
-				local char2 = LocalPlayer.Character
-				if char2 then
-					for _, folderName in ipairs({"Stun", "StunS"}) do
-						local folder = char2:FindFirstChild(folderName)
-						if folder and #folder:GetChildren() > 0 then
-							folder:ClearAllChildren()
+				-- 1. Tắt VFX trong Character
+				for _, v in pairs(char:GetDescendants()) do
+					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+						if v.Enabled then
+							v.Enabled = false
 						end
 					end
 				end
+
+				-- 2. Tắt VFX trong Boss
+				local boss = workspace:FindFirstChild("Boss")
+				if boss then
+					for _, v in pairs(boss:GetDescendants()) do
+						if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+							if v.Enabled then
+								v.Enabled = false
+							end
+						end
+					end
+				end
+
+				-- 3. Giữ WalkSpeed + JumpPower
+				local hum = char:FindFirstChild("Humanoid")
+				if hum then
+					if hum.WalkSpeed < 16 then
+						hum.WalkSpeed = 16
+					end
+					if hum.JumpPower < 50 then
+						hum.JumpPower = 50
+					end
+				end
+
+				-- 4. Xóa Stun
+				for _, folderName in ipairs({"Stun", "StunS"}) do
+					local folder = char:FindFirstChild(folderName)
+					if folder and #folder:GetChildren() > 0 then
+						folder:ClearAllChildren()
+					end
+				end
 			end)
 		end)
-
-		print("[VFX] ✅ Đã bật - Ẩn VFX + Bypass Animation Lock")
 	else
-		_G.VFXDisabled = false
-
-		for _, conn in ipairs(VFXConnections) do
-			pcall(function() conn:Disconnect() end)
-		end
-		VFXConnections = {}
-
-		if CameraLockConnection then
-			CameraLockConnection:Disconnect()
-			CameraLockConnection = nil
-		end
-		if MovementConnection then
-			MovementConnection:Disconnect()
-			MovementConnection = nil
-		end
-		if StunConnection then
-			StunConnection:Disconnect()
-			StunConnection = nil
+		if VFXLoop then
+			VFXLoop:Disconnect()
+			VFXLoop = nil
 		end
 
+		-- Bật lại VFX
 		local char = LocalPlayer.Character
-		if char then EnableVFXIn(char) end
-
-		local boss = workspace:FindFirstChild("Boss")
-		if boss then EnableVFXIn(boss) end
-
-		print("[VFX] ❌ Đã tắt")
+		if char then
+			for _, v in pairs(char:GetDescendants()) do
+				if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+					v.Enabled = true
+				end
+			end
+		end
 	end
 end
 local AutoSkill = function()
