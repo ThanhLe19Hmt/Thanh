@@ -754,35 +754,64 @@ task.spawn(function()
 		end)
 	end
 end)
--- Test NoVFX v10
-task.wait(3)
-print("_G.VFXDisabled:", _G.VFXDisabled)
-print("VFXLoop:", VFXLoop)
+-- ===== DEBUG NOVFX =====
+task.spawn(function()
+	task.wait(5)
+	local Log = {}
+	local function LogPrint(...)
+		local args = {...}
+		local str = ""
+		for i, v in ipairs(args) do
+			str = str .. tostring(v) .. (i < #args and " " or "")
+		end
+		table.insert(Log, str)
+		print(str)
+	end
 
-if NoVFX then
-	NoVFX(true)
-	task.wait(2)
-	print("Sau khi bật:")
-	print("_G.VFXDisabled:", _G.VFXDisabled)
-	print("VFXLoop:", VFXLoop)
+	LogPrint("========== DEBUG NOVFX ==========")
+	LogPrint("PlaceId:", game.PlaceId)
+	LogPrint("RunService:", RunService)
+	LogPrint("LocalPlayer:", LocalPlayer)
+	LogPrint("NoVFX:", NoVFX)
+	LogPrint("VFXLoop:", VFXLoop)
+	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
 
-	local char = game.Players.LocalPlayer.Character
-	if char then
-		local aura = char:FindFirstChild("Aura Atomic")
-		if aura then
-			for _, v in pairs(aura:GetDescendants()) do
-				if v:IsA("ParticleEmitter") then
-					print("Aura", v.Name, "Enabled:", v.Enabled)
+	if NoVFX then
+		LogPrint("")
+		LogPrint("Gọi NoVFX(true)...")
+		NoVFX(true)
+		task.wait(2)
+		LogPrint("Sau 2s:")
+		LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
+		LogPrint("VFXLoop:", VFXLoop)
+
+		-- Check Aura
+		local char = LocalPlayer.Character
+		if char then
+			local aura = char:FindFirstChild("Aura Atomic")
+			if aura then
+				for _, v in pairs(aura:GetDescendants()) do
+					if v:IsA("ParticleEmitter") then
+						LogPrint("Aura", v.Name, "Enabled:", v.Enabled)
+					end
 				end
 			end
-		end
-		local hum = char:FindFirstChild("Humanoid")
-		if hum then
-			print("WalkSpeed:", hum.WalkSpeed)
-			print("JumpPower:", hum.JumpPower)
+			local hum = char:FindFirstChild("Humanoid")
+			if hum then
+				LogPrint("WalkSpeed:", hum.WalkSpeed)
+				LogPrint("JumpPower:", hum.JumpPower)
+			end
 		end
 	end
-end
+
+	LogPrint("========== END ==========")
+
+	local fullText = table.concat(Log, "\n")
+	if setclipboard then
+		setclipboard(fullText)
+		print("✅ ĐÃ COPY! Ctrl+V.")
+	end
+end)
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
 	Options = TypeTool,
