@@ -2942,18 +2942,51 @@ local Teleport = function(Pos)
 		Character:PivotTo(Pos)
 	end
 end
+-- ===== NoVFX với Camera Fix =====
+local CameraLockConnection = nil
+local LastGoodCF = nil
+
 local NoVFX = function(State)
 	if State then
+		-- Xóa VFX
 		workspace:WaitForChild("VFX"):ClearAllChildren()
 		Connection = workspace:WaitForChild("VFX").DescendantAdded:Connect(function(v)
+			pcall(function() v:Destroy() end)
+		end)
+
+		-- Khóa Camera khi xuống dưới đất
+		local Camera = workspace.CurrentCamera
+		LastGoodCF = Camera.CFrame
+
+		if CameraLockConnection then
+			CameraLockConnection:Disconnect()
+		end
+
+		CameraLockConnection = RunService.RenderStepped:Connect(function()
 			pcall(function()
-				v:Destroy()
+				local camY = Camera.CFrame.Position.Y
+				local char = LocalPlayer.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+				if hrp then
+					-- Nếu camera xuống dưới nhân vật 20 studs → reset
+					if camY < (hrp.Position.Y - 20) then
+						Camera.CFrame = LastGoodCF
+					else
+						-- Lưu vị trí tốt
+						LastGoodCF = Camera.CFrame
+					end
+				end
 			end)
 		end)
 	else
 		if Connection then
 			Connection:Disconnect()
 			Connection = nil
+		end
+		if CameraLockConnection then
+			CameraLockConnection:Disconnect()
+			CameraLockConnection = nil
 		end
 	end
 end
