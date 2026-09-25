@@ -2942,55 +2942,49 @@ local Teleport = function(Pos)
 		Character:PivotTo(Pos)
 	end
 end
--- ===== NoVFX v2 - Chặn Animation + Camera =====
+-- ===== NoVFX v3 =====
+local VFXConnections = {}
 local CameraLockConnection = nil
-local AnimConnection = nil
-local VFXConnection = nil
 local LastGoodCF = nil
+local HooksInstalled = false
+
+-- Hàm xóa VFX ở tất cả folder
+local function ClearAllVFX()
+	local foldersToCheck = {
+		workspace:FindFirstChild("VFX"),
+		workspace:FindFirstChild("Effects"),
+		workspace:FindFirstChild("Auras"),
+		workspace:FindFirstChild("VFX2"),
+		workspace:FindFirstChild("Effects2"),
+	}
+
+	for _, folder in pairs(foldersToCheck) do
+		if folder then
+			pcall(function() folder:ClearAllChildren() end)
+
+			-- Theo dõi VFX mới
+			local conn = folder.DescendantAdded:Connect(function(v)
+				pcall(function() v:Destroy() end)
+			end)
+			table.insert(VFXConnections, conn)
+		end
+	end
+end
 
 local NoVFX = function(State)
 	if State then
 		-- 1. Xóa VFX
-		local vfx = workspace:FindFirstChild("VFX")
-		if vfx then
-			vfx:ClearAllChildren()
-			VFXConnection = vfx.DescendantAdded:Connect(function(v)
-				pcall(function() v:Destroy() end)
-			end)
-		end
+		ClearAllVFX()
 
-		-- 2. Chặn Animation (dừng track ngay khi play)
-		local char = LocalPlayer.Character
-		local hum = char and char:FindFirstChild("Humanoid")
-		if hum then
-			local animator = hum:FindFirstChild("Animator")
-			if animator then
-				AnimConnection = animator.AnimationPlayed:Connect(function(track)
-					pcall(function()
-						if _G.VFXDisabled then
-							task.wait(0.05)
-							track:Stop(0)
-							track:Destroy()
-						end
-					end)
-				end)
-			end
-		end
-
-		-- 3. Khóa Camera khi xuống dưới đất
+		-- 2. Camera Lock
 		local Camera = workspace.CurrentCamera
 		LastGoodCF = Camera.CFrame
-
-		if CameraLockConnection then
-			CameraLockConnection:Disconnect()
-		end
-
+		if CameraLockConnection then CameraLockConnection:Disconnect() end
 		CameraLockConnection = RunService.RenderStepped:Connect(function()
 			pcall(function()
 				local camY = Camera.CFrame.Position.Y
-				local char2 = LocalPlayer.Character
-				local hrp = char2 and char2:FindFirstChild("HumanoidRootPart")
-
+				local char = LocalPlayer.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
 				if hrp then
 					if camY < (hrp.Position.Y - 20) then
 						Camera.CFrame = LastGoodCF
@@ -3001,22 +2995,36 @@ local NoVFX = function(State)
 			end)
 		end)
 
+		-- 3. Bypass Animation Lock (nếu có hookfunction)
+		if not HooksInstalled and hookfunction then
+			pcall(function()
+				local CAS = game:GetService("ContextActionService")
+				local OldBindAction = CAS.BindAction
+				CAS.BindAction = function(self, ...)
+					if _G.VFXDisabled then return end
+					return OldBindAction(self, ...)
+				end
+				HooksInstalled = true
+				print("✅ Đã bypass Animation Lock")
+			end)
+		end
+
 		_G.VFXDisabled = true
+		print("[VFX] Đã bật - Ẩn VFX + Bypass lock")
 	else
 		-- Tắt VFX
-		if VFXConnection then
-			VFXConnection:Disconnect()
-			VFXConnection = nil
+		for _, conn in ipairs(VFXConnections) do
+			pcall(function() conn:Disconnect() end)
 		end
-		if AnimConnection then
-			AnimConnection:Disconnect()
-			AnimConnection = nil
-		end
+		VFXConnections = {}
+
 		if CameraLockConnection then
 			CameraLockConnection:Disconnect()
 			CameraLockConnection = nil
 		end
+
 		_G.VFXDisabled = false
+		print("[VFX] Đã tắt")
 	end
 end
 local AutoSkill = function()
