@@ -122,57 +122,46 @@ local AutoSkill = function()
 	end
 end
 
--- ===== NoVFX v9 =====
+-- ===== NoVFX =====
 _G.VFXDisabled = false
+local VFXLoop = nil
 
 local NoVFX = function(State)
 	print("[VFX] State:", State)
 	_G.VFXDisabled = State
 
 	if State then
-		task.spawn(function()
-			while _G.VFXDisabled do
-				pcall(function()
-					local char = LocalPlayer.Character
-					if char then
-						-- Tắt VFX Character
-						for _, v in pairs(char:GetDescendants()) do
-							if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-								if v.Enabled then v.Enabled = false end
-							end
-						end
-
-						-- Tắt VFX Boss
-						local boss = workspace:FindFirstChild("Boss")
-						if boss then
-							for _, v in pairs(boss:GetDescendants()) do
-								if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-									if v.Enabled then v.Enabled = false end
-								end
-							end
-						end
-
-						-- Giữ WalkSpeed + JumpPower
-						local hum = char:FindFirstChild("Humanoid")
-						if hum then
-							if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-							if hum.JumpPower < 50 then hum.JumpPower = 50 end
-						end
-
-						-- Xóa Stun
-						for _, folderName in ipairs({"Stun", "StunS"}) do
-							local folder = char:FindFirstChild(folderName)
-							if folder and #folder:GetChildren() > 0 then
-								folder:ClearAllChildren()
-							end
-						end
+		if VFXLoop then VFXLoop:Disconnect() end
+		VFXLoop = RunService.Heartbeat:Connect(function()
+			pcall(function()
+				local char = LocalPlayer.Character
+				if not char then return end
+				for _, v in pairs(char:GetDescendants()) do
+					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+						if v.Enabled then v.Enabled = false end
 					end
-				end)
-				task.wait(0.1)
-			end
+				end
+				local hum = char:FindFirstChild("Humanoid")
+				if hum then
+					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+					if hum.JumpPower < 50 then hum.JumpPower = 50 end
+				end
+				for _, folderName in ipairs({"Stun", "StunS"}) do
+					local folder = char:FindFirstChild(folderName)
+					if folder and #folder:GetChildren() > 0 then
+						folder:ClearAllChildren()
+					end
+				end
+			end)
 		end)
+	else
+		if VFXLoop then
+			VFXLoop:Disconnect()
+			VFXLoop = nil
+		end
 	end
 end
+
 for Item,Price in pairs(PointItemM) do
 	table.insert(Poitem,{Name = Item,Price = Price})
 end
@@ -705,9 +694,9 @@ task.spawn(function()
 		end)
 	end
 end)
--- ===== DEBUG AURA =====
+-- ===== TEST TOGGLE VFX =====
 task.spawn(function()
-	task.wait(10)
+	task.wait(3)
 	local Log = {}
 	local function LogPrint(...)
 		local args = {...}
@@ -719,39 +708,23 @@ task.spawn(function()
 		print(str)
 	end
 
-	LogPrint("========== DEBUG AURA ==========")
+	LogPrint("========== TEST TOGGLE VFX ==========")
+	LogPrint("NoVFX:", NoVFX)
+	LogPrint("VFX section:", VFX)
 	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
+	LogPrint("")
 
-	local char = LocalPlayer.Character
-	if char then
-		-- Check Aura
-		local aura = char:FindFirstChild("Aura Atomic")
-		LogPrint("Aura Atomic:", aura and "CÓ" or "KHÔNG")
-		if aura then
-			for _, v in pairs(aura:GetDescendants()) do
-				if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-					LogPrint("  ", v.Name, "- Enabled:", v.Enabled)
-				end
-			end
-		end
-
-		-- Check Humanoid
-		local hum = char:FindFirstChild("Humanoid")
-		if hum then
-			LogPrint("")
-			LogPrint("WalkSpeed:", hum.WalkSpeed)
-			LogPrint("JumpPower:", hum.JumpPower)
-			LogPrint("State:", tostring(hum:GetState()))
-		end
-
-		-- Check Stun
-		local stun = char:FindFirstChild("Stun")
-		LogPrint("Stun children:", stun and #stun:GetChildren() or "nil")
+	-- Test gọi NoVFX thủ công
+	if NoVFX then
+		LogPrint("Gọi NoVFX(true)...")
+		NoVFX(true)
+		LogPrint("Sau khi gọi _G.VFXDisabled:", _G.VFXDisabled)
+	else
+		LogPrint("❌ NoVFX = nil")
 	end
 
 	LogPrint("========== END ==========")
 
-	-- Copy clipboard
 	local fullText = table.concat(Log, "\n")
 	if setclipboard then
 		setclipboard(fullText)
@@ -3029,6 +3002,45 @@ local Teleport = function(Pos)
 	local Character = LocalPlayer.Character
 	if Character then
 		Character:PivotTo(Pos)
+	end
+end
+-- ===== NoVFX =====
+_G.VFXDisabled = false
+local VFXLoop = nil
+
+local NoVFX = function(State)
+	print("[VFX] State:", State)
+	_G.VFXDisabled = State
+
+	if State then
+		if VFXLoop then VFXLoop:Disconnect() end
+		VFXLoop = RunService.Heartbeat:Connect(function()
+			pcall(function()
+				local char = LocalPlayer.Character
+				if not char then return end
+				for _, v in pairs(char:GetDescendants()) do
+					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+						if v.Enabled then v.Enabled = false end
+					end
+				end
+				local hum = char:FindFirstChild("Humanoid")
+				if hum then
+					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+					if hum.JumpPower < 50 then hum.JumpPower = 50 end
+				end
+				for _, folderName in ipairs({"Stun", "StunS"}) do
+					local folder = char:FindFirstChild(folderName)
+					if folder and #folder:GetChildren() > 0 then
+						folder:ClearAllChildren()
+					end
+				end
+			end)
+		end)
+	else
+		if VFXLoop then
+			VFXLoop:Disconnect()
+			VFXLoop = nil
+		end
 	end
 end
 local AutoSkill = function()
