@@ -151,60 +151,75 @@ local function ClearAllVFX()
 	end
 end
 
-local NoVFX = function(State)
-	if State then
-		-- 1. Xóa VFX
-		ClearAllVFX()
+-- ===== NoVFX v10 - Kết hợp v3 + v9 =====
+_G.VFXDisabled = false
+local VFXLoop = nil
 
-		-- 2. Camera Lock
-		local Camera = workspace.CurrentCamera
-		LastGoodCF = Camera.CFrame
-		if CameraLockConnection then CameraLockConnection:Disconnect() end
-		CameraLockConnection = RunService.RenderStepped:Connect(function()
+local NoVFX = function(State)
+	print("[VFX] State:", State)
+	_G.VFXDisabled = State
+
+	if State then
+		-- Disconnect loop cũ nếu có
+		if VFXLoop then
+			VFXLoop:Disconnect()
+			VFXLoop = nil
+		end
+
+		-- Tạo loop mới
+		VFXLoop = RunService.Heartbeat:Connect(function()
 			pcall(function()
-				local camY = Camera.CFrame.Position.Y
 				local char = LocalPlayer.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart")
-				if hrp then
-					if camY < (hrp.Position.Y - 20) then
-						Camera.CFrame = LastGoodCF
-					else
-						LastGoodCF = Camera.CFrame
+				if not char then return end
+
+				-- 1. Tắt VFX trong Character (Aura, Beam, Trail...)
+				for _, v in pairs(char:GetDescendants()) do
+					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+						if v.Enabled then v.Enabled = false end
+					end
+				end
+
+				-- 2. Tắt VFX trong Boss
+				local boss = workspace:FindFirstChild("Boss")
+				if boss then
+					for _, v in pairs(boss:GetDescendants()) do
+						if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+							if v.Enabled then v.Enabled = false end
+						end
+					end
+				end
+
+				-- 3. Xóa workspace.VFX
+				local vfxFolder = workspace:FindFirstChild("VFX")
+				if vfxFolder and #vfxFolder:GetChildren() > 0 then
+					pcall(function() vfxFolder:ClearAllChildren() end)
+				end
+
+				-- 4. Giữ WalkSpeed + JumpPower
+				local hum = char:FindFirstChild("Humanoid")
+				if hum then
+					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+					if hum.JumpPower < 50 then hum.JumpPower = 50 end
+				end
+
+				-- 5. Xóa Stun
+				for _, folderName in ipairs({"Stun", "StunS"}) do
+					local folder = char:FindFirstChild(folderName)
+					if folder and #folder:GetChildren() > 0 then
+						folder:ClearAllChildren()
 					end
 				end
 			end)
 		end)
 
-		-- 3. Bypass Animation Lock (nếu có hookfunction)
-		if not HooksInstalled and hookfunction then
-			pcall(function()
-				local CAS = game:GetService("ContextActionService")
-				local OldBindAction = CAS.BindAction
-				CAS.BindAction = function(self, ...)
-					if _G.VFXDisabled then return end
-					return OldBindAction(self, ...)
-				end
-				HooksInstalled = true
-				print("✅ Đã bypass Animation Lock")
-			end)
-		end
-
-		_G.VFXDisabled = true
-		print("[VFX] Đã bật - Ẩn VFX + Bypass lock")
+		print("[VFX] ✅ Đã bật - Loop chạy")
 	else
-		-- Tắt VFX
-		for _, conn in ipairs(VFXConnections) do
-			pcall(function() conn:Disconnect() end)
+		-- Tắt loop
+		if VFXLoop then
+			VFXLoop:Disconnect()
+			VFXLoop = nil
+			print("[VFX] ❌ Đã tắt loop")
 		end
-		VFXConnections = {}
-
-		if CameraLockConnection then
-			CameraLockConnection:Disconnect()
-			CameraLockConnection = nil
-		end
-
-		_G.VFXDisabled = false
-		print("[VFX] Đã tắt")
 	end
 end
 for Item,Price in pairs(PointItemM) do
@@ -739,64 +754,35 @@ task.spawn(function()
 		end)
 	end
 end)
--- ===== DEBUG NOVFX =====
-task.spawn(function()
-	task.wait(5)
-	local Log = {}
-	local function LogPrint(...)
-		local args = {...}
-		local str = ""
-		for i, v in ipairs(args) do
-			str = str .. tostring(v) .. (i < #args and " " or "")
-		end
-		table.insert(Log, str)
-		print(str)
-	end
+-- Test NoVFX v10
+task.wait(3)
+print("_G.VFXDisabled:", _G.VFXDisabled)
+print("VFXLoop:", VFXLoop)
 
-	LogPrint("========== DEBUG NOVFX ==========")
-	LogPrint("PlaceId:", game.PlaceId)
-	LogPrint("RunService:", RunService)
-	LogPrint("LocalPlayer:", LocalPlayer)
-	LogPrint("NoVFX:", NoVFX)
-	LogPrint("VFXLoop:", VFXLoop)
-	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
+if NoVFX then
+	NoVFX(true)
+	task.wait(2)
+	print("Sau khi bật:")
+	print("_G.VFXDisabled:", _G.VFXDisabled)
+	print("VFXLoop:", VFXLoop)
 
-	if NoVFX then
-		LogPrint("")
-		LogPrint("Gọi NoVFX(true)...")
-		NoVFX(true)
-		task.wait(2)
-		LogPrint("Sau 2s:")
-		LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
-		LogPrint("VFXLoop:", VFXLoop)
-
-		-- Check Aura
-		local char = LocalPlayer.Character
-		if char then
-			local aura = char:FindFirstChild("Aura Atomic")
-			if aura then
-				for _, v in pairs(aura:GetDescendants()) do
-					if v:IsA("ParticleEmitter") then
-						LogPrint("Aura", v.Name, "Enabled:", v.Enabled)
-					end
+	local char = game.Players.LocalPlayer.Character
+	if char then
+		local aura = char:FindFirstChild("Aura Atomic")
+		if aura then
+			for _, v in pairs(aura:GetDescendants()) do
+				if v:IsA("ParticleEmitter") then
+					print("Aura", v.Name, "Enabled:", v.Enabled)
 				end
 			end
-			local hum = char:FindFirstChild("Humanoid")
-			if hum then
-				LogPrint("WalkSpeed:", hum.WalkSpeed)
-				LogPrint("JumpPower:", hum.JumpPower)
-			end
+		end
+		local hum = char:FindFirstChild("Humanoid")
+		if hum then
+			print("WalkSpeed:", hum.WalkSpeed)
+			print("JumpPower:", hum.JumpPower)
 		end
 	end
-
-	LogPrint("========== END ==========")
-
-	local fullText = table.concat(Log, "\n")
-	if setclipboard then
-		setclipboard(fullText)
-		print("✅ ĐÃ COPY! Ctrl+V.")
-	end
-end)
+end
 Weapon:Dropdown({
 	Title = "Main Weapon (Attack)",
 	Options = TypeTool,
