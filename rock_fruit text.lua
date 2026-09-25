@@ -122,46 +122,91 @@ local AutoSkill = function()
 	end
 end
 
--- ===== NoVFX =====
-_G.VFXDisabled = false
-local VFXLoop = nil
+-- ===== NoVFX v3 =====
+local VFXConnections = {}
+local CameraLockConnection = nil
+local LastGoodCF = nil
+local HooksInstalled = false
 
-local NoVFX = function(State)
-	print("[VFX] State:", State)
-	_G.VFXDisabled = State
+-- Hàm xóa VFX ở tất cả folder
+local function ClearAllVFX()
+	local foldersToCheck = {
+		workspace:FindFirstChild("VFX"),
+		workspace:FindFirstChild("Effects"),
+		workspace:FindFirstChild("Auras"),
+		workspace:FindFirstChild("VFX2"),
+		workspace:FindFirstChild("Effects2"),
+	}
 
-	if State then
-		if VFXLoop then VFXLoop:Disconnect() end
-		VFXLoop = RunService.Heartbeat:Connect(function()
-			pcall(function()
-				local char = LocalPlayer.Character
-				if not char then return end
-				for _, v in pairs(char:GetDescendants()) do
-					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-						if v.Enabled then v.Enabled = false end
-					end
-				end
-				local hum = char:FindFirstChild("Humanoid")
-				if hum then
-					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-					if hum.JumpPower < 50 then hum.JumpPower = 50 end
-				end
-				for _, folderName in ipairs({"Stun", "StunS"}) do
-					local folder = char:FindFirstChild(folderName)
-					if folder and #folder:GetChildren() > 0 then
-						folder:ClearAllChildren()
-					end
-				end
+	for _, folder in pairs(foldersToCheck) do
+		if folder then
+			pcall(function() folder:ClearAllChildren() end)
+
+			-- Theo dõi VFX mới
+			local conn = folder.DescendantAdded:Connect(function(v)
+				pcall(function() v:Destroy() end)
 			end)
-		end)
-	else
-		if VFXLoop then
-			VFXLoop:Disconnect()
-			VFXLoop = nil
+			table.insert(VFXConnections, conn)
 		end
 	end
 end
 
+local NoVFX = function(State)
+	if State then
+		-- 1. Xóa VFX
+		ClearAllVFX()
+
+		-- 2. Camera Lock
+		local Camera = workspace.CurrentCamera
+		LastGoodCF = Camera.CFrame
+		if CameraLockConnection then CameraLockConnection:Disconnect() end
+		CameraLockConnection = RunService.RenderStepped:Connect(function()
+			pcall(function()
+				local camY = Camera.CFrame.Position.Y
+				local char = LocalPlayer.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					if camY < (hrp.Position.Y - 20) then
+						Camera.CFrame = LastGoodCF
+					else
+						LastGoodCF = Camera.CFrame
+					end
+				end
+			end)
+		end)
+
+		-- 3. Bypass Animation Lock (nếu có hookfunction)
+		if not HooksInstalled and hookfunction then
+			pcall(function()
+				local CAS = game:GetService("ContextActionService")
+				local OldBindAction = CAS.BindAction
+				CAS.BindAction = function(self, ...)
+					if _G.VFXDisabled then return end
+					return OldBindAction(self, ...)
+				end
+				HooksInstalled = true
+				print("✅ Đã bypass Animation Lock")
+			end)
+		end
+
+		_G.VFXDisabled = true
+		print("[VFX] Đã bật - Ẩn VFX + Bypass lock")
+	else
+		-- Tắt VFX
+		for _, conn in ipairs(VFXConnections) do
+			pcall(function() conn:Disconnect() end)
+		end
+		VFXConnections = {}
+
+		if CameraLockConnection then
+			CameraLockConnection:Disconnect()
+			CameraLockConnection = nil
+		end
+
+		_G.VFXDisabled = false
+		print("[VFX] Đã tắt")
+	end
+end
 for Item,Price in pairs(PointItemM) do
 	table.insert(Poitem,{Name = Item,Price = Price})
 end
@@ -407,7 +452,7 @@ local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon","Left")
 local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills","Left")
 local Method = Tab_Page1:CreateSection("🎯 Select Method Farm","Right")
 local Haki = Tab_Page1:CreateSection("👁️ Haki","Right")
-local VFX = Tab_Page1:CreateSection("✨ VFX test2","Right")
+local VFX = Tab_Page1:CreateSection("✨ VFX TEST","Right")
 local Tab_Page2 = Tab1:CreatePage("Other Settings")
 local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth","Right")
 local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion","Left")
@@ -694,9 +739,9 @@ task.spawn(function()
 		end)
 	end
 end)
--- ===== TEST TOGGLE VFX =====
+-- ===== DEBUG NOVFX =====
 task.spawn(function()
-	task.wait(3)
+	task.wait(5)
 	local Log = {}
 	local function LogPrint(...)
 		local args = {...}
@@ -708,19 +753,40 @@ task.spawn(function()
 		print(str)
 	end
 
-	LogPrint("========== TEST TOGGLE VFX ==========")
+	LogPrint("========== DEBUG NOVFX ==========")
+	LogPrint("PlaceId:", game.PlaceId)
+	LogPrint("RunService:", RunService)
+	LogPrint("LocalPlayer:", LocalPlayer)
 	LogPrint("NoVFX:", NoVFX)
-	LogPrint("VFX section:", VFX)
+	LogPrint("VFXLoop:", VFXLoop)
 	LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
-	LogPrint("")
 
-	-- Test gọi NoVFX thủ công
 	if NoVFX then
+		LogPrint("")
 		LogPrint("Gọi NoVFX(true)...")
 		NoVFX(true)
-		LogPrint("Sau khi gọi _G.VFXDisabled:", _G.VFXDisabled)
-	else
-		LogPrint("❌ NoVFX = nil")
+		task.wait(2)
+		LogPrint("Sau 2s:")
+		LogPrint("_G.VFXDisabled:", _G.VFXDisabled)
+		LogPrint("VFXLoop:", VFXLoop)
+
+		-- Check Aura
+		local char = LocalPlayer.Character
+		if char then
+			local aura = char:FindFirstChild("Aura Atomic")
+			if aura then
+				for _, v in pairs(aura:GetDescendants()) do
+					if v:IsA("ParticleEmitter") then
+						LogPrint("Aura", v.Name, "Enabled:", v.Enabled)
+					end
+				end
+			end
+			local hum = char:FindFirstChild("Humanoid")
+			if hum then
+				LogPrint("WalkSpeed:", hum.WalkSpeed)
+				LogPrint("JumpPower:", hum.JumpPower)
+			end
+		end
 	end
 
 	LogPrint("========== END ==========")
@@ -3004,43 +3070,89 @@ local Teleport = function(Pos)
 		Character:PivotTo(Pos)
 	end
 end
--- ===== NoVFX =====
-_G.VFXDisabled = false
-local VFXLoop = nil
+-- ===== NoVFX v3 =====
+local VFXConnections = {}
+local CameraLockConnection = nil
+local LastGoodCF = nil
+local HooksInstalled = false
+
+-- Hàm xóa VFX ở tất cả folder
+local function ClearAllVFX()
+	local foldersToCheck = {
+		workspace:FindFirstChild("VFX"),
+		workspace:FindFirstChild("Effects"),
+		workspace:FindFirstChild("Auras"),
+		workspace:FindFirstChild("VFX2"),
+		workspace:FindFirstChild("Effects2"),
+	}
+
+	for _, folder in pairs(foldersToCheck) do
+		if folder then
+			pcall(function() folder:ClearAllChildren() end)
+
+			-- Theo dõi VFX mới
+			local conn = folder.DescendantAdded:Connect(function(v)
+				pcall(function() v:Destroy() end)
+			end)
+			table.insert(VFXConnections, conn)
+		end
+	end
+end
 
 local NoVFX = function(State)
-	print("[VFX] State:", State)
-	_G.VFXDisabled = State
-
 	if State then
-		if VFXLoop then VFXLoop:Disconnect() end
-		VFXLoop = RunService.Heartbeat:Connect(function()
+		-- 1. Xóa VFX
+		ClearAllVFX()
+
+		-- 2. Camera Lock
+		local Camera = workspace.CurrentCamera
+		LastGoodCF = Camera.CFrame
+		if CameraLockConnection then CameraLockConnection:Disconnect() end
+		CameraLockConnection = RunService.RenderStepped:Connect(function()
 			pcall(function()
+				local camY = Camera.CFrame.Position.Y
 				local char = LocalPlayer.Character
-				if not char then return end
-				for _, v in pairs(char:GetDescendants()) do
-					if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
-						if v.Enabled then v.Enabled = false end
-					end
-				end
-				local hum = char:FindFirstChild("Humanoid")
-				if hum then
-					if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-					if hum.JumpPower < 50 then hum.JumpPower = 50 end
-				end
-				for _, folderName in ipairs({"Stun", "StunS"}) do
-					local folder = char:FindFirstChild(folderName)
-					if folder and #folder:GetChildren() > 0 then
-						folder:ClearAllChildren()
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					if camY < (hrp.Position.Y - 20) then
+						Camera.CFrame = LastGoodCF
+					else
+						LastGoodCF = Camera.CFrame
 					end
 				end
 			end)
 		end)
-	else
-		if VFXLoop then
-			VFXLoop:Disconnect()
-			VFXLoop = nil
+
+		-- 3. Bypass Animation Lock (nếu có hookfunction)
+		if not HooksInstalled and hookfunction then
+			pcall(function()
+				local CAS = game:GetService("ContextActionService")
+				local OldBindAction = CAS.BindAction
+				CAS.BindAction = function(self, ...)
+					if _G.VFXDisabled then return end
+					return OldBindAction(self, ...)
+				end
+				HooksInstalled = true
+				print("✅ Đã bypass Animation Lock")
+			end)
 		end
+
+		_G.VFXDisabled = true
+		print("[VFX] Đã bật - Ẩn VFX + Bypass lock")
+	else
+		-- Tắt VFX
+		for _, conn in ipairs(VFXConnections) do
+			pcall(function() conn:Disconnect() end)
+		end
+		VFXConnections = {}
+
+		if CameraLockConnection then
+			CameraLockConnection:Disconnect()
+			CameraLockConnection = nil
+		end
+
+		_G.VFXDisabled = false
+		print("[VFX] Đã tắt")
 	end
 end
 local AutoSkill = function()
