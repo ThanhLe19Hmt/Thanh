@@ -1,13 +1,16 @@
 -- =========================================================
---  FEATURE: Random & Shop (gộp)
---  ItemScrollingFrame (trái) = chọn item
---  DisplayFrame (phải)       = x5/x10/x15
+--  FEATURE: Random & Shop (gộp) v2
+--  - List item có sẵn → click chọn
+--  - Toggle BẮT ĐẦU/DỪNG
+--  - Delay cố định 0.5s
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
 		local Players = game:GetService("Players")
 		local LP = Players.LocalPlayer
 		local VIM = game:GetService("VirtualInputManager")
+
+		local DELAY = 0.5
 
 		local function GetHUD() return LP.PlayerGui:FindFirstChild("HUD") end
 
@@ -53,44 +56,41 @@ return {
 
 		-- ===== STATE =====
 		local State = {
-			-- Random
 			running = false,
 			mode = "x15",
 			count = 0,
-			delay = 0.5,
-			-- Shop
 			selectedItem = nil,
 			autoShop = false,
 			itemList = {},
 		}
 
 		-- ===== RANDOM =====
-		local function StopRandom()
-			State.running = false
-		end
-
-		local function StartRandom()
-			if State.running then return end
-			State.running = true
-			State.count = 0
-			NeoUI.Notify:Show({
-				Title = "▶️ Auto " .. State.mode,
-				Description = "Delay " .. State.delay .. "s",
-				Duration = 2,
-			})
-			task.spawn(function()
-				while State.running do
-					local btn = FindPath("Main.Frame_RandomItem.DisplayFrame." .. State.mode)
-					if btn then
-						ClickButton(btn)
-						State.count = State.count + 1
+		local function ToggleRandom()
+			if State.running then
+				State.running = false
+				NeoUI.Notify:Show({ Title = "⏹️ Dừng quay", Duration = 2 })
+			else
+				State.running = true
+				State.count = 0
+				NeoUI.Notify:Show({
+					Title = "▶️ Bắt đầu " .. State.mode,
+					Description = "Delay " .. DELAY .. "s",
+					Duration = 2,
+				})
+				task.spawn(function()
+					while State.running do
+						local btn = FindPath("Main.Frame_RandomItem.DisplayFrame." .. State.mode)
+						if btn then
+							ClickButton(btn)
+							State.count = State.count + 1
+						end
+						task.wait(DELAY)
 					end
-					task.wait(State.delay)
-				end
-			end)
+				end)
+			end
 		end
 
-		-- ===== QUÉT ITEM TRONG ItemScrollingFrame =====
+		-- ===== QUÉT ITEM =====
 		local function ScanItems()
 			State.itemList = {}
 			local hud = GetHUD()
@@ -103,14 +103,11 @@ return {
 
 			for _, child in ipairs(scroll:GetChildren()) do
 				if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("ImageButton") then
-					-- Tìm nút Main bên trong
 					local mainBtn = child:FindFirstChild("Main")
 					if not mainBtn then
-						-- Fallback: tìm button đầu tiên
 						mainBtn = child:FindFirstChildWhichIsA("TextButton")
 							or child:FindFirstChildWhichIsA("ImageButton")
 					end
-
 					if mainBtn then
 						table.insert(State.itemList, {
 							name = child.Name,
@@ -123,7 +120,6 @@ return {
 			return #State.itemList
 		end
 
-		-- ===== CHỌN ITEM =====
 		local function SelectItem(name)
 			for _, item in ipairs(State.itemList) do
 				if item.name:lower() == name:lower() then
@@ -144,12 +140,12 @@ return {
 
 		Sec:Paragraph({
 			Title = "Cách dùng",
-			Content = "Bên trái: chọn mốc quay (5/10/15) → BẮT ĐẦU.\nBên phải: chọn item + BẬT Auto đổi.\n\nMở panel Random Item trong game trước.",
+			Content = "Bên trái: chọn mốc + BẬT quay.\nBên phải: chọn item + Auto đổi.\nMở panel Random Item trong game trước.",
 		})
 
 		local MainRow = Sec:TwoColumn()
 
-		-- ⭐ CỘT TRÁI: RANDOM
+		-- ===== CỘT TRÁI: RANDOM =====
 		local RandomInfo = MainRow.Left:ListRow({
 			Title = "🎰 Random",
 			Items = {
@@ -164,37 +160,26 @@ return {
 			Title = "Mốc (5/10/15)",
 			Placeholder = "15",
 			Value = "15",
+			Callback = function(v)
+				local n = tonumber(v) or 15
+				if n == 5 then State.mode = "x5"
+				elseif n == 10 then State.mode = "x10"
+				else State.mode = "x15" end
+			end,
 		})
 
 		MainRow.Left:Button({
-			Title = "▶️ BẮT ĐẦU",
+			Title = "▶️ BẬT / ⏹️ DỪNG",
 			Callback = function()
 				local v = tonumber(modeBox:Get()) or 15
 				if v == 5 then State.mode = "x5"
 				elseif v == 10 then State.mode = "x10"
 				else State.mode = "x15" end
-				StartRandom()
-			end,
-		})
-		MainRow.Left:Button({
-			Title = "⏹️ DỪNG",
-			Callback = function()
-				StopRandom()
-				NeoUI.Notify:Show({ Title = "⏹️ Đã dừng Random", Duration = 2 })
+				ToggleRandom()
 			end,
 		})
 
-		local delayBox = MainRow.Left:Textbox({
-			Title = "Delay (s)",
-			Placeholder = "0.5",
-			Value = "0.5",
-			Callback = function(v)
-				local n = tonumber(v) or 0.5
-				State.delay = math.clamp(n, 0.1, 5)
-			end,
-		})
-
-		-- ⭐ CỘT PHẢI: SHOP
+		-- ===== CỘT PHẢI: SHOP =====
 		local ShopInfo = MainRow.Right:ListRow({
 			Title = "🛒 Shop Item",
 			Items = {
@@ -204,39 +189,37 @@ return {
 			},
 		})
 
-		local shopInput = MainRow.Right:Textbox({
-			Title = "Tên item (VD: Wood)",
-			Placeholder = "Wood",
-			Value = "",
-		})
-
-		MainRow.Right:Button({
-			Title = "✅ Chọn item",
-			Callback = function()
-				local name = shopInput:Get()
-				if name == "" then
-					NeoUI.Notify:Show({ Title = "❌ Nhập tên item", Duration = 2 })
-					return
-				end
-				if #State.itemList == 0 then
-					ScanItems()
-				end
-				if not SelectItem(name) then
-					NeoUI.Notify:Show({
-						Title = "❌ Không tìm thấy",
-						Description = "Item: " .. name,
-						Duration = 2,
-					})
+		-- ⭐ DROPDOWN item — quét sẵn
+		local itemOptions = {}
+		local itemDropdown = MainRow.Right:Dropdown({
+			Title = "Chọn Item",
+			Options = itemOptions,
+			Value = nil,
+			Callback = function(v)
+				if v then
+					SelectItem(v)
 				end
 			end,
 		})
 
-		local autoShopState = false
+		-- Hàm refresh dropdown options
+		local function RefreshItemOptions()
+			ScanItems()
+			local names = {}
+			for _, item in ipairs(State.itemList) do
+				table.insert(names, item.name)
+			end
+			-- NeoUI Dropdown: ghi đè options
+			if itemDropdown and itemDropdown.Refresh then
+				itemDropdown:Refresh(names, false)
+			end
+		end
+
+		-- Auto đổi toggle
 		MainRow.Right:Toggle({
 			Title = "Auto đổi Shop",
 			Value = false,
 			Callback = function(v)
-				autoShopState = v
 				State.autoShop = v
 				if v then
 					NeoUI.Notify:Show({
@@ -247,18 +230,6 @@ return {
 				else
 					NeoUI.Notify:Show({ Title = "❌ Auto Shop OFF", Duration = 2 })
 				end
-			end,
-		})
-
-		MainRow.Right:Button({
-			Title = "🔄 Quét lại",
-			Callback = function()
-				local n = ScanItems()
-				NeoUI.Notify:Show({
-					Title = "Đã quét",
-					Description = "Tìm thấy " .. n .. " item",
-					Duration = 2,
-				})
 			end,
 		})
 
@@ -292,7 +263,7 @@ return {
 		-- Quét item lần đầu
 		task.spawn(function()
 			task.wait(0.8)
-			ScanItems()
+			pcall(RefreshItemOptions)
 		end)
 
 		NeoUI.Notify:Show({
