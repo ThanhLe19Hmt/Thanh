@@ -1759,16 +1759,14 @@ function NeoUI:CreateWindow(opts)
 					end
 
 					-- ⭐ StatRow — hàng có key | value | nút +
-					function V:StatRow(cfg)
+										function V:StatRow(cfg)
 						cfg = cfg or {}
-						-- cfg = { Key, Title, Value, OnAdd, AddAmount }
 						local row = Create("Frame", {
 							Parent = colFrame, BackgroundColor3 = THEME.Surface,
 							Size = UDim2.new(1, 0, 0, SIZE.RowH),
 						}, { Corner(6) })
 						Reg(Registry.Surface, row, "BackgroundColor3")
 
-						-- Key label
 						local keyLbl = Create("TextLabel", {
 							Parent = row, BackgroundTransparency = 1,
 							Text = cfg.Key or "Stat",
@@ -1778,7 +1776,6 @@ function NeoUI:CreateWindow(opts)
 							Size = UDim2.new(0.4, 0, 1, 0),
 						})
 
-						-- Value label
 						local valLbl = Create("TextLabel", {
 							Parent = row, BackgroundTransparency = 1,
 							Text = tostring(cfg.Value or "..."),
@@ -1789,7 +1786,6 @@ function NeoUI:CreateWindow(opts)
 						})
 						Reg(Registry.Menu, valLbl, "TextColor3")
 
-						-- Nút +
 						local plusBtn = Create("TextButton", {
 							Parent = row, BackgroundColor3 = THEME.Button,
 							Text = "+", Font = FONT_B, TextSize = 14, TextColor3 = THEME.Text,
@@ -1811,11 +1807,14 @@ function NeoUI:CreateWindow(opts)
 
 						local handle = {}
 						handle.Instance = row
-						function handle:SetValue(v)
-							local t = tostring(v)
+						handle.SetValue = function(_self, v)
+							-- hỗ trợ cả statMelee:SetValue(x) và statMelee.SetValue(x)
+							local value = v
+							if value == nil then value = _self end
+							local t = tostring(value)
 							if valLbl.Text ~= t then valLbl.Text = t end
 						end
-						function handle:GetValue() return valLbl.Text end
+						handle.GetValue = function() return valLbl.Text end
 						return handle
 					end
 
