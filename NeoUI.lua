@@ -1398,22 +1398,30 @@ function NeoUI:CreateWindow(opts)
 				local function createRow(key, value, order)
 					local row = Create("Frame", {
 						Parent = list, BackgroundTransparency = 1,
-						Size = UDim2.new(1, 0, 0, 16), LayoutOrder = order,
+						Size = UDim2.new(1, 0, 0, 20), LayoutOrder = order,
 					})
-					Create("TextLabel", {
+
+					-- Key label — bên trái, cố định
+					local keyLbl = Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(key) .. ":",
 						Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
 						TextXAlignment = Enum.TextXAlignment.Left,
-						Size = UDim2.new(0.5, 0, 1, 0),
+						TextTruncate = Enum.TextTruncate.AtEnd,
+						Size = UDim2.new(0.4, -4, 1, 0),
+						Position = UDim2.new(0, 0, 0, 0),
 					})
+
+					-- Value label — bên phải, dài thì co lại, không tràn
 					local valLbl = Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(value),
 						Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
 						TextXAlignment = Enum.TextXAlignment.Right,
-						Size = UDim2.new(0.5, 0, 1, 0),
-						Position = UDim2.new(0.5, 0, 0, 0),
+						TextTruncate = Enum.TextTruncate.AtEnd,
+						TextScaled = false,
+						Size = UDim2.new(0.6, -4, 1, 0),
+						Position = UDim2.new(0.4, 4, 0, 0),
 					})
 					valueLabels[key] = valLbl
 					return row
@@ -1697,29 +1705,37 @@ function NeoUI:CreateWindow(opts)
 
 						local valueLabels = {}
 
-						local function createRow(key, value, order)
-							local row = Create("Frame", {
-								Parent = list, BackgroundTransparency = 1,
-								Size = UDim2.new(1, 0, 0, 16), LayoutOrder = order,
-							})
-							Create("TextLabel", {
-								Parent = row, BackgroundTransparency = 1,
-								Text = tostring(key) .. ":",
-								Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
-								TextXAlignment = Enum.TextXAlignment.Left,
-								Size = UDim2.new(0.5, 0, 1, 0),
-							})
-							local valLbl = Create("TextLabel", {
-								Parent = row, BackgroundTransparency = 1,
-								Text = tostring(value),
-								Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
-								TextXAlignment = Enum.TextXAlignment.Right,
-								Size = UDim2.new(0.5, 0, 1, 0),
-								Position = UDim2.new(0.5, 0, 0, 0),
-							})
-							valueLabels[key] = valLbl
-							return row
-						end
+										local function createRow(key, value, order)
+					local row = Create("Frame", {
+						Parent = list, BackgroundTransparency = 1,
+						Size = UDim2.new(1, 0, 0, 20), LayoutOrder = order,
+					})
+
+					-- Key label — bên trái, cố định
+					local keyLbl = Create("TextLabel", {
+						Parent = row, BackgroundTransparency = 1,
+						Text = tostring(key) .. ":",
+						Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextTruncate = Enum.TextTruncate.AtEnd,
+						Size = UDim2.new(0.4, -4, 1, 0),
+						Position = UDim2.new(0, 0, 0, 0),
+					})
+
+					-- Value label — bên phải, dài thì co lại, không tràn
+					local valLbl = Create("TextLabel", {
+						Parent = row, BackgroundTransparency = 1,
+						Text = tostring(value),
+						Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
+						TextXAlignment = Enum.TextXAlignment.Right,
+						TextTruncate = Enum.TextTruncate.AtEnd,
+						TextScaled = false,
+						Size = UDim2.new(0.6, -4, 1, 0),
+						Position = UDim2.new(0.4, 4, 0, 0),
+					})
+					valueLabels[key] = valLbl
+					return row
+				end
 
 						if cfg.Items then
 							for i, item in ipairs(cfg.Items) do
@@ -1770,19 +1786,21 @@ function NeoUI:CreateWindow(opts)
 						local keyLbl = Create("TextLabel", {
 							Parent = row, BackgroundTransparency = 1,
 							Text = cfg.Key or "Stat",
-							Font = FONT_M, TextSize = 12, TextColor3 = THEME.Text,
+							Font = FONT_M, TextSize = 11, TextColor3 = THEME.Text,
 							TextXAlignment = Enum.TextXAlignment.Left,
+							TextTruncate = Enum.TextTruncate.AtEnd,
 							Position = UDim2.new(0, 10, 0, 0),
-							Size = UDim2.new(0.4, 0, 1, 0),
+							Size = UDim2.new(0.35, -10, 1, 0),
 						})
 
 						local valLbl = Create("TextLabel", {
 							Parent = row, BackgroundTransparency = 1,
 							Text = tostring(cfg.Value or "..."),
-							Font = FONT_B, TextSize = 12, TextColor3 = THEME.Accent,
+							Font = FONT_B, TextSize = 11, TextColor3 = THEME.Accent,
 							TextXAlignment = Enum.TextXAlignment.Right,
-							Position = UDim2.new(0, 0, 0, 0),
-							Size = UDim2.new(1, -55, 1, 0),
+							TextTruncate = Enum.TextTruncate.AtEnd,
+							Position = UDim2.new(0.35, 0, 0, 0),
+							Size = UDim2.new(0.65, -46, 1, 0),
 						})
 						Reg(Registry.Menu, valLbl, "TextColor3")
 
