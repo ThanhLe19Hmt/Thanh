@@ -1,6 +1,6 @@
 -- =========================================================
 --  NEO HUB - Main Menu
---  - Modules tự chạy khi load, KHÔNG cần bấm nút
+--  Modules tự chạy khi load, KHÔNG cần bấm nút
 -- =========================================================
 repeat task.wait() until game:IsLoaded()
 
@@ -128,17 +128,12 @@ SetSec:Paragraph({
 	Content = "Các chức năng tự chạy khi vào tab.\nKhông cần bấm nút.\n\nMuốn thêm chức năng? Tạo file mới trong features/ rồi thêm RunFeature vào MainMenu.",
 })
 
--- ⭐ TAB 4: MÀU
-local ColorTab = Window:CreateTab("Màu")
-local ColorSec = ColorTab:CreateSection("🎨 Tùy Chỉnh")
-ColorSec:ColorRow({
-	Title = "Màu Menu", Value = NeoUI.Theme.Accent,
-	Setter = function(c) NeoUI.SetMenuColor(c) end,
-})
-ColorSec:ColorRow({
-	Title = "Màu Nút", Value = NeoUI.Theme.Button,
-	Setter = function(c) NeoUI.SetButtonColor(c) end,
-})
+-- ⭐ TAB 4: MÀU — tự load module theme
+local ColorTab = Window:CreateTab("Color")
+task.spawn(function()
+	task.wait(0.7)
+	RunFeature("theme", ColorTab)
+end)
 
 -- =========================================================
 --  REVEAL
