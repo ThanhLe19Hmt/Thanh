@@ -1466,6 +1466,368 @@ function NeoUI:CreateWindow(opts)
 				return handle  -- ⭐ QUAN TRỌNG — phải có return
 			end
 
+						-- ⭐ 2 CỘT — chia section thành trái/phải
+			function Section:TwoColumn()
+				local twoColWrap = Create("Frame", {
+					Parent = itemHolder, BackgroundTransparency = 1,
+					Size = UDim2.new(1, 0, 0, 0),
+					AutomaticSize = Enum.AutomaticSize.Y,
+				})
+
+				local leftCol = Create("Frame", {
+					Parent = twoColWrap, BackgroundTransparency = 1,
+					Size = UDim2.new(0.5, -3, 0, 0),
+					Position = UDim2.new(0, 0, 0, 0),
+					AutomaticSize = Enum.AutomaticSize.Y,
+				}, {
+					Create("UIListLayout", {
+						SortOrder = Enum.SortOrder.LayoutOrder,
+						Padding = UDim.new(0, 6),
+					}),
+				})
+
+				local rightCol = Create("Frame", {
+					Parent = twoColWrap, BackgroundTransparency = 1,
+					Size = UDim2.new(0.5, -3, 0, 0),
+					Position = UDim2.new(0.5, 3, 0, 0),
+					AutomaticSize = Enum.AutomaticSize.Y,
+				}, {
+					Create("UIListLayout", {
+						SortOrder = Enum.SortOrder.LayoutOrder,
+						Padding = UDim.new(0, 6),
+					}),
+				})
+
+				-- Section ảo dùng chung toàn bộ logic gốc
+				-- Cách làm: tạo closure mới có cùng methods nhưng itemHolder = colFrame
+
+				local function buildVirtual(colFrame, colName)
+					local V = {}
+
+					local function makeHolder(parentFrame)
+						return Create("Frame", {
+							Parent = parentFrame, BackgroundTransparency = 1,
+							Size = UDim2.new(1, 0, 0, 0),
+							AutomaticSize = Enum.AutomaticSize.Y,
+						})
+					end
+
+					-- Tạo holder ẩn bên trong colFrame để các method gốc có thể parent vào
+					local vHolder = Create("Frame", {
+						Parent = colFrame, BackgroundTransparency = 1,
+						Size = UDim2.new(1, 0, 0, 0),
+						AutomaticSize = Enum.AutomaticSize.Y,
+					}, {
+						Create("UIListLayout", {
+							SortOrder = Enum.SortOrder.LayoutOrder,
+							Padding = UDim.new(0, 6),
+						}),
+					})
+
+					-- ⭐ Ghi đè biến itemHolder bằng cách REBIND closure
+					-- Kỹ thuật: dùng lại toàn bộ Section gốc nhưng
+					-- với itemHolder = vHolder bằng cách patch tạm
+					local originalHolder = itemHolder
+					itemHolder = vHolder
+
+					-- Clone các method
+					for k, fn in pairs(Section) do
+						V[k] = fn
+					end
+
+					-- Khôi phục
+					itemHolder = originalHolder
+
+					-- ⚠️ Vấn đề: các method gốc capture itemHolder lúc định nghĩa.
+					-- Nên cách này KHÔNG hoạt động.
+					-- Cần phải viết lại từ đầu — xem phương án B bên dưới.
+
+					return V
+				end
+
+				-- Phương án B: Section ảo tự implement
+				local function makeRealVirtual(colFrame)
+					local V = {}
+
+					-- Button
+					function V:Button(cfg)
+						cfg = cfg or {}
+						local btn = Create("TextButton", {
+							Parent = colFrame, BackgroundColor3 = THEME.Button,
+							Text = cfg.Title or "Button", Font = FONT_M, TextSize = 12,
+							TextColor3 = THEME.Text,
+							Size = UDim2.new(1, 0, 0, SIZE.RowH),
+							AutoButtonColor = false,
+						}, { Corner(6), Stroke(THEME.Border, 1, 0.6) })
+						Reg(Registry.Button, btn, "BackgroundColor3")
+						AddPress(btn)
+						btn.MouseEnter:Connect(function() Tween(btn, { BackgroundColor3 = THEME.ButtonHover }, 0.15) end)
+						btn.MouseLeave:Connect(function() Tween(btn, { BackgroundColor3 = THEME.Button }, 0.15) end)
+						btn.MouseButton1Click:Connect(function()
+							if cfg.Callback then task.spawn(cfg.Callback) end
+						end)
+						return { Instance = btn }
+					end
+
+					-- Toggle
+					function V:Toggle(cfg)
+						cfg = cfg or {}
+						local state = cfg.Value == true
+						local row = Create("Frame", {
+							Parent = colFrame, BackgroundColor3 = THEME.Surface,
+							Size = UDim2.new(1, 0, 0, SIZE.RowH),
+						}, { Corner(6) })
+						Reg(Registry.Surface, row, "BackgroundColor3")
+
+						Create("TextLabel", {
+							Parent = row, BackgroundTransparency = 1,
+							Text = cfg.Title or "Toggle", Font = FONT_M, TextSize = 12,
+							TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -70, 1, 0),
+						})
+
+						local track = Create("Frame", {
+							Parent = row,
+							BackgroundColor3 = state and THEME.Button or THEME.Border,
+							Size = UDim2.fromOffset(38, 20),
+							Position = UDim2.new(1, -48, 0.5, -10),
+						}, { Create("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+						Reg(Registry.Button, track, "BackgroundColor3")
+
+						local knob = Create("Frame", {
+							Parent = track, BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+							Size = UDim2.fromOffset(14, 14),
+							Position = state and UDim2.new(1, -17, 0.5, -7)
+								or UDim2.new(0, 3, 0.5, -7),
+						}, { Create("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+
+						local clicker = Create("TextButton", {
+							Parent = row, BackgroundTransparency = 1, Text = "",
+							Size = UDim2.new(1, 0, 1, 0),
+						})
+
+						local function set(v)
+							state = v
+							track.BackgroundColor3 = state and THEME.Button or THEME.Border
+							Tween(knob, {
+								Position = state and UDim2.new(1, -17, 0.5, -7)
+									or UDim2.new(0, 3, 0.5, -7),
+							}, 0.2, Enum.EasingStyle.Quart)
+							if cfg.Callback then task.spawn(cfg.Callback, state) end
+						end
+
+						clicker.MouseButton1Click:Connect(function() set(not state) end)
+						return { Set = set, Get = function() return state end }
+					end
+
+					-- Textbox
+					function V:Textbox(cfg)
+						cfg = cfg or {}
+						local wrap = Create("Frame", {
+							Parent = colFrame, BackgroundColor3 = THEME.Surface,
+							Size = UDim2.new(1, 0, 0, 50),
+						}, { Corner(6) })
+						Reg(Registry.Surface, wrap, "BackgroundColor3")
+
+						Create("TextLabel", {
+							Parent = wrap, BackgroundTransparency = 1,
+							Text = cfg.Title or "Textbox", Font = FONT_M, TextSize = 12,
+							TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -20, 0, 14),
+						})
+						local box = Create("TextBox", {
+							Parent = wrap, BackgroundColor3 = THEME.Background,
+							Text = cfg.Value or "",
+							PlaceholderText = cfg.Placeholder or "Nhập...",
+							PlaceholderColor3 = THEME.TextDim,
+							Font = FONT, TextSize = 12, TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							ClearTextOnFocus = false,
+							Position = UDim2.new(0, 10, 0, 22),
+							Size = UDim2.new(1, -20, 0, 22),
+						}, { Corner(6), Stroke(THEME.Border, 1, 0.5), Pad(8, 0, 0, 0) })
+						Reg(Registry.Background, box, "BackgroundColor3")
+
+						box.Focused:Connect(function()
+							Tween(box, { BackgroundColor3 = THEME.SurfaceHover }, 0.15)
+							Tween(box:FindFirstChildOfClass("UIStroke"), { Color = THEME.Accent }, 0.15)
+						end)
+						box.FocusLost:Connect(function()
+							Tween(box, { BackgroundColor3 = THEME.Background }, 0.15)
+							Tween(box:FindFirstChildOfClass("UIStroke"), { Color = THEME.Border }, 0.15)
+							if cfg.Callback then task.spawn(cfg.Callback, box.Text) end
+						end)
+						return {
+							Set = function(v) box.Text = tostring(v) end,
+							Get = function() return box.Text end,
+						}
+					end
+
+					-- ListRow (key: value)
+					function V:ListRow(cfg)
+						cfg = cfg or {}
+						local wrap = Create("Frame", {
+							Parent = colFrame, BackgroundColor3 = THEME.Surface,
+							Size = UDim2.new(1, 0, 0, 0),
+							AutomaticSize = Enum.AutomaticSize.Y,
+						}, { Corner(6), Pad(8, 8, 8, 8) })
+						Reg(Registry.Surface, wrap, "BackgroundColor3")
+
+						local titleLbl = Create("TextLabel", {
+							Parent = wrap, BackgroundTransparency = 1,
+							Text = cfg.Title or "Info", Font = FONT_B, TextSize = 12,
+							TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Size = UDim2.new(1, 0, 0, 16),
+						})
+
+						local list = Create("Frame", {
+							Parent = wrap, BackgroundTransparency = 1,
+							Position = UDim2.new(0, 0, 0, 20),
+							Size = UDim2.new(1, 0, 0, 0),
+							AutomaticSize = Enum.AutomaticSize.Y,
+						}, {
+							Create("UIListLayout", {
+								SortOrder = Enum.SortOrder.LayoutOrder,
+								Padding = UDim.new(0, 4),
+							}),
+						})
+
+						local valueLabels = {}
+
+						local function createRow(key, value, order)
+							local row = Create("Frame", {
+								Parent = list, BackgroundTransparency = 1,
+								Size = UDim2.new(1, 0, 0, 16), LayoutOrder = order,
+							})
+							Create("TextLabel", {
+								Parent = row, BackgroundTransparency = 1,
+								Text = tostring(key) .. ":",
+								Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
+								TextXAlignment = Enum.TextXAlignment.Left,
+								Size = UDim2.new(0.5, 0, 1, 0),
+							})
+							local valLbl = Create("TextLabel", {
+								Parent = row, BackgroundTransparency = 1,
+								Text = tostring(value),
+								Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
+								TextXAlignment = Enum.TextXAlignment.Right,
+								Size = UDim2.new(0.5, 0, 1, 0),
+								Position = UDim2.new(0.5, 0, 0, 0),
+							})
+							valueLabels[key] = valLbl
+							return row
+						end
+
+						if cfg.Items then
+							for i, item in ipairs(cfg.Items) do
+								createRow(item.key, item.value, i)
+							end
+						end
+
+						local handle = {}
+						handle.Instance = wrap
+
+						function handle:SetItems(items)
+							for _, c in ipairs(list:GetChildren()) do
+								if c:IsA("Frame") then c:Destroy() end
+							end
+							valueLabels = {}
+							for i, item in ipairs(items or {}) do
+								createRow(item.key, item.value, i)
+							end
+						end
+						function handle:UpdateItem(key, value)
+							local lbl = valueLabels[key]
+							if lbl and lbl.Parent then
+								local t = tostring(value)
+								if lbl.Text ~= t then lbl.Text = t end
+								return true
+							end
+							return false
+						end
+						function handle:UpdateItems(map)
+							for k, v in pairs(map or {}) do
+								local lbl = valueLabels[k]
+								if lbl and lbl.Parent then lbl.Text = tostring(v) end
+							end
+						end
+						function handle:SetTitle(t) titleLbl.Text = tostring(t) end
+						return handle
+					end
+
+					-- ⭐ StatRow — hàng có key | value | nút +
+					function V:StatRow(cfg)
+						cfg = cfg or {}
+						-- cfg = { Key, Title, Value, OnAdd, AddAmount }
+						local row = Create("Frame", {
+							Parent = colFrame, BackgroundColor3 = THEME.Surface,
+							Size = UDim2.new(1, 0, 0, SIZE.RowH),
+						}, { Corner(6) })
+						Reg(Registry.Surface, row, "BackgroundColor3")
+
+						-- Key label
+						local keyLbl = Create("TextLabel", {
+							Parent = row, BackgroundTransparency = 1,
+							Text = cfg.Key or "Stat",
+							Font = FONT_M, TextSize = 12, TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.new(0, 10, 0, 0),
+							Size = UDim2.new(0.4, 0, 1, 0),
+						})
+
+						-- Value label
+						local valLbl = Create("TextLabel", {
+							Parent = row, BackgroundTransparency = 1,
+							Text = tostring(cfg.Value or "..."),
+							Font = FONT_B, TextSize = 12, TextColor3 = THEME.Accent,
+							TextXAlignment = Enum.TextXAlignment.Right,
+							Position = UDim2.new(0, 0, 0, 0),
+							Size = UDim2.new(1, -55, 1, 0),
+						})
+						Reg(Registry.Menu, valLbl, "TextColor3")
+
+						-- Nút +
+						local plusBtn = Create("TextButton", {
+							Parent = row, BackgroundColor3 = THEME.Button,
+							Text = "+", Font = FONT_B, TextSize = 14, TextColor3 = THEME.Text,
+							Size = UDim2.fromOffset(28, 22),
+							Position = UDim2.new(1, -38, 0.5, -11),
+							AutoButtonColor = false,
+						}, { Corner(5), Stroke(THEME.Border, 1, 0.6) })
+						Reg(Registry.Button, plusBtn, "BackgroundColor3")
+						AddPress(plusBtn, 0.88)
+						plusBtn.MouseEnter:Connect(function()
+							Tween(plusBtn, { BackgroundColor3 = THEME.ButtonHover }, 0.12)
+						end)
+						plusBtn.MouseLeave:Connect(function()
+							Tween(plusBtn, { BackgroundColor3 = THEME.Button }, 0.12)
+						end)
+						plusBtn.MouseButton1Click:Connect(function()
+							if cfg.OnAdd then task.spawn(cfg.OnAdd) end
+						end)
+
+						local handle = {}
+						handle.Instance = row
+						function handle:SetValue(v)
+							local t = tostring(v)
+							if valLbl.Text ~= t then valLbl.Text = t end
+						end
+						function handle:GetValue() return valLbl.Text end
+						return handle
+					end
+
+					return V
+				end
+
+				local Left = makeRealVirtual(leftCol)
+				local Right = makeRealVirtual(rightCol)
+
+				return { Left = Left, Right = Right, LeftFrame = leftCol, RightFrame = rightCol }
+			end
+
 			return Section
 		end
 		return Tab
