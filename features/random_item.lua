@@ -193,8 +193,7 @@ return {
 			},
 		})
 
-		-- ⭐ DROPDOWN item động
-		local itemDropdown = MainRow.Right:Dropdown({
+				local itemDropdown = MainRow.Right:Dropdown({
 			Title = "Chọn Item",
 			Options = { "Đang quét..." },
 			Value = nil,
@@ -205,13 +204,27 @@ return {
 			end,
 		})
 
+		-- Log debug
+		print("[Random] itemDropdown type:", typeof(itemDropdown))
+		print("[Random] itemDropdown.Refresh:", typeof(itemDropdown and itemDropdown.Refresh))
+
 		-- Auto quét lại mỗi 5s
 		task.spawn(function()
 			task.wait(1)
 			while true do
 				local names = ScanItems()
-				if #names > 0 and itemDropdown and itemDropdown.Refresh then
-					itemDropdown:Refresh(names, true)
+				print("[Random] ScanItems found:", #names, "items")
+				if #names > 0 then
+					if itemDropdown and itemDropdown.Refresh then
+						local ok, err = pcall(function()
+							itemDropdown:Refresh(names, true)
+						end)
+						print("[Random] Refresh result:", ok, err)
+					else
+						print("[Random] ❌ Dropdown không có Refresh method!")
+					end
+				else
+					print("[Random] ❌ Không tìm thấy item — panel Random chưa mở?")
 				end
 				task.wait(5)
 			end
