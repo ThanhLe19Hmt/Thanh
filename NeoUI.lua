@@ -2058,7 +2058,6 @@ function NeoUI:CreateWindow(opts)
 	display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
 
 	if cfg.Callback then task.spawn(cfg.Callback, selected) end
-end
 
 					return V
 				end
