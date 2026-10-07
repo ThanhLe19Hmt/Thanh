@@ -100,7 +100,7 @@ return {
 			return true
 		end
 
-		local ADD_AMOUNT = 100
+		local ADD_AMOUNT = 1000
 
 		local function IncreaseStat(name)
 			local btn = STAT_PATHS[name] and FindPath(STAT_PATHS[name])
