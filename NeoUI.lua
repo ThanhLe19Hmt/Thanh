@@ -1232,18 +1232,7 @@ function NeoUI:CreateWindow(opts)
 						Tween(arrow, { Rotation = 0 }, 0.25)
 					end
 				end)
-				AddPress(mainBtn, 0.98)
-				if cfg.Callback then task.spawn(cfg.Callback, selected) end
-								mainBtn.MouseButton1Click:Connect(function()
-					opened = not opened
-					if opened then
-						Tween(wrap, { Size = UDim2.new(1, 0, 0, 56 + #options * 26 + 6) }, 0.25, Enum.EasingStyle.Quart)
-						Tween(arrow, { Rotation = 180 }, 0.25)
-					else
-						Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
-						Tween(arrow, { Rotation = 0 }, 0.25)
-					end
-				end)
+				
 				AddPress(mainBtn, 0.98)
 				if cfg.Callback then task.spawn(cfg.Callback, selected) end
 
@@ -1300,7 +1289,6 @@ function NeoUI:CreateWindow(opts)
 				end
 
 				return handle
-			   end
 			end
 
 			function Section:Paragraph(cfg)
