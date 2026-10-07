@@ -1829,7 +1829,7 @@ function NeoUI:CreateWindow(opts)
 					end
 
 					-- ⭐ StatRow — hàng có key | value | nút +
-										function V:StatRow(cfg)
+					function V:StatRow(cfg)
 						cfg = cfg or {}
 						local row = Create("Frame", {
 							Parent = colFrame, BackgroundColor3 = THEME.Surface,
@@ -1887,6 +1887,162 @@ function NeoUI:CreateWindow(opts)
 							if valLbl.Text ~= t then valLbl.Text = t end
 						end
 						handle.GetValue = function() return valLbl.Text end
+						return handle
+					end
+					
+					-- ⭐ Dropdown (cho TwoColumn)
+					function V:Dropdown(cfg)
+						cfg = cfg or {}
+						local options = cfg.Options or {}
+						local isMulti = cfg.Multi == true
+						local selected = isMulti and (type(cfg.Value) == "table" and cfg.Value or {}) or (cfg.Value or options[1])
+						local opened = false
+
+						local wrap = Create("Frame", {
+							Parent = colFrame, BackgroundColor3 = THEME.Surface,
+							Size = UDim2.new(1, 0, 0, 56), ClipsDescendants = true,
+						}, { Corner(6) })
+						Reg(Registry.Surface, wrap, "BackgroundColor3")
+
+						Create("TextLabel", {
+							Parent = wrap, BackgroundTransparency = 1,
+							Text = cfg.Title or "Dropdown", Font = FONT_M, TextSize = 12, TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.new(0, 10, 0, 6), Size = UDim2.new(1, -20, 0, 16),
+						})
+						local mainBtn = Create("TextButton", {
+							Parent = wrap, BackgroundColor3 = THEME.Background,
+							Text = "", Size = UDim2.new(1, -20, 0, 24),
+							Position = UDim2.new(0, 10, 0, 26), AutoButtonColor = false,
+						}, { Corner(6), Stroke(THEME.Border, 1, 0.5) })
+						Reg(Registry.Background, mainBtn, "BackgroundColor3")
+
+						local display = Create("TextLabel", {
+							Parent = mainBtn, BackgroundTransparency = 1,
+							Text = "Chọn...", Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -30, 1, 0),
+						})
+						local arrow = Create("TextLabel", {
+							Parent = mainBtn, BackgroundTransparency = 1,
+							Text = "▾", Font = FONT_B, TextSize = 12, TextColor3 = THEME.TextDim,
+							Position = UDim2.new(1, -22, 0, 0), Size = UDim2.new(0, 20, 1, 0),
+						})
+						local listHolder = Create("Frame", {
+							Parent = wrap, BackgroundTransparency = 1,
+							Size = UDim2.new(1, -20, 0, 0), Position = UDim2.new(0, 10, 0, 54),
+							AutomaticSize = Enum.AutomaticSize.Y,
+						}, {
+							Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }),
+						})
+
+						local optBtns = {}
+						local function render()
+							for _, b in ipairs(optBtns) do b:Destroy() end
+							optBtns = {}
+							for _, opt in ipairs(options) do
+								local isSel = isMulti and table.find(selected, opt) or (not isMulti and selected == opt)
+								local ob = Create("TextButton", {
+									Parent = listHolder,
+									BackgroundColor3 = isSel and THEME.AccentDark or THEME.Background,
+									BackgroundTransparency = isSel and 0 or 0.5,
+									Text = tostring(opt), Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
+									TextXAlignment = Enum.TextXAlignment.Left,
+									Size = UDim2.new(1, 0, 0, 24), AutoButtonColor = false,
+								}, { Corner(4), Pad(8, 0, 0, 0) })
+								Reg(Registry.Background, ob, "BackgroundColor3")
+								AddPress(ob, 0.97)
+								table.insert(optBtns, ob)
+								ob.MouseButton1Click:Connect(function()
+									if isMulti then
+										local idx = table.find(selected, opt)
+										if idx then table.remove(selected, idx) else table.insert(selected, opt) end
+									else
+										selected = opt; opened = false
+									end
+									render()
+									if isMulti then
+										local t = {}
+										for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+										display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+									else
+										display.Text = tostring(selected)
+									end
+									if cfg.Callback then task.spawn(cfg.Callback, selected) end
+									if not isMulti then
+										Tween(arrow, { Rotation = 0 }, 0.2)
+										Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
+									end
+								end)
+							end
+						end
+						render()
+						if isMulti then
+							local t = {}
+							for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+							display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+						else
+							display.Text = tostring(selected)
+						end
+
+						mainBtn.MouseButton1Click:Connect(function()
+							opened = not opened
+							if opened then
+								Tween(wrap, { Size = UDim2.new(1, 0, 0, 56 + #options * 26 + 6) }, 0.25, Enum.EasingStyle.Quart)
+								Tween(arrow, { Rotation = 180 }, 0.25)
+							else
+								Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
+								Tween(arrow, { Rotation = 0 }, 0.25)
+							end
+						end)
+						AddPress(mainBtn, 0.98)
+						if cfg.Callback then task.spawn(cfg.Callback, selected) end
+
+						-- ⭐ Handle với Refresh
+						local handle = {}
+						handle.Get = function() return selected end
+						handle.Set = function(v) selected = v; render() end
+
+						handle.Refresh = function(newOptions, keepSelection)
+							options = newOptions or options
+							keepSelection = keepSelection ~= false
+
+							if isMulti then
+								if keepSelection and type(selected) == "table" then
+									local kept = {}
+									for _, v in ipairs(selected) do
+										if table.find(options, v) then table.insert(kept, v) end
+									end
+									selected = kept
+								else
+									selected = {}
+								end
+							else
+								if not (keepSelection and table.find(options, selected)) then
+									selected = options[1]
+								end
+							end
+
+							for _, b in ipairs(optBtns) do b:Destroy() end
+							optBtns = {}
+							render()
+
+							if isMulti then
+								local t = {}
+								for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+								display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+							else
+								display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
+							end
+
+							if opened then
+								local newH = 56 + #options * 26 + 6
+								Tween(wrap, { Size = UDim2.new(1, 0, 0, newH) }, 0.2, Enum.EasingStyle.Quart)
+							end
+
+							if cfg.Callback then task.spawn(cfg.Callback, selected) end
+						end
+
 						return handle
 					end
 
