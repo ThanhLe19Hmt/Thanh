@@ -1369,7 +1369,7 @@ function NeoUI:CreateWindow(opts)
 				}
 			end
 
-			-- ⭐ ListRow — hiện danh sách item dạng key: value (dùng cho Info)
+						-- ⭐ ListRow — hiện danh sách item dạng key: value (dùng cho Info)
 			function Section:ListRow(cfg)
 				cfg = cfg or {}
 				local wrap = Create("Frame", {
@@ -1393,39 +1393,72 @@ function NeoUI:CreateWindow(opts)
 					Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4) }),
 				})
 
-				local entries = {}
+				-- ⭐ Bảng lưu label value để update nhanh
+				local valueLabels = {}
 
-				local function rebuild(items)
-					for _, e in ipairs(entries) do e:Destroy() end
-					entries = {}
-					for i, item in ipairs(items) do
-						local row = Create("Frame", {
-							Parent = list, BackgroundTransparency = 1,
-							Size = UDim2.new(1, 0, 0, 16), LayoutOrder = i,
-						})
-						Create("TextLabel", {
-							Parent = row, BackgroundTransparency = 1,
-							Text = tostring(item.key) .. ":",
-							Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
-							TextXAlignment = Enum.TextXAlignment.Left,
-							Size = UDim2.new(0.5, 0, 1, 0),
-						})
-						Create("TextLabel", {
-							Parent = row, BackgroundTransparency = 1,
-							Text = tostring(item.value),
-							Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
-							TextXAlignment = Enum.TextXAlignment.Right,
-							Size = UDim2.new(0.5, 0, 1, 0),
-							Position = UDim2.new(0.5, 0, 0, 0),
-						})
-						table.insert(entries, row)
+				local function createRow(key, value, order)
+					local row = Create("Frame", {
+						Parent = list, BackgroundTransparency = 1,
+						Size = UDim2.new(1, 0, 0, 16), LayoutOrder = order,
+					})
+					Create("TextLabel", {
+						Parent = row, BackgroundTransparency = 1,
+						Text = tostring(key) .. ":",
+						Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						Size = UDim2.new(0.5, 0, 1, 0),
+					})
+					local valLbl = Create("TextLabel", {
+						Parent = row, BackgroundTransparency = 1,
+						Text = tostring(value),
+						Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
+						TextXAlignment = Enum.TextXAlignment.Right,
+						Size = UDim2.new(0.5, 0, 1, 0),
+						Position = UDim2.new(0.5, 0, 0, 0),
+					})
+					valueLabels[key] = valLbl
+					return row
+				end
+
+				-- Tạo rows ban đầu
+				if cfg.Items then
+					for i, item in ipairs(cfg.Items) do
+						createRow(item.key, item.value, i)
 					end
 				end
 
-				if cfg.Items then rebuild(cfg.Items) end
-
 				return {
-					SetItems = function(items) rebuild(items or {}) end,
+					-- Set lại toàn bộ (xoá + tạo mới)
+					SetItems = function(items)
+						for _, c in ipairs(list:GetChildren()) do
+							if c:IsA("Frame") then c:Destroy() end
+						end
+						valueLabels = {}
+						for i, item in ipairs(items or {}) do
+							createRow(item.key, item.value, i)
+						end
+					end,
+					-- ⭐ Update 1 dòng — không destroy
+					UpdateItem = function(key, value)
+						local lbl = valueLabels[key]
+						if lbl and lbl.Parent then
+							local newText = tostring(value)
+							if lbl.Text ~= newText then
+								lbl.Text = newText
+							end
+							return true
+						end
+						return false
+					end,
+					-- Update nhiều dòng cùng lúc
+					UpdateItems = function(map)
+						for key, value in pairs(map or {}) do
+							local lbl = valueLabels[key]
+							if lbl and lbl.Parent then
+								lbl.Text = tostring(value)
+							end
+						end
+					end,
 					SetTitle = function(t) title.Text = tostring(t) end,
 				}
 			end
