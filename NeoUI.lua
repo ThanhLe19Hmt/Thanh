@@ -2004,47 +2004,61 @@ function NeoUI:CreateWindow(opts)
 						handle.Set = function(v) selected = v; render() end
 
 						handle.Refresh = function(newOptions, keepSelection)
-							options = newOptions or options
-							keepSelection = keepSelection ~= false
+	options = newOptions or options
+	keepSelection = keepSelection ~= false
+	
+	if isMulti then
+		if keepSelection and type(selected) == "table" then
+			local kept = {}
+			for _, v in ipairs(selected) do
+				if table.find(options, v) then table.insert(kept, v) end
+			end
+			selected = kept
+		else
+			selected = {}
+		end
+	else
+		if not (keepSelection and table.find(options, selected)) then
+			selected = options[1]
+		end
+	end
 
-							if isMulti then
-								if keepSelection and type(selected) == "table" then
-									local kept = {}
-									for _, v in ipairs(selected) do
-										if table.find(options, v) then table.insert(kept, v) end
-									end
-									selected = kept
-								else
-									selected = {}
-								end
-							else
-								if not (keepSelection and table.find(options, selected)) then
-									selected = options[1]
-								end
-							end
+	-- Destroy tất cả con cũ
+	for _, c in ipairs(listHolder:GetChildren()) do
+		if c:IsA("TextButton") then c:Destroy() end
+	end
+	optBtns = {}
+	
+	-- Rebuild
+	for _, opt in ipairs(options) do
+		local isSel = isMulti and table.find(selected, opt) or (not isMulti and selected == opt)
+		local ob = Create("TextButton", {
+			Parent = listHolder,
+			BackgroundColor3 = isSel and THEME.AccentDark or THEME.Background,
+			BackgroundTransparency = isSel and 0 or 0.5,
+			Text = tostring(opt), Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, 0, 0, 24), AutoButtonColor = false,
+		}, { Corner(4), Pad(8, 0, 0, 0) })
+		Reg(Registry.Background, ob, "BackgroundColor3")
+		AddPress(ob, 0.97)
+		table.insert(optBtns, ob)
+		ob.MouseButton1Click:Connect(function()
+			selected = opt
+			opened = false
+			display.Text = tostring(opt)
+			-- Đóng dropdown
+			Tween(arrow, { Rotation = 0 }, 0.2)
+			Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
+			if cfg.Callback then task.spawn(cfg.Callback, selected) end
+		end)
+	end
+	
+	-- Update display
+	display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
 
-							for _, b in ipairs(optBtns) do b:Destroy() end
-							optBtns = {}
-							render()
-
-							if isMulti then
-								local t = {}
-								for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-								display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
-							else
-								display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
-							end
-
-							if opened then
-								local newH = 56 + #options * 26 + 6
-								Tween(wrap, { Size = UDim2.new(1, 0, 0, newH) }, 0.2, Enum.EasingStyle.Quart)
-							end
-
-							if cfg.Callback then task.spawn(cfg.Callback, selected) end
-						end
-
-						return handle
-					end
+	if cfg.Callback then task.spawn(cfg.Callback, selected) end
+end
 
 					return V
 				end
