@@ -9,7 +9,7 @@ local LP = Players.LocalPlayer
 
 -- ===== CONFIG =====
 local GITHUB_BASE = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main"
-local UI_URL       = GITHUB_BASE .. "/NeoUI.lua?v=2"
+local UI_URL       = GITHUB_BASE .. "/NeoUI.lua"
 local FEATURES_URL = GITHUB_BASE .. "/features"
 
 -- ===== LOAD UI =====
