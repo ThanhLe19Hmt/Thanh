@@ -1369,7 +1369,7 @@ function NeoUI:CreateWindow(opts)
 				}
 			end
 
-						-- ⭐ ListRow — hiện danh sách item dạng key: value (dùng cho Info)
+									-- ⭐ ListRow — hiện danh sách item dạng key: value
 			function Section:ListRow(cfg)
 				cfg = cfg or {}
 				local wrap = Create("Frame", {
@@ -1378,7 +1378,7 @@ function NeoUI:CreateWindow(opts)
 				}, { Corner(6), Pad(8, 8, 8, 8) })
 				Reg(Registry.Surface, wrap, "BackgroundColor3")
 
-				local title = Create("TextLabel", {
+				local titleLbl = Create("TextLabel", {
 					Parent = wrap, BackgroundTransparency = 1,
 					Text = cfg.Title or "Info", Font = FONT_B, TextSize = 12, TextColor3 = THEME.Text,
 					TextXAlignment = Enum.TextXAlignment.Left,
@@ -1393,7 +1393,6 @@ function NeoUI:CreateWindow(opts)
 					Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4) }),
 				})
 
-				-- ⭐ Bảng lưu label value để update nhanh
 				local valueLabels = {}
 
 				local function createRow(key, value, order)
@@ -1420,47 +1419,51 @@ function NeoUI:CreateWindow(opts)
 					return row
 				end
 
-				-- Tạo rows ban đầu
 				if cfg.Items then
 					for i, item in ipairs(cfg.Items) do
 						createRow(item.key, item.value, i)
 					end
 				end
 
-				return {
-					-- Set lại toàn bộ (xoá + tạo mới)
-					SetItems = function(items)
-						for _, c in ipairs(list:GetChildren()) do
-							if c:IsA("Frame") then c:Destroy() end
+				local handle = {}
+				handle.Instance = wrap
+
+				function handle:SetItems(items)
+					for _, c in ipairs(list:GetChildren()) do
+						if c:IsA("Frame") then c:Destroy() end
+					end
+					valueLabels = {}
+					for i, item in ipairs(items or {}) do
+						createRow(item.key, item.value, i)
+					end
+				end
+
+				function handle:UpdateItem(key, value)
+					local lbl = valueLabels[key]
+					if lbl and lbl.Parent then
+						local newText = tostring(value)
+						if lbl.Text ~= newText then
+							lbl.Text = newText
 						end
-						valueLabels = {}
-						for i, item in ipairs(items or {}) do
-							createRow(item.key, item.value, i)
-						end
-					end,
-					-- ⭐ Update 1 dòng — không destroy
-					UpdateItem = function(key, value)
+						return true
+					end
+					return false
+				end
+
+				function handle:UpdateItems(map)
+					for key, value in pairs(map or {}) do
 						local lbl = valueLabels[key]
 						if lbl and lbl.Parent then
-							local newText = tostring(value)
-							if lbl.Text ~= newText then
-								lbl.Text = newText
-							end
-							return true
+							lbl.Text = tostring(value)
 						end
-						return false
-					end,
-					-- Update nhiều dòng cùng lúc
-					UpdateItems = function(map)
-						for key, value in pairs(map or {}) do
-							local lbl = valueLabels[key]
-							if lbl and lbl.Parent then
-								lbl.Text = tostring(value)
-							end
-						end
-					end,
-					SetTitle = function(t) title.Text = tostring(t) end,
-				}
+					end
+				end
+
+				function handle:SetTitle(t) titleLbl.Text = tostring(t) end
+
+				print("[NeoUI] ListRow created with", #(cfg.Items or {}), "items")
+
+				return handle  -- ⭐ QUAN TRỌNG — phải có return
 			end
 
 			return Section
