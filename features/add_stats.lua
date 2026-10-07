@@ -1,5 +1,6 @@
 -- =========================================================
 --  FEATURE: Add Stats
+--  Có auto-refresh giá trị Stats mỗi 2s
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
@@ -7,7 +8,42 @@ return {
 		local LP = Players.LocalPlayer
 		local VIM = game:GetService("VirtualInputManager")
 
+		local function SafeRead(gui, path, fallback)
+			local ok, result = pcall(function()
+				local cur = gui
+				for segment in path:gmatch("[^%.]+") do
+					cur = cur[segment]
+					if not cur then return fallback end
+				end
+				return cur
+			end)
+			if ok and result then
+				if typeof(result) == "Instance" then return result.Text or result.Name end
+				return tostring(result)
+			end
+			return fallback
+		end
+
 		local function GetHUD() return LP.PlayerGui:FindFirstChild("HUD") end
+
+		local function SafeUpdate(target, method, ...)
+			if not target then return false end
+			local fn = target[method]
+			if typeof(fn) ~= "function" then return false end
+			return (pcall(fn, target, ...))
+		end
+
+		local function ReadCombatStats()
+			local info = { Melee="N/A", Defense="N/A", Sword="N/A", Power="N/A", Points="N/A" }
+			local hud = GetHUD()
+			if not hud then return info end
+			info.Melee   = SafeRead(hud, "Main.Frame_Stats.Stats.Frame.Melee.Pt", "N/A")
+			info.Defense = SafeRead(hud, "Main.Frame_Stats.Stats.Frame.Defense.Pt", "N/A")
+			info.Sword   = SafeRead(hud, "Main.Frame_Stats.Stats.Frame.Sword.Pt", "N/A")
+			info.Power   = SafeRead(hud, "Main.Frame_Stats.Stats.Frame.Power.Pt", "N/A")
+			info.Points  = SafeRead(hud, "Main.Frame_Stats.Stats.TextLabel", "N/A"):gsub("Points: ", "")
+			return info
+		end
 
 		local function FindPath(path)
 			local hud = GetHUD()
@@ -64,7 +100,7 @@ return {
 			return true
 		end
 
-		local ADD_AMOUNT = 1000
+		local ADD_AMOUNT = 100
 
 		local function IncreaseStat(name)
 			local btn = STAT_PATHS[name] and FindPath(STAT_PATHS[name])
@@ -89,36 +125,67 @@ return {
 			})
 		end
 
-		local Sec = Tab:CreateSection("📊 Cộng Stats")
+		-- ===== UI =====
+		local Sec = Tab:CreateSection("📊 Combat Stats")
 
 		Sec:Paragraph({
 			Title = "Cách dùng",
-			Content = "Bấm [+] để cộng " .. ADD_AMOUNT .. " điểm.\nMở bảng Stats trong game trước.",
+			Content = "Bấm [+] để cộng " .. ADD_AMOUNT .. " điểm.\nMở bảng Stats trong game trước (nút STATS trên HUD).",
 		})
 
 		local cols = Sec:TwoColumn()
 
-		cols.Left:StatRow({
+		local statMelee = cols.Left:StatRow({
 			Key = "Melee", Value = "...",
 			OnAdd = function() IncreaseStat("Melee") end,
 		})
-		cols.Left:StatRow({
+		local statDefense = cols.Left:StatRow({
 			Key = "Defense", Value = "...",
 			OnAdd = function() IncreaseStat("Defense") end,
 		})
-		cols.Right:StatRow({
+		local statSword = cols.Right:StatRow({
 			Key = "Sword", Value = "...",
 			OnAdd = function() IncreaseStat("Sword") end,
 		})
-		cols.Right:StatRow({
+		local statPower = cols.Right:StatRow({
 			Key = "Power", Value = "...",
 			OnAdd = function() IncreaseStat("Power") end,
 		})
 
+		local pointsSec = Tab:CreateSection("🎯 Điểm còn lại")
+		local statPointsRow = pointsSec:ListRow({
+			Title = "Points",
+			Items = {
+				{ key = "Points", value = "..." },
+			},
+		})
+
+		-- ===== REFRESH (giá trị Stats) =====
+		local function Refresh()
+			local c = ReadCombatStats()
+			SafeUpdate(statMelee, "SetValue", c.Melee)
+			SafeUpdate(statDefense, "SetValue", c.Defense)
+			SafeUpdate(statSword, "SetValue", c.Sword)
+			SafeUpdate(statPower, "SetValue", c.Power)
+			SafeUpdate(statPointsRow, "UpdateItem", "Points", c.Points)
+		end
+
+		-- Chạy refresh lần đầu (delay 0.3s cho UI render)
+		task.wait(0.3)
+		pcall(Refresh)
+
+		-- Auto refresh mỗi 2s
+		task.spawn(function()
+			while true do
+				task.wait(2)
+				pcall(Refresh)
+			end
+		end)
+
 		NeoUI.Notify:Show({
-			Title = "✅ Add Stats",
-			Description = "Đã mở",
-			Duration = 3,
+			Title = "✅ Stats",
+			Description = "Tự cập nhật mỗi 2s",
+			Duration = 2,
 		})
 	end,
 }
