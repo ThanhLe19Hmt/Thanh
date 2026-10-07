@@ -107,6 +107,20 @@ task.spawn(function()
 	RunFeature("add_stats", StatsTab)
 end)
 
+-- ⭐ TAB RANDOM ITEM
+local RandTab = Window:CreateTab("Random Item")
+task.spawn(function()
+	task.wait(0.7)
+	RunFeature("random_item", RandTab)
+end)
+
+-- ⭐ TAB SHOP ITEM
+local ShopTab = Window:CreateTab("Shop Item")
+task.spawn(function()
+	task.wait(0.8)
+	RunFeature("shop_item", ShopTab)
+end)
+
 -- ⭐ TAB 3: CÀI ĐẶT
 local SettingsTab = Window:CreateTab("Cài đặt")
 local SetSec = SettingsTab:CreateSection("🎨 Giao diện")
