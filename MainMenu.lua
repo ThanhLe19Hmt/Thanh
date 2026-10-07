@@ -1,7 +1,6 @@
 -- =========================================================
---  NEO HUB - Main Menu (KHÔNG chứa logic game)
---  - Chỉ tạo UI, các nút bấm
---  - Khi bấm → load module từ features/ folder
+--  NEO HUB - Main Menu
+--  - Modules tự chạy khi load, KHÔNG cần bấm nút
 -- =========================================================
 repeat task.wait() until game:IsLoaded()
 
@@ -25,8 +24,6 @@ local loader = NeoUI.Loader:Show({
 -- =========================================================
 local ModuleCache = {}
 
--- Tải module từ features/<name>.lua và trả về table/function
--- Module phải return 1 table có method .Run(NeoUI, Tab, Ctx) hoặc 1 function
 local function LoadFeature(name)
 	if ModuleCache[name] then
 		return ModuleCache[name], nil
@@ -65,38 +62,30 @@ local function LoadFeature(name)
 	return mod, nil
 end
 
--- Chạy 1 feature: truyền NeoUI + Tab + Context (LP, hud helpers)
 local function RunFeature(name, tab)
 	local mod, err = LoadFeature(name)
 	if not mod then
-		NeoUI.Notify:Show({
-			Title = "❌ Không tải được chức năng",
-			Description = err or name,
-			Duration = 3,
-		})
-		return
+		warn("[Neo] Không chạy được feature:", name, err)
+		return false
 	end
 
-	-- Module là table có .Run()
 	if type(mod) == "table" and type(mod.Run) == "function" then
 		local ok, runErr = pcall(mod.Run, NeoUI, tab)
 		if not ok then
 			warn("[Neo] Lỗi khi chạy module:", name, runErr)
-			NeoUI.Notify:Show({
-				Title = "❌ Lỗi chức năng",
-				Description = tostring(runErr):sub(1, 60),
-				Duration = 3,
-			})
+			return false
 		end
-	-- Module là function trực tiếp
+		return true
 	elseif type(mod) == "function" then
 		local ok, runErr = pcall(mod, NeoUI, tab)
 		if not ok then
 			warn("[Neo] Lỗi khi chạy function:", name, runErr)
+			return false
 		end
-	else
-		warn("[Neo] Module không hợp lệ:", name, type(mod))
+		return true
 	end
+	warn("[Neo] Module không hợp lệ:", name, type(mod))
+	return false
 end
 
 -- =========================================================
@@ -104,35 +93,21 @@ end
 -- =========================================================
 local Window = NeoUI:CreateWindow({ Title = "Neo Hub", Subtitle = "Rock Fruit" })
 
--- ===== TAB: CHÍNH =====
-local MainTab = Window:CreateTab("Chính")
+-- ⭐ TAB 1: THÔNG TIN — tự load player_info
+local InfoTab = Window:CreateTab("Thông tin")
+task.spawn(function()
+	task.wait(0.5)
+	RunFeature("player_info", InfoTab)
+end)
 
--- Section 1: Player Info
-local InfoSec = MainTab:CreateSection("👤 Thông tin Player")
-InfoSec:Button({
-	Title = "📋 Mở thông tin Player",
-	Callback = function()
-		RunFeature("player_info", MainTab)
-	end,
-})
+-- ⭐ TAB 2: STATS — tự load add_stats
+local StatsTab = Window:CreateTab("Stats")
+task.spawn(function()
+	task.wait(0.6)
+	RunFeature("add_stats", StatsTab)
+end)
 
--- Section 2: Stats
-local StatSec = MainTab:CreateSection("📊 Combat Stats")
-StatSec:Button({
-	Title = "➕ Mở cộng Stats",
-	Callback = function()
-		RunFeature("add_stats", MainTab)
-	end,
-})
-
--- Section 3: (Sau này thêm module mới ở đây)
-local FutureSec = MainTab:CreateSection("🚀 Sắp có")
-FutureSec:Paragraph({
-	Title = "Ghi chú",
-	Content = "Muốn thêm chức năng? Chỉ cần tạo file mới trong features/ rồi thêm nút gọi nó.\nKhông cần sửa file này.",
-})
-
--- ===== TAB: SETTINGS =====
+-- ⭐ TAB 3: CÀI ĐẶT
 local SettingsTab = Window:CreateTab("Cài đặt")
 local SetSec = SettingsTab:CreateSection("🎨 Giao diện")
 
@@ -142,13 +117,18 @@ SetSec:Button({
 		ModuleCache = {}
 		NeoUI.Notify:Show({
 			Title = "Đã xoá cache",
-			Description = "Các module sẽ tải lại khi bấm",
+			Description = "Chạy lại script để load mới",
 			Duration = 3,
 		})
 	end,
 })
 
--- ===== TAB: MÀU =====
+SetSec:Paragraph({
+	Title = "Hướng dẫn",
+	Content = "Các chức năng tự chạy khi vào tab.\nKhông cần bấm nút.\n\nMuốn thêm chức năng? Tạo file mới trong features/ rồi thêm RunFeature vào MainMenu.",
+})
+
+-- ⭐ TAB 4: MÀU
 local ColorTab = Window:CreateTab("Màu")
 local ColorSec = ColorTab:CreateSection("🎨 Tùy Chỉnh")
 ColorSec:ColorRow({
@@ -172,7 +152,7 @@ task.spawn(function()
 	Window:Reveal()
 	NeoUI.Notify:Show({
 		Title = "✅ Neo Hub",
-		Description = "Chọn chức năng trong tab Chính",
+		Description = "Đã sẵn sàng!",
 		Duration = 3,
 	})
 end)
