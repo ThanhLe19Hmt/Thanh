@@ -1,6 +1,6 @@
 -- =========================================================
---  FEATURE: Random & Shop (gộp) v2
---  - List item có sẵn → click chọn
+--  FEATURE: Random & Shop (gộp) v3
+--  - Dropdown item động (quét từ game)
 --  - Toggle BẮT ĐẦU/DỪNG
 --  - Delay cố định 0.5s
 -- =========================================================
@@ -94,13 +94,14 @@ return {
 		local function ScanItems()
 			State.itemList = {}
 			local hud = GetHUD()
-			if not hud then return 0 end
+			if not hud then return {} end
 
 			local scroll = hud.Main
 				and hud.Main.Frame_RandomItem
 				and hud.Main.Frame_RandomItem:FindFirstChild("ItemScrollingFrame")
-			if not scroll then return 0 end
+			if not scroll then return {} end
 
+			local names = {}
 			for _, child in ipairs(scroll:GetChildren()) do
 				if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("ImageButton") then
 					local mainBtn = child:FindFirstChild("Main")
@@ -114,10 +115,13 @@ return {
 							button = mainBtn,
 							frame = child,
 						})
+						table.insert(names, child.Name)
 					end
 				end
 			end
-			return #State.itemList
+
+			table.sort(names)
+			return names
 		end
 
 		local function SelectItem(name)
@@ -189,31 +193,29 @@ return {
 			},
 		})
 
-		-- ⭐ DROPDOWN item — quét sẵn
-		local itemOptions = {}
+		-- ⭐ DROPDOWN item động
 		local itemDropdown = MainRow.Right:Dropdown({
 			Title = "Chọn Item",
-			Options = itemOptions,
+			Options = { "Đang quét..." },
 			Value = nil,
 			Callback = function(v)
-				if v then
+				if v and v ~= "Đang quét..." then
 					SelectItem(v)
 				end
 			end,
 		})
 
-		-- Hàm refresh dropdown options
-		local function RefreshItemOptions()
-			ScanItems()
-			local names = {}
-			for _, item in ipairs(State.itemList) do
-				table.insert(names, item.name)
+		-- Auto quét lại mỗi 5s
+		task.spawn(function()
+			task.wait(1)
+			while true do
+				local names = ScanItems()
+				if #names > 0 and itemDropdown and itemDropdown.Refresh then
+					itemDropdown:Refresh(names, true)
+				end
+				task.wait(5)
 			end
-			-- NeoUI Dropdown: ghi đè options
-			if itemDropdown and itemDropdown.Refresh then
-				itemDropdown:Refresh(names, false)
-			end
-		end
+		end)
 
 		-- Auto đổi toggle
 		MainRow.Right:Toggle({
@@ -260,15 +262,9 @@ return {
 			end
 		end)
 
-		-- Quét item lần đầu
-		task.spawn(function()
-			task.wait(0.8)
-			pcall(RefreshItemOptions)
-		end)
-
 		NeoUI.Notify:Show({
 			Title = "✅ Random & Shop",
-			Description = "Mở panel Random game để quét item",
+			Description = "Đang quét item từ game...",
 			Duration = 3,
 		})
 	end,
