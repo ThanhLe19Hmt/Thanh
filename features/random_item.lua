@@ -1,7 +1,6 @@
 -- =========================================================
---  FEATURE: Random & Shop v6
---  - Quét item SAU KHI quay
---  - Click vào Frame item để đổi
+--  FEATURE: Random & Shop v7 (Viết lại hoàn toàn)
+--  Quét item trực tiếp từ ItemScrollingFrame
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
@@ -11,34 +10,47 @@ return {
 
 		local DELAY = 0.5
 
-		local function GetHUD() return LP.PlayerGui:FindFirstChild("HUD") end
-
-		local function FindPath(path)
-			local hud = GetHUD()
-			if not hud then return nil end
-			local ok, r = pcall(function()
-				local cur = hud
-				for seg in path:gmatch("[^%.]+") do
-					cur = cur[seg]
-					if not cur then return nil end
-				end
-				return cur
-			end)
-			return ok and r or nil
+		-- =========================================================
+		--  HELPERS
+		-- =========================================================
+		local function GetHUD()
+			return LP.PlayerGui:FindFirstChild("HUD")
 		end
 
-		-- ⭐ Click mạnh — thử nhiều cách
+		-- Lấy ItemScrollingFrame trong panel Random
+		local function GetScrollFrame()
+			local hud = GetHUD()
+			if not hud then return nil end
+			local main = hud:FindFirstChild("Main")
+			if not main then return nil end
+			local ri = main:FindFirstChild("Frame_RandomItem")
+			if not ri then return nil end
+			return ri:FindFirstChild("ItemScrollingFrame")
+		end
+
+		-- Đọc Points từ panel
+		local function ReadPoints()
+			local hud = GetHUD()
+			if not hud then return "N/A" end
+			local ri = hud.Main and hud.Main:FindFirstChild("Frame_RandomItem")
+			if not ri then return "N/A" end
+			local df = ri:FindFirstChild("DisplayFrame")
+			if not df then return "N/A" end
+			local pl = df:FindFirstChild("PointLabel")
+			return pl and pl.Text or "N/A"
+		end
+
+		-- Click button: firesignal + VIM
 		local function ClickButton(btn)
 			if not btn then return false end
-			-- Cách 1: firesignal event
+			
+			-- Thử firesignal
 			if firesignal then
 				pcall(function() firesignal(btn.Activated) end)
 				pcall(function() firesignal(btn.MouseButton1Click) end)
-				pcall(function() firesignal(btn.MouseButton1Down) end)
-				pcall(function() firesignal(btn.MouseButton1Up) end)
 			end
-			-- Cách 2: VIM click vào tâm
-			task.wait(0.05)
+			
+			-- VIM click (chắc chắn hơn)
 			local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
 			VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
 			task.wait(0.05)
@@ -46,31 +58,44 @@ return {
 			return true
 		end
 
-		local function ReadPoints()
-			local hud = GetHUD()
-			if not hud then return "N/A" end
-			local lbl = hud.Main
-				and hud.Main.Frame_RandomItem
-				and hud.Main.Frame_RandomItem.DisplayFrame
-				and hud.Main.Frame_RandomItem.DisplayFrame:FindFirstChild("PointLabel")
-			return lbl and lbl.Text or "N/A"
-		end
-
-		-- ⭐ Kiểm tra panel có item không
-		local function HasItems()
-			local hud = GetHUD()
-			if not hud then return false end
-			local scroll = hud.Main
-				and hud.Main.Frame_RandomItem
-				and hud.Main.Frame_RandomItem:FindFirstChild("ItemScrollingFrame")
-			if not scroll then return false end
-			for _, c in ipairs(scroll:GetChildren()) do
-				if c:IsA("Frame") then return true end
+		-- =========================================================
+		--  SCAN ITEMS
+		-- =========================================================
+		local function ScanItems()
+			local list = {}
+			local scroll = GetScrollFrame()
+			if not scroll then 
+				print("[Random] Không có ItemScrollingFrame")
+				return list 
 			end
-			return false
+
+			for _, child in ipairs(scroll:GetChildren()) do
+				if child:IsA("Frame") then
+					-- Bỏ qua Template
+					if child.Name ~= "Template" 
+						and child.Name ~= "ItemTemplate" 
+						and not child.Name:lower():find("template") then
+						
+						-- Tìm nút để click bên trong
+						local mainBtn = child:FindFirstChild("Main")
+						
+						table.insert(list, {
+							name = child.Name,
+							frame = child,
+							button = mainBtn,
+						})
+					end
+				end
+			end
+
+			table.sort(list, function(a, b) return a.name < b.name end)
+			print("[Random] Quét được", #list, "item")
+			return list
 		end
 
-		-- ===== STATE =====
+		-- =========================================================
+		--  STATE
+		-- =========================================================
 		local State = {
 			running = false,
 			mode = "x15",
@@ -78,109 +103,102 @@ return {
 			selectedItem = nil,
 			autoShop = false,
 			itemList = {},
-			lastItemNames = "",
+			lastListKey = "",
 		}
 
-		-- ===== RANDOM =====
+		-- =========================================================
+		--  RANDOM
+		-- =========================================================
+		local function GetRandomButton(mode)
+			local hud = GetHUD()
+			if not hud then return nil end
+			local df = hud.Main 
+				and hud.Main.Frame_RandomItem 
+				and hud.Main.Frame_RandomItem.DisplayFrame
+			if not df then return nil end
+			return df:FindFirstChild(mode)
+		end
+
 		local function ToggleRandom()
 			if State.running then
 				State.running = false
 				NeoUI.Notify:Show({ Title = "⏹️ Dừng quay", Duration = 2 })
-			else
-				State.running = true
-				State.count = 0
-				NeoUI.Notify:Show({
-					Title = "▶️ Bắt đầu " .. State.mode,
-					Duration = 2,
-				})
-				task.spawn(function()
-					while State.running do
-						local btn = FindPath("Main.Frame_RandomItem.DisplayFrame." .. State.mode)
-						if btn then
-							ClickButton(btn)
-							State.count = State.count + 1
-						end
-						task.wait(DELAY)
+				return
+			end
+
+			State.running = true
+			State.count = 0
+			NeoUI.Notify:Show({
+				Title = "▶️ Bắt đầu " .. State.mode,
+				Duration = 2,
+			})
+			
+			task.spawn(function()
+				while State.running do
+					local btn = GetRandomButton(State.mode)
+					if btn then
+						ClickButton(btn)
+						State.count = State.count + 1
+					else
+						print("[Random] Không tìm thấy nút", State.mode)
 					end
-				end)
-			end
-		end
-
-		-- ===== QUÉT ITEM =====
-		local function ScanItems()
-			State.itemList = {}
-			local hud = GetHUD()
-			if not hud then return {} end
-
-			local scroll = hud.Main
-				and hud.Main.Frame_RandomItem
-				and hud.Main.Frame_RandomItem:FindFirstChild("ItemScrollingFrame")
-			if not scroll then return {} end
-
-			local names = {}
-			for _, child in ipairs(scroll:GetChildren()) do
-				if child:IsA("Frame") then
-					-- Tìm button để click — thường là "Main" hoặc chính frame
-					local mainBtn = child:FindFirstChild("Main")
-						or child:FindFirstChildWhichIsA("TextButton")
-						or child:FindFirstChildWhichIsA("ImageButton")
-
-					table.insert(State.itemList, {
-						name = child.Name,
-						button = mainBtn or child,  -- nếu không có button con, click frame
-						frame = child,
-					})
-					table.insert(names, child.Name)
+					task.wait(DELAY)
 				end
-			end
-
-			table.sort(names)
-			return names
+			end)
 		end
 
-		-- ⭐ CHỌN ITEM — click thẳng vào frame item (vì đó là cách đổi)
+		-- =========================================================
+		--  SELECT ITEM
+		-- =========================================================
 		local function SelectItem(name)
+			-- Nếu list trống → quét lại
+			if #State.itemList == 0 then
+				State.itemList = ScanItems()
+			end
+
 			for _, item in ipairs(State.itemList) do
 				if item.name:lower() == name:lower() then
 					State.selectedItem = item.name
 
-					-- Thử click button "Main" trước
-					if item.button and item.button ~= item.frame then
+					-- Ưu tiên click nút "Main" nếu có
+					if item.button then
+						print("[Random] Click vào nút Main của", item.name)
 						ClickButton(item.button)
-						task.wait(0.1)
-					end
-
-					-- Nếu là frame trực tiếp, click vào tâm frame
-					if item.frame then
-						local pos = item.frame.AbsolutePosition + item.frame.AbsoluteSize / 2
-						VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
-						task.wait(0.05)
-						VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
+					else
+						-- Không có nút Main → click thẳng frame
+						print("[Random] Click thẳng vào frame", item.name)
+						ClickButton(item.frame)
 					end
 
 					NeoUI.Notify:Show({
 						Title = "✅ Đổi sang: " .. item.name,
-						Description = "Đã bấm, kiểm tra game",
 						Duration = 3,
 					})
-					print("[Random] Đã click item:", item.name)
 					return true
 				end
 			end
+
+			NeoUI.Notify:Show({
+				Title = "❌ Không tìm thấy",
+				Description = name,
+				Duration = 2,
+			})
 			return false
 		end
 
-		-- ===== UI =====
+		-- =========================================================
+		--  UI
+		-- =========================================================
 		local Sec = Tab:CreateSection("🎰 Random & Shop")
 
 		Sec:Paragraph({
-			Title = "⚠️ Hướng dẫn",
-			Content = "1. Mở panel Random Item\n2. Quay 1 lần để có list item\n3. Dropdown mới hiện item để đổi\n4. Chọn item → tự click đổi",
+			Title = "Hướng dẫn",
+			Content = "Bên trái: Random. Bên phải: đổi item.\nMở panel Random Item game trước.",
 		})
 
 		local MainRow = Sec:TwoColumn()
 
-		-- ⭐ CỘT TRÁI: RANDOM
+		-- ===== CỘT TRÁI =====
 		local RandomInfo = MainRow.Left:ListRow({
 			Title = "🎰 Random",
 			Items = {
@@ -214,7 +232,7 @@ return {
 			end,
 		})
 
-		-- ⭐ CỘT PHẢI: SHOP
+		-- ===== CỘT PHẢI =====
 		local ShopInfo = MainRow.Right:ListRow({
 			Title = "🛒 Shop Item",
 			Items = {
@@ -226,36 +244,37 @@ return {
 
 		local itemDropdown = MainRow.Right:Dropdown({
 			Title = "Đổi Item",
-			Options = { "⚠️ Quay trước để có item" },
+			Options = { "⏳ Đang quét..." },
 			Value = nil,
 			Callback = function(v)
-				if v and v ~= "⚠️ Quay trước để có item" 
-					and v ~= "Đang quét..."
-					and v ~= "⏳ Chưa có item" then
+				if v and v ~= "⏳ Đang quét..." and v ~= "❌ Không có item" then
 					SelectItem(v)
 				end
 			end,
 		})
 
-		-- ⭐ Auto scan mỗi 2s
+		-- Auto scan mỗi 1s
 		task.spawn(function()
-			task.wait(1)
+			task.wait(0.8)
 			while true do
-				local names = ScanItems()
-				local key = table.concat(names, ",")
-				if key ~= State.lastItemNames then
-					State.lastItemNames = key
+				local list = ScanItems()
+				State.itemList = list
+				
+				local names = {}
+				for _, it in ipairs(list) do
+					table.insert(names, it.name)
+				end
+				local key = table.concat(names, "|")
+				
+				if key ~= State.lastListKey and itemDropdown and itemDropdown.Refresh then
+					State.lastListKey = key
 					if #names > 0 then
-						if itemDropdown and itemDropdown.Refresh then
-							itemDropdown:Refresh(names, true)
-						end
+						itemDropdown:Refresh(names, true)
 					else
-						if itemDropdown and itemDropdown.Refresh then
-							itemDropdown:Refresh({ "⏳ Chưa có item" }, false)
-						end
+						itemDropdown:Refresh({ "❌ Không có item" }, false)
 					end
 				end
-				task.wait(2)
+				task.wait(1)
 			end
 		end)
 
@@ -265,14 +284,13 @@ return {
 			Callback = function(v)
 				State.autoShop = v
 				NeoUI.Notify:Show({
-					Title = v and "✅ Auto Shop ON" or "❌ Auto Shop OFF",
-					Description = v and "Tự đổi mỗi 3s" or "",
+					Title = v and "✅ Auto ON" or "❌ Auto OFF",
 					Duration = 2,
 				})
 			end,
 		})
 
-		-- AUTO SHOP LOOP
+		-- Auto shop loop
 		task.spawn(function()
 			while true do
 				task.wait(3)
@@ -282,9 +300,9 @@ return {
 			end
 		end)
 
-		-- AUTO REFRESH STATUS
+		-- Auto refresh status
 		task.spawn(function()
-			task.wait(1)
+			task.wait(0.5)
 			while true do
 				task.wait(1)
 				pcall(function()
@@ -302,7 +320,7 @@ return {
 
 		NeoUI.Notify:Show({
 			Title = "✅ Random & Shop",
-			Description = "Quay 1 lần để có item",
+			Description = "Mở panel Random Item game để quét",
 			Duration = 3,
 		})
 	end,
