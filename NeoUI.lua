@@ -1234,7 +1234,60 @@ function NeoUI:CreateWindow(opts)
 				end)
 				AddPress(mainBtn, 0.98)
 				if cfg.Callback then task.spawn(cfg.Callback, selected) end
-				return { Get = function() return selected end, Set = function(v) selected = v; render() end }
+
+				-- ⭐ Handle với Refresh method
+				local handle = {}
+				handle.Get = function() return selected end
+				handle.Set = function(v) selected = v; render() end
+
+				-- ⭐ Refresh Options runtime
+				handle.Refresh = function(newOptions, keepSelection)
+					options = newOptions or options
+					keepSelection = keepSelection ~= false
+
+					-- Xử lý selection khi options đổi
+					if isMulti then
+						if keepSelection and type(selected) == "table" then
+							local kept = {}
+							for _, v in ipairs(selected) do
+								if table.find(options, v) then
+									table.insert(kept, v)
+								end
+							end
+							selected = kept
+						else
+							selected = {}
+						end
+					else
+						if not (keepSelection and table.find(options, selected)) then
+							selected = options[1]
+						end
+					end
+
+					-- Rebuild lại list
+					for _, b in ipairs(optBtns) do b:Destroy() end
+					optBtns = {}
+					render()
+
+					-- Update display text
+					if isMulti then
+						local t = {}
+						for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+						display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+					else
+						display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
+					end
+
+					-- Nếu đang mở thì tween lại size
+					if opened then
+						local newH = 56 + #options * 26 + 6
+						Tween(wrap, { Size = UDim2.new(1, 0, 0, newH) }, 0.2, Enum.EasingStyle.Quart)
+					end
+
+					if cfg.Callback then task.spawn(cfg.Callback, selected) end
+				end
+
+				return handle
 			end
 
 			function Section:Paragraph(cfg)
