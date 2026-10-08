@@ -2045,6 +2045,40 @@ function NeoUI:CreateWindow(opts)
 
 						return handle
 					end
+					
+					-- ⭐ Paragraph (cho TwoColumn)
+					function V:Paragraph(cfg)
+						cfg = cfg or {}
+						local wrap = Create("Frame", {
+							Parent = colFrame, BackgroundColor3 = THEME.Surface, BackgroundTransparency = 0.3,
+							Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+						}, { Corner(6), Stroke(THEME.Border, 1, 0.7), Pad(10, 10, 10, 10) })
+						Reg(Registry.Surface, wrap, "BackgroundColor3")
+						Reg(Registry.Border, wrap:FindFirstChildOfClass("UIStroke"), "Color")
+
+						if cfg.Title then
+							Create("TextLabel", {
+								Parent = wrap, BackgroundTransparency = 1,
+								Text = cfg.Title, Font = FONT_B, TextSize = 12, TextColor3 = THEME.Text,
+								TextXAlignment = Enum.TextXAlignment.Left,
+								Size = UDim2.new(1, 0, 0, 16),
+							})
+						end
+						local contentLbl = Create("TextLabel", {
+							Parent = wrap, BackgroundTransparency = 1,
+							Text = cfg.Content or "", Font = FONT, TextSize = 11, TextColor3 = THEME.TextDim,
+							TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+							TextWrapped = true,
+							Position = cfg.Title and UDim2.new(0, 0, 0, 20) or UDim2.new(0, 0, 0, 0),
+							Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LineHeight = 1.2,
+						})
+						return {
+							SetContent = function(t) contentLbl.Text = tostring(t) end,
+							SetTitle = function(t)
+								contentLbl.Position = (t and t ~= "") and UDim2.new(0, 0, 0, 20) or UDim2.new(0, 0, 0, 0)
+							end,
+						}
+					end
 
 					return V
 				end
