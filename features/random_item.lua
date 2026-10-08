@@ -1,13 +1,15 @@
 -- =========================================================
---  FEATURE: Random & Shop v43
---  + Panel gợi ý (list button) khi gõ
---  + Bấm gợi ý → chọn item
+--  FEATURE: Random & Shop v44
+--  + Gợi ý kiểu Google — popup nổi khi gõ
+--  + Layout ngang: Diamond trái, Moon phải
+--  + Mỗi bên có dropdown Chọn Item
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
 		local Players = game:GetService("Players")
 		local LP = Players.LocalPlayer
 		local RS = game:GetService("ReplicatedStorage")
+		local CoreGui = game:GetService("CoreGui")
 		local NetworkEvent = RS.Modules.NetworkFramework.NetworkEvent
 
 		local function SafeRequire(paths)
@@ -133,7 +135,7 @@ return {
 			end
 		end
 
-		print("[v43] Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions)
+		print("[v44] Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions)
 
 		local function NormalizeName(s)
 			return tostring(s):lower():gsub("[%s_%-]", "")
@@ -149,6 +151,170 @@ return {
 				end
 			end
 			return filt
+		end
+
+		-- ⭐⭐⭐ HÀM TẠO POPUP GỢI Ý KIỂU GOOGLE
+		local function CreateSuggestPopup(anchorTextBox, getListFn, onSelect)
+			-- Tạo frame popup nổi
+			local popup = Instance.new("Frame")
+			popup.Name = "SuggestPopup_" .. tostring(math.random(1000, 9999))
+			popup.Parent = CoreGui:FindFirstChildOfClass("ScreenGui") or CoreGui
+			-- Dùng chính ScreenGui của NeoUI
+			for _, g in ipairs(CoreGui:GetChildren()) do
+				if g.Name:find("NeoUI_") then
+					popup.Parent = g
+					break
+				end
+			end
+			popup.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+			popup.BorderSizePixel = 0
+			popup.Visible = false
+			popup.ZIndex = 5000
+			popup.ClipsDescendants = true
+			
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = popup
+			
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(60, 60, 68)
+			stroke.Thickness = 1.5
+			stroke.Parent = popup
+			
+			local scroll = Instance.new("ScrollingFrame")
+			scroll.Parent = popup
+			scroll.BackgroundTransparency = 1
+			scroll.Size = UDim2.new(1, -8, 1, -8)
+			scroll.Position = UDim2.new(0, 4, 0, 4)
+			scroll.ScrollBarThickness = 3
+			scroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 88)
+			scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+			scroll.BorderSizePixel = 0
+			
+			local layout = Instance.new("UIListLayout")
+			layout.Parent = scroll
+			layout.SortOrder = Enum.SortOrder.LayoutOrder
+			layout.Padding = UDim.new(0, 2)
+			
+			local buttons = {}
+			
+			local function ClearButtons()
+				for _, b in ipairs(buttons) do
+					if b and b.Parent then b:Destroy() end
+				end
+				buttons = {}
+			end
+			
+			local function ShowSuggestions(query)
+				ClearButtons()
+				
+				if not query or query == "" then
+					popup.Visible = false
+					return
+				end
+				
+				local matches = getListFn(query)
+				if #matches == 0 then
+					popup.Visible = false
+					return
+				end
+				
+				-- Hiện tối đa 8 gợi ý (kiểu Google)
+				local limit = math.min(#matches, 8)
+				
+				for i = 1, limit do
+					local item = matches[i]
+					local btn = Instance.new("TextButton")
+					btn.Parent = scroll
+					btn.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+					btn.BorderSizePixel = 0
+					btn.Text = ""
+					btn.Size = UDim2.new(1, -6, 0, 32)
+					btn.AutoButtonColor = false
+					btn.LayoutOrder = i
+					
+					local btnCorner = Instance.new("UICorner")
+					btnCorner.CornerRadius = UDim.new(0, 5)
+					btnCorner.Parent = btn
+					
+					-- Tên item (trái)
+					local nameLbl = Instance.new("TextLabel")
+					nameLbl.Parent = btn
+					nameLbl.BackgroundTransparency = 1
+					nameLbl.Text = item.name
+					nameLbl.Font = Enum.Font.GothamMedium
+					nameLbl.TextSize = 12
+					nameLbl.TextColor3 = Color3.fromRGB(240, 240, 245)
+					nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+					nameLbl.Position = UDim2.new(0, 10, 0, 0)
+					nameLbl.Size = UDim2.new(0.65, -10, 1, 0)
+					nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+					
+					-- Giá (phải)
+					local priceLbl = Instance.new("TextLabel")
+					priceLbl.Parent = btn
+					priceLbl.BackgroundTransparency = 1
+					priceLbl.Text = item.price .. "P"
+					priceLbl.Font = Enum.Font.GothamBold
+					priceLbl.TextSize = 11
+					priceLbl.TextColor3 = Color3.fromRGB(230, 55, 55)
+					priceLbl.TextXAlignment = Enum.TextXAlignment.Right
+					priceLbl.Position = UDim2.new(0.65, 0, 0, 0)
+					priceLbl.Size = UDim2.new(0.35, -10, 1, 0)
+					
+					-- Hover effect
+					btn.MouseEnter:Connect(function()
+						btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+					end)
+					btn.MouseLeave:Connect(function()
+						btn.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+					end)
+					
+					-- Click → chọn
+					btn.MouseButton1Click:Connect(function()
+						onSelect(item)
+						popup.Visible = false
+					end)
+					
+					table.insert(buttons, btn)
+				end
+				
+				-- Cập nhật canvas size
+				layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+					scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 4)
+				end)
+				scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 4)
+				
+				-- Định vị popup dưới textbox
+				local absPos = anchorTextBox.AbsolutePosition
+				local absSize = anchorTextBox.AbsoluteSize
+				local popupH = math.min(#matches * 34 + 10, 280)
+				
+				popup.Position = UDim2.fromOffset(absPos.X, absPos.Y + absSize.Y + 4)
+				popup.Size = UDim2.fromOffset(math.max(absSize.X, 200), popupH)
+				popup.Visible = true
+			end
+			
+			-- Theo dõi thay đổi text
+			local lastText = ""
+			anchorTextBox:GetPropertyChangedSignal("Text"):Connect(function()
+				local newText = anchorTextBox.Text
+				if newText ~= lastText then
+					lastText = newText
+					ShowSuggestions(newText)
+				end
+			end)
+			
+			-- Ẩn khi mất focus (nhưng delay để kịp click)
+			anchorTextBox.FocusLost:Connect(function()
+				task.wait(0.2)
+				popup.Visible = false
+			end)
+			
+			return {
+				Hide = function() popup.Visible = false end,
+				Show = ShowSuggestions,
+			}
 		end
 
 		local State = {
@@ -237,31 +403,44 @@ return {
 		QuayRow.Right:Button({ Title = "Bật / Dừng", Callback = ToggleMoon })
 
 		-- =======================================================
-		--  SHOP
+		--  SHOP — 2 cột: Diamond trái, Moon phải
 		-- =======================================================
 		local ShopSec = Tab:CreateSection("Shop")
+		local ShopRow = ShopSec:TwoColumn()
 
-		-- ⭐ DIAMOND SECTION
-		local diamondInfo = ShopSec:ListRow({
+		-- ===== DIAMOND (TRÁI) =====
+		local diamondInfo = ShopRow.Left:ListRow({
 			Title = "Diamond",
 			Items = {
 				{ key = "Đang chọn", value = "-" },
-				{ key = "Tổng item", value = tostring(#diamondList) },
 			},
 		})
 
-		-- ⭐ Ô tìm
-		local searchD = ShopSec:Textbox({
-			Title = "🔍 Tìm (gõ để xem gợi ý)",
-			Placeholder = "VD: orb, duck, wood",
+		-- ⭐ Dropdown chọn item
+		ShopRow.Left:Dropdown({
+			Title = "Chọn Item",
+			Options = diamondOptions,
+			Value = nil,
+			Callback = function(v)
+				if v and type(v) == "string" then
+					local name = v:match("^(.-) %(")
+					if name then
+						State.selectedItem = name
+						diamondInfo:UpdateItem("Đang chọn", name)
+					end
+				end
+			end,
+		})
+
+		-- ⭐ Ô tìm kiếm — có autocomplete
+		local searchD = ShopRow.Left:Textbox({
+			Title = "Tìm",
+			Placeholder = "Gõ: orb, duck...",
 			Value = "",
 		})
 
-		-- ⭐⭐⭐ PANEL GỢI Ý DIAMOND — hiện list button
-		local suggestDiamond = ShopSec:TwoColumn()
-
-		-- ⭐ Nút MUA 1 LẦN Diamond
-		ShopSec:Button({
+		-- ⭐ Nút mua
+		ShopRow.Left:Button({
 			Title = "MUA DIAMOND",
 			Callback = function()
 				if State.selectedItem then
@@ -272,89 +451,60 @@ return {
 			end,
 		})
 
-		-- ⭐ Loop cập nhật gợi ý Diamond
+		-- ⭐ Kích hoạt autocomplete cho Diamond
 		task.spawn(function()
-			task.wait(1)
-			local lastQuery = ""
-			local suggestButtons = {}  -- Lưu button hiện tại để destroy khi cần
-			
-			local function ClearSuggestButtons()
-				for _, b in ipairs(suggestButtons) do
-					if b and b.Instance then b.Instance:Destroy() end
-				end
-				suggestButtons = {}
-			end
-			
-			local function CreateSuggestButton(col, item)
-				local btn = col:Button({
-					Title = item.name .. " - " .. item.price .. "P",
-					Callback = function()
+			task.wait(1.5)
+			if searchD and searchD.Instance then
+				CreateSuggestPopup(
+					searchD.Instance,
+					function(q) return FilterList(diamondList, q) end,
+					function(item)
 						State.selectedItem = item.name
 						diamondInfo:UpdateItem("Đang chọn", item.name)
+						-- Gán text vào textbox
+						searchD.Instance.Text = item.name
+						print("[v44] Diamond chọn: " .. item.name)
 						NeoUI.Notify:Show({
 							Title = "Đã chọn: " .. item.name,
 							Description = item.price .. " Point",
 							Duration = 2,
 						})
-					end,
-				})
-				return btn
-			end
-			
-			while true do
-				task.wait(0.3)
-				pcall(function()
-					if not searchD or not searchD.Instance then return end
-					
-					local q = searchD.Instance.Text or ""
-					if q ~= lastQuery then
-						lastQuery = q
-						ClearSuggestButtons()
-						
-						if q == "" then
-							-- Không gõ → xóa gợi ý
-						else
-							-- Gõ → tìm item khớp
-							local matches = FilterList(diamondList, q)
-							print("[v43] Gợi ý Diamond '" .. q .. "' → " .. #matches .. " item")
-							
-							if #matches == 0 then
-								-- Không có item khớp
-							else
-								-- Hiện tối đa 30 gợi ý để tránh lag
-								local limit = math.min(#matches, 30)
-								for i = 1, limit do
-									local item = matches[i]
-									local col = (i % 2 == 1) and suggestDiamond.Left or suggestDiamond.Right
-									local btn = CreateSuggestButton(col, item)
-									table.insert(suggestButtons, btn)
-								end
-							end
-						end
 					end
-				end)
+				)
 			end
 		end)
 
-		-- ⭐ MOON SECTION
+		-- ===== MOON (PHẢI) =====
 		if #moonOptions > 0 then
-			local moonInfo = ShopSec:ListRow({
+			local moonInfo = ShopRow.Right:ListRow({
 				Title = "Moon",
 				Items = {
 					{ key = "Đang chọn", value = "-" },
-					{ key = "Tổng item", value = tostring(#moonList) },
 				},
 			})
 
-			local searchM = ShopSec:Textbox({
-				Title = "🔍 Tìm Moon",
-				Placeholder = "VD: aura",
+			ShopRow.Right:Dropdown({
+				Title = "Chọn Item",
+				Options = moonOptions,
+				Value = nil,
+				Callback = function(v)
+					if v and type(v) == "string" then
+						local name = v:match("^(.-) %(")
+						if name then
+							State.selectedMoonItem = name
+							moonInfo:UpdateItem("Đang chọn", name)
+						end
+					end
+				end,
+			})
+
+			local searchM = ShopRow.Right:Textbox({
+				Title = "Tìm",
+				Placeholder = "Gõ: aura...",
 				Value = "",
 			})
 
-			local suggestMoon = ShopSec:TwoColumn()
-
-			ShopSec:Button({
+			ShopRow.Right:Button({
 				Title = "MUA MOON",
 				Callback = function()
 					if State.selectedMoonItem then
@@ -366,61 +516,27 @@ return {
 			})
 
 			task.spawn(function()
-				task.wait(1)
-				local lastQuery = ""
-				local suggestButtons = {}
-				
-				local function ClearSuggestButtons()
-					for _, b in ipairs(suggestButtons) do
-						if b and b.Instance then b.Instance:Destroy() end
-					end
-					suggestButtons = {}
-				end
-				
-				local function CreateSuggestButton(col, item)
-					local btn = col:Button({
-						Title = item.name .. " - " .. item.price .. "P",
-						Callback = function()
+				task.wait(1.5)
+				if searchM and searchM.Instance then
+					CreateSuggestPopup(
+						searchM.Instance,
+						function(q) return FilterList(moonList, q) end,
+						function(item)
 							State.selectedMoonItem = item.name
 							moonInfo:UpdateItem("Đang chọn", item.name)
+							searchM.Instance.Text = item.name
+							print("[v44] Moon chọn: " .. item.name)
 							NeoUI.Notify:Show({
 								Title = "Đã chọn Moon: " .. item.name,
 								Description = item.price .. " Point",
 								Duration = 2,
 							})
-						end,
-					})
-					return btn
-				end
-				
-				while true do
-					task.wait(0.3)
-					pcall(function()
-						if not searchM or not searchM.Instance then return end
-						
-						local q = searchM.Instance.Text or ""
-						if q ~= lastQuery then
-							lastQuery = q
-							ClearSuggestButtons()
-							
-							if q ~= "" then
-								local matches = FilterList(moonList, q)
-								print("[v43] Gợi ý Moon '" .. q .. "' → " .. #matches .. " item")
-								
-								local limit = math.min(#matches, 30)
-								for i = 1, limit do
-									local item = matches[i]
-									local col = (i % 2 == 1) and suggestMoon.Left or suggestMoon.Right
-									local btn = CreateSuggestButton(col, item)
-									table.insert(suggestButtons, btn)
-								end
-							end
 						end
-					end)
+					)
 				end
 			end)
 		else
-			ShopSec:ListRow({
+			ShopRow.Right:ListRow({
 				Title = "Moon",
 				Items = { { key = "Trạng thái", value = "Chưa load module" } },
 			})
@@ -462,8 +578,8 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "v43 Loaded",
-			Description = "Gõ tên → hiện gợi ý",
+			Title = "v44 Loaded",
+			Description = "Gõ vào ô Tìm để xem gợi ý",
 			Duration = 5,
 		})
 	end,
