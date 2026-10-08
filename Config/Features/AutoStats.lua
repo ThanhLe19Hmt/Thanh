@@ -3,7 +3,8 @@
     Auto Up Stats, Auto Rebirth, Auto Haki, Auto Equip Accessory
 ]]
 
-local Globals = _G.__Globals or Globals
+local Globals = _G.__Globals
+assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
 local RS = Globals.ReplicatedStorage
 local HttpService = Globals.HttpService
 local LP = Globals.LocalPlayer
