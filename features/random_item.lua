@@ -1,13 +1,13 @@
 -- =========================================================
---  FEATURE: Random & Shop v30
---  - Chỉ Refresh khi search thay đổi
---  - Dropdown hoạt động ổn định
+--  FEATURE: Random & Shop v31
+--  + Enter trong search → tự chọn & mua item đầu tiên khớp
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
 		local Players = game:GetService("Players")
 		local LP = Players.LocalPlayer
 		local RS = game:GetService("ReplicatedStorage")
+		local UIS = game:GetService("UserInputService")
 		local NetworkEvent = RS.Modules.NetworkFramework.NetworkEvent
 
 		local function SafeRequire(paths)
@@ -55,7 +55,7 @@ return {
 			end
 		end
 
-		print("[v30] Diamond:", #diamondOptions, "| Moon:", #moonOptions)
+		print("[v31] Diamond:", #diamondOptions, "| Moon:", #moonOptions)
 
 		if #diamondOptions == 0 then
 			diamondOptions = {
@@ -83,7 +83,7 @@ return {
 				return
 			end
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeRandomItem", itemName)
-			NeoUI.Notify:Show({ Title = "✅ Mua: " .. itemName, Duration = 2 })
+			NeoUI.Notify:Show({ Title = "✅ Mua: " .. itemName, Description = "-" .. price, Duration = 2 })
 		end
 
 		local function BuyMoonItem(itemName)
@@ -95,7 +95,34 @@ return {
 				return
 			end
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeEventMoon", itemName)
-			NeoUI.Notify:Show({ Title = "✅ Mua Moon: " .. itemName, Duration = 2 })
+			NeoUI.Notify:Show({ Title = "✅ Mua Moon: " .. itemName, Description = "-" .. price, Duration = 2 })
+		end
+
+		-- ⭐ TÌM ITEM THEO TÊN (exact match trước, gần đúng sau)
+		local function FindDiamondByName(query)
+			if not query or query == "" then return nil end
+			local q = query:lower()
+			-- Exact match
+			for _, d in ipairs(diamondList) do
+				if d.name:lower() == q then return d end
+			end
+			-- Gần đúng
+			for _, d in ipairs(diamondList) do
+				if d.name:lower():find(q, 1, true) then return d end
+			end
+			return nil
+		end
+
+		local function FindMoonByName(query)
+			if not query or query == "" then return nil end
+			local q = query:lower()
+			for _, m in ipairs(moonList) do
+				if m.name:lower() == q then return m end
+			end
+			for _, m in ipairs(moonList) do
+				if m.name:lower():find(q, 1, true) then return m end
+			end
+			return nil
 		end
 
 		local function ToggleRandom()
@@ -151,18 +178,14 @@ return {
 		-- =======================================================
 		local DiamondSec = Tab:CreateSection("💎 Diamond (" .. #diamondOptions .. " item)")
 
-		-- ⭐ Search (dùng biến riêng để track)
-		local currentSearchD = ""
-
-		DiamondSec:Textbox({
-			Title = "🔍 Tìm kiếm",
+		-- ⭐ Search textbox — giữ reference để hook Enter
+		local searchDiamondBox = DiamondSec:Textbox({
+			Title = "🔍 Tìm (Enter để mua)",
 			Placeholder = "VD: Wood, Duck...",
 			Value = "",
 			Callback = function(v)
-				currentSearchD = v or ""
-				-- ⭐ Filter NGAY khi callback chạy (không cần loop)
+				local q = (v or ""):lower()
 				if diamondDrop and diamondDrop.Refresh then
-					local q = currentSearchD:lower()
 					if q == "" then
 						diamondDrop:Refresh(diamondOptions, true)
 					else
@@ -185,7 +208,7 @@ return {
 			Options = diamondOptions,
 			Value = nil,
 			Callback = function(v)
-				print("[v30] Diamond selected:", v)
+				print("[v31] Diamond selected:", v)
 				local n = diamondMap[v]
 				if n then
 					State.selectedItem = n
@@ -194,6 +217,38 @@ return {
 			end,
 		})
 
+		-- ⭐ HOOK ENTER cho Diamond
+		task.spawn(function()
+			task.wait(1)
+			if searchDiamondBox and searchDiamondBox.Instance then
+				local box = searchDiamondBox.Instance
+				box.FocusLost:Connect(function(enterPressed)
+					if enterPressed then
+						local q = box.Text
+						if q and q ~= "" then
+							local found = FindDiamondByName(q)
+							if found then
+								State.selectedItem = found.name
+								if diamondDrop then diamondDrop:Set(found.optStr) end
+								BuyDiamondItem(found.name)
+								NeoUI.Notify:Show({
+									Title = "✅ Enter → Mua: " .. found.name,
+									Description = "-" .. found.price .. " Point",
+									Duration = 3,
+								})
+							else
+								NeoUI.Notify:Show({
+									Title = "❌ Không tìm thấy",
+									Description = q,
+									Duration = 3,
+								})
+							end
+						end
+					end
+				end)
+			end
+		end)
+
 		-- =======================================================
 		--  MOON SHOP
 		-- =======================================================
@@ -201,16 +256,13 @@ return {
 		if #moonOptions > 0 then
 			local MoonSec = Tab:CreateSection("🌙 Moon (" .. #moonOptions .. " item)")
 
-			local currentSearchM = ""
-
-			MoonSec:Textbox({
-				Title = "🔍 Tìm kiếm",
+			local searchMoonBox = MoonSec:Textbox({
+				Title = "🔍 Tìm (Enter để mua)",
 				Placeholder = "VD: Aura, Nuke...",
 				Value = "",
 				Callback = function(v)
-					currentSearchM = v or ""
+					local q = (v or ""):lower()
 					if moonDrop and moonDrop.Refresh then
-						local q = currentSearchM:lower()
 						if q == "" then
 							moonDrop:Refresh(moonOptions, true)
 						else
@@ -233,7 +285,7 @@ return {
 				Options = moonOptions,
 				Value = nil,
 				Callback = function(v)
-					print("[v30] Moon selected:", v)
+					print("[v31] Moon selected:", v)
 					local n = moonMap[v]
 					if n then
 						State.selectedMoonItem = n
@@ -241,6 +293,38 @@ return {
 					end
 				end,
 			})
+
+			-- ⭐ HOOK ENTER cho Moon
+			task.spawn(function()
+				task.wait(1)
+				if searchMoonBox and searchMoonBox.Instance then
+					local box = searchMoonBox.Instance
+					box.FocusLost:Connect(function(enterPressed)
+						if enterPressed then
+							local q = box.Text
+							if q and q ~= "" then
+								local found = FindMoonByName(q)
+								if found then
+									State.selectedMoonItem = found.name
+									if moonDrop then moonDrop:Set(found.optStr) end
+									BuyMoonItem(found.name)
+									NeoUI.Notify:Show({
+										Title = "✅ Enter → Mua Moon: " .. found.name,
+										Description = "-" .. found.price .. " Point",
+										Duration = 3,
+									})
+								else
+									NeoUI.Notify:Show({
+										Title = "❌ Không tìm thấy",
+										Description = q,
+										Duration = 3,
+									})
+								end
+							end
+						end
+					end)
+				end
+			end)
 		end
 
 		-- =======================================================
@@ -281,8 +365,8 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "✅ v30 Loaded",
-			Description = "Diamond: " .. #diamondOptions,
+			Title = "✅ v31 Loaded",
+			Description = "Nhập + Enter để mua nhanh",
 			Duration = 5,
 		})
 	end,
