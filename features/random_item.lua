@@ -1,9 +1,7 @@
 -- =========================================================
---  FEATURE: Random & Shop v24 FINAL
---  - Dùng Dropdown popup (không bị cắt)
---  - Layout: Random trên, Shop dưới
---  - 2 Shop nằm ngang (trái Diamond, phải Moon)
---  - Search + Dropdown đều hoạt động
+--  FEATURE: Random & Shop v26
+--  - Bỏ TwoColumn cho Shop → dropdown full width
+--  - Giữ TwoColumn cho Auto Quay (Random + Moon)
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
@@ -12,7 +10,6 @@ return {
 		local RS = game:GetService("ReplicatedStorage")
 		local NetworkEvent = RS.Modules.NetworkFramework.NetworkEvent
 
-		-- Load module
 		local function SafeRequire(paths)
 			for _, p in ipairs(paths) do
 				local ok, result = pcall(function()
@@ -28,30 +25,18 @@ return {
 			return nil
 		end
 
-		local PointItemM = SafeRequire({
-			"Modules.GaranteeRandomItem",
-			"Modules.GuaranteeRandomItem",
-		})
-		local PointItemMoon = SafeRequire({
-			"Modules.GuaranteeEventMoon",
-			"Modules.GaranteeEventMoon",
-		})
+		local PointItemM = SafeRequire({ "Modules.GaranteeRandomItem", "Modules.GuaranteeRandomItem" })
+		local PointItemMoon = SafeRequire({ "Modules.GuaranteeEventMoon", "Modules.GaranteeEventMoon" })
 
-		print("[Random] Diamond loaded:", PointItemM ~= nil)
-		print("[Random] Moon loaded:", PointItemMoon ~= nil)
-
-		-- ===== STATE =====
 		local State = {
 			running = false, mode = "x15", count = 0,
 			runningMoon = false, modeMoon = "x15", countMoon = 0,
 			selectedItem = nil, selectedMoonItem = nil,
 			autoBuy = false, boughtCount = 0,
 			autoShopMode = "Diamond",
-			searchDiamond = "",
-			searchMoon = "",
+			searchDiamond = "", searchMoon = "",
 		}
 
-		-- ===== BUILD DATA =====
 		local diamondList, moonList = {}, {}
 		if PointItemM then
 			for name, price in pairs(PointItemM) do
@@ -66,13 +51,12 @@ return {
 			table.sort(moonList, function(a, b) return a.price < b.price end)
 		end
 
-		-- ⭐ Build map option string → name
-		local diamondMap, moonMap = {}, {}
-		local diamondOptions, moonOptions = {}, {}
+		local diamondMap, diamondOptions = {}, {}
 		for _, d in ipairs(diamondList) do
 			table.insert(diamondOptions, d.optStr)
 			diamondMap[d.optStr] = d.name
 		end
+		local moonMap, moonOptions = {}, {}
 		for _, m in ipairs(moonList) do
 			table.insert(moonOptions, m.optStr)
 			moonMap[m.optStr] = m.name
@@ -157,12 +141,11 @@ return {
 		end
 
 		-- =========================================================
-		--  SECTION 1: AUTO QUAY (Random + Moon ngang)
+		--  SECTION 1: AUTO QUAY (2 cột)
 		-- =========================================================
 		local QuaySec = Tab:CreateSection("🎰 Auto Quay")
 		local QuayRow = QuaySec:TwoColumn()
 
-		-- TRÁI: RANDOM
 		local RandomInfo = QuayRow.Left:ListRow({
 			Title = "🎰 Random",
 			Items = {
@@ -183,7 +166,6 @@ return {
 		})
 		QuayRow.Left:Button({ Title = "▶️ Bật / ⏹️ Dừng", Callback = ToggleRandom })
 
-		-- PHẢI: MOON
 		local MoonInfo = QuayRow.Right:ListRow({
 			Title = "🌙 Event Moon",
 			Items = {
@@ -205,14 +187,12 @@ return {
 		QuayRow.Right:Button({ Title = "▶️ Bật / ⏹️ Dừng", Callback = ToggleMoon })
 
 		-- =========================================================
-		--  SECTION 2: SHOP (Diamond trái + Moon phải NGANG)
+		--  SECTION 2: 💎 DIAMOND SHOP (full width)
 		-- =========================================================
-		local ShopSec = Tab:CreateSection("🛒 Shop Item")
-		local ShopRow = ShopSec:TwoColumn()
+		local DiamondSec = Tab:CreateSection("💎 Diamond Shop")
 
-		-- ===== TRÁI: DIAMOND =====
-		local DiamondInfo = ShopRow.Left:ListRow({
-			Title = "💎 Diamond",
+		local DiamondInfo = DiamondSec:ListRow({
+			Title = "Info",
 			Items = {
 				{ key = "Chọn", value = "-" },
 				{ key = "Point", value = "N/A" },
@@ -220,7 +200,7 @@ return {
 			},
 		})
 
-		local diamondDropdown = ShopRow.Left:Dropdown({
+		local diamondDropdown = DiamondSec:Dropdown({
 			Title = "Chọn Item",
 			Options = diamondOptions,
 			Value = nil,
@@ -230,14 +210,12 @@ return {
 					if itemName then
 						State.selectedItem = itemName
 						BuyDiamondItem(itemName)
-					else
-						print("[Shop] Không map được:", v)
 					end
 				end
 			end,
 		})
 
-		local searchDiamondBox = ShopRow.Left:Textbox({
+		local searchDiamond = DiamondSec:Textbox({
 			Title = "🔍 Tìm kiếm",
 			Placeholder = "VD: Duck, Wood",
 			Value = "",
@@ -246,7 +224,7 @@ return {
 			end,
 		})
 
-		ShopRow.Left:Button({
+		DiamondSec:Button({
 			Title = "🔍 Tìm & Mua",
 			Callback = function()
 				local q = (State.searchDiamond or ""):lower()
@@ -254,7 +232,6 @@ return {
 					NeoUI.Notify:Show({ Title = "❌ Chưa nhập tên", Duration = 2 })
 					return
 				end
-				-- Exact match
 				for _, d in ipairs(diamondList) do
 					if d.name:lower() == q then
 						State.selectedItem = d.name
@@ -263,7 +240,6 @@ return {
 						return
 					end
 				end
-				-- Gần đúng
 				for _, d in ipairs(diamondList) do
 					if d.name:lower():find(q, 1, true) then
 						State.selectedItem = d.name
@@ -276,7 +252,7 @@ return {
 			end,
 		})
 
-		ShopRow.Left:Button({
+		DiamondSec:Button({
 			Title = "🔄 Mua lại",
 			Callback = function()
 				if State.selectedItem then BuyDiamondItem(State.selectedItem)
@@ -284,9 +260,13 @@ return {
 			end,
 		})
 
-		-- ===== PHẢI: MOON =====
-		local MoonShopInfo = ShopRow.Right:ListRow({
-			Title = "🌙 Moon",
+		-- =========================================================
+		--  SECTION 3: 🌙 MOON SHOP (full width)
+		-- =========================================================
+		local MoonSec = Tab:CreateSection("🌙 Moon Shop")
+
+		local MoonShopInfo = MoonSec:ListRow({
+			Title = "Info",
 			Items = {
 				{ key = "Chọn", value = "-" },
 				{ key = "Moon", value = "N/A" },
@@ -294,7 +274,7 @@ return {
 			},
 		})
 
-		local moonDropdown = ShopRow.Right:Dropdown({
+		local moonDropdown = MoonSec:Dropdown({
 			Title = "Chọn Item",
 			Options = moonOptions,
 			Value = nil,
@@ -304,14 +284,12 @@ return {
 					if itemName then
 						State.selectedMoonItem = itemName
 						BuyMoonItem(itemName)
-					else
-						print("[Shop] Không map được:", v)
 					end
 				end
 			end,
 		})
 
-		local searchMoonBox = ShopRow.Right:Textbox({
+		local searchMoon = MoonSec:Textbox({
 			Title = "🔍 Tìm kiếm",
 			Placeholder = "VD: Aura",
 			Value = "",
@@ -320,7 +298,7 @@ return {
 			end,
 		})
 
-		ShopRow.Right:Button({
+		MoonSec:Button({
 			Title = "🔍 Tìm & Mua",
 			Callback = function()
 				local q = (State.searchMoon or ""):lower()
@@ -348,7 +326,7 @@ return {
 			end,
 		})
 
-		ShopRow.Right:Button({
+		MoonSec:Button({
 			Title = "🔄 Mua lại",
 			Callback = function()
 				if State.selectedMoonItem then BuyMoonItem(State.selectedMoonItem)
@@ -396,7 +374,7 @@ return {
 			end
 		end)
 
-		-- ===== SECTION 3: AUTO =====
+		-- ===== AUTO =====
 		local AutoSec = Tab:CreateSection("🔁 Auto Mua")
 
 		AutoSec:Dropdown({
@@ -463,8 +441,8 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "✅ Random & Shop v24",
-			Description = "Dropdown popup đã fix",
+			Title = "✅ Random & Shop v26",
+			Description = "Dropdown full width",
 			Duration = 3,
 		})
 	end,
