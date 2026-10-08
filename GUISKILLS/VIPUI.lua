@@ -2,7 +2,7 @@
     VIP UI Module: Status HUD, Keybind System, Notification nâng cao
 ]]
 
-local Core = loadstring(game:HttpGet("URL_CORE"))()
+local Core = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Core.lua"))()
 local UserInputService = Core.Services.UserInputService
 local LocalPlayer = Core.Services.LocalPlayer
 local RunService = Core.Services.RunService
