@@ -1,7 +1,7 @@
 -- =========================================================
---  FEATURE: Random & Shop v42
---  + Gợi ý HOẠT ĐỘNG bằng hook Text property
---  + Fix dropdown hiện item
+--  FEATURE: Random & Shop v43
+--  + Panel gợi ý (list button) khi gõ
+--  + Bấm gợi ý → chọn item
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
@@ -133,31 +133,19 @@ return {
 			end
 		end
 
-		print("[v42] Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions)
+		print("[v43] Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions)
 
 		local function NormalizeName(s)
 			return tostring(s):lower():gsub("[%s_%-]", "")
 		end
 
-		local function FilterDiamond(query)
-			if not query or query == "" then return diamondOptions end
+		local function FilterList(list, query)
+			if not query or query == "" then return {} end
 			local qNorm = NormalizeName(query)
 			local filt = {}
-			for _, d in ipairs(diamondList) do
+			for _, d in ipairs(list) do
 				if NormalizeName(d.name):find(qNorm, 1, true) then
-					table.insert(filt, d.optStr)
-				end
-			end
-			return filt
-		end
-
-		local function FilterMoon(query)
-			if not query or query == "" then return moonOptions end
-			local qNorm = NormalizeName(query)
-			local filt = {}
-			for _, m in ipairs(moonList) do
-				if NormalizeName(m.name):find(qNorm, 1, true) then
-					table.insert(filt, m.optStr)
+					table.insert(filt, d)
 				end
 			end
 			return filt
@@ -252,34 +240,29 @@ return {
 		--  SHOP
 		-- =======================================================
 		local ShopSec = Tab:CreateSection("Shop")
-		local ShopRow = ShopSec:TwoColumn()
 
-		-- ===== DIAMOND (TRÁI) =====
-		local diamondDrop = ShopRow.Left:Dropdown({
+		-- ⭐ DIAMOND SECTION
+		local diamondInfo = ShopSec:ListRow({
 			Title = "Diamond",
-			Options = diamondOptions,
-			Value = nil,
-			Callback = function(v)
-				if v and type(v) == "string" then
-					local name = v:match("^(.-) %(")
-					if name then
-						State.selectedItem = name
-						print("[v42] Diamond chọn:", name)
-					end
-				end
-			end,
+			Items = {
+				{ key = "Đang chọn", value = "-" },
+				{ key = "Tổng item", value = tostring(#diamondList) },
+			},
 		})
 
-		-- ⭐ Ô TÌM — CHỈ lưu text, KHÔNG filter trong Callback
-		local searchD = ShopRow.Left:Textbox({
-			Title = "Tìm",
+		-- ⭐ Ô tìm
+		local searchD = ShopSec:Textbox({
+			Title = "🔍 Tìm (gõ để xem gợi ý)",
 			Placeholder = "VD: orb, duck, wood",
 			Value = "",
-			-- ⭐ KHÔNG CÓ CALLBACK → tránh bug NeoUI gọi sớm
 		})
 
-		ShopRow.Left:Button({
-			Title = "MUA 1 LẦN",
+		-- ⭐⭐⭐ PANEL GỢI Ý DIAMOND — hiện list button
+		local suggestDiamond = ShopSec:TwoColumn()
+
+		-- ⭐ Nút MUA 1 LẦN Diamond
+		ShopSec:Button({
+			Title = "MUA DIAMOND",
 			Callback = function()
 				if State.selectedItem then
 					BuyDiamondItem(State.selectedItem)
@@ -289,61 +272,90 @@ return {
 			end,
 		})
 
-		-- ⭐⭐⭐ FILTER LOOP — CHẠY MỖI 0.3s, đọc text từ Textbox gốc
+		-- ⭐ Loop cập nhật gợi ý Diamond
 		task.spawn(function()
-			task.wait(1.5)  -- Đợi UI render xong
-			
+			task.wait(1)
 			local lastQuery = ""
-			print("[v42] Filter loop bắt đầu")
+			local suggestButtons = {}  -- Lưu button hiện tại để destroy khi cần
+			
+			local function ClearSuggestButtons()
+				for _, b in ipairs(suggestButtons) do
+					if b and b.Instance then b.Instance:Destroy() end
+				end
+				suggestButtons = {}
+			end
+			
+			local function CreateSuggestButton(col, item)
+				local btn = col:Button({
+					Title = item.name .. " - " .. item.price .. "P",
+					Callback = function()
+						State.selectedItem = item.name
+						diamondInfo:UpdateItem("Đang chọn", item.name)
+						NeoUI.Notify:Show({
+							Title = "Đã chọn: " .. item.name,
+							Description = item.price .. " Point",
+							Duration = 2,
+						})
+					end,
+				})
+				return btn
+			end
 			
 			while true do
 				task.wait(0.3)
 				pcall(function()
 					if not searchD or not searchD.Instance then return end
-					if not diamondDrop or not diamondDrop.Refresh then return end
 					
 					local q = searchD.Instance.Text or ""
 					if q ~= lastQuery then
 						lastQuery = q
-						local filt = FilterDiamond(q)
+						ClearSuggestButtons()
 						
-						if #filt > 0 then
-							diamondDrop:Refresh(filt, true)
-							print("[v42] Filter Diamond '" .. q .. "' → " .. #filt .. " item")
+						if q == "" then
+							-- Không gõ → xóa gợi ý
 						else
-							-- Không match → hiện thông báo
-							diamondDrop:Refresh({ "Không có item: " .. q }, false)
+							-- Gõ → tìm item khớp
+							local matches = FilterList(diamondList, q)
+							print("[v43] Gợi ý Diamond '" .. q .. "' → " .. #matches .. " item")
+							
+							if #matches == 0 then
+								-- Không có item khớp
+							else
+								-- Hiện tối đa 30 gợi ý để tránh lag
+								local limit = math.min(#matches, 30)
+								for i = 1, limit do
+									local item = matches[i]
+									local col = (i % 2 == 1) and suggestDiamond.Left or suggestDiamond.Right
+									local btn = CreateSuggestButton(col, item)
+									table.insert(suggestButtons, btn)
+								end
+							end
 						end
 					end
 				end)
 			end
 		end)
 
-		-- ===== MOON (PHẢI) =====
+		-- ⭐ MOON SECTION
 		if #moonOptions > 0 then
-			local moonDrop = ShopRow.Right:Dropdown({
+			local moonInfo = ShopSec:ListRow({
 				Title = "Moon",
-				Options = moonOptions,
-				Value = nil,
-				Callback = function(v)
-					if v and type(v) == "string" then
-						local name = v:match("^(.-) %(")
-						if name then
-							State.selectedMoonItem = name
-							print("[v42] Moon chọn:", name)
-						end
-					end
-				end,
+				Items = {
+					{ key = "Đang chọn", value = "-" },
+					{ key = "Tổng item", value = tostring(#moonList) },
+				},
 			})
 
-			local searchM = ShopRow.Right:Textbox({
-				Title = "Tìm",
+			local searchM = ShopSec:Textbox({
+				Title = "🔍 Tìm Moon",
 				Placeholder = "VD: aura",
 				Value = "",
 			})
 
-			ShopRow.Right:Button({
-				Title = "MUA 1 LẦN",
+			local suggestMoon = ShopSec:TwoColumn()
+
+			ShopSec:Button({
+				Title = "MUA MOON",
 				Callback = function()
 					if State.selectedMoonItem then
 						BuyMoonItem(State.selectedMoonItem)
@@ -353,33 +365,62 @@ return {
 				end,
 			})
 
-			-- ⭐ Filter loop Moon
 			task.spawn(function()
-				task.wait(1.5)
+				task.wait(1)
 				local lastQuery = ""
+				local suggestButtons = {}
+				
+				local function ClearSuggestButtons()
+					for _, b in ipairs(suggestButtons) do
+						if b and b.Instance then b.Instance:Destroy() end
+					end
+					suggestButtons = {}
+				end
+				
+				local function CreateSuggestButton(col, item)
+					local btn = col:Button({
+						Title = item.name .. " - " .. item.price .. "P",
+						Callback = function()
+							State.selectedMoonItem = item.name
+							moonInfo:UpdateItem("Đang chọn", item.name)
+							NeoUI.Notify:Show({
+								Title = "Đã chọn Moon: " .. item.name,
+								Description = item.price .. " Point",
+								Duration = 2,
+							})
+						end,
+					})
+					return btn
+				end
+				
 				while true do
 					task.wait(0.3)
 					pcall(function()
 						if not searchM or not searchM.Instance then return end
-						if not moonDrop or not moonDrop.Refresh then return end
 						
 						local q = searchM.Instance.Text or ""
 						if q ~= lastQuery then
 							lastQuery = q
-							local filt = FilterMoon(q)
+							ClearSuggestButtons()
 							
-							if #filt > 0 then
-								moonDrop:Refresh(filt, true)
-								print("[v42] Filter Moon '" .. q .. "' → " .. #filt .. " item")
-							else
-								moonDrop:Refresh({ "Không có item: " .. q }, false)
+							if q ~= "" then
+								local matches = FilterList(moonList, q)
+								print("[v43] Gợi ý Moon '" .. q .. "' → " .. #matches .. " item")
+								
+								local limit = math.min(#matches, 30)
+								for i = 1, limit do
+									local item = matches[i]
+									local col = (i % 2 == 1) and suggestMoon.Left or suggestMoon.Right
+									local btn = CreateSuggestButton(col, item)
+									table.insert(suggestButtons, btn)
+								end
 							end
 						end
 					end)
 				end
 			end)
 		else
-			ShopRow.Right:ListRow({
+			ShopSec:ListRow({
 				Title = "Moon",
 				Items = { { key = "Trạng thái", value = "Chưa load module" } },
 			})
@@ -421,8 +462,8 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "v42 Loaded",
-			Description = "Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions,
+			Title = "v43 Loaded",
+			Description = "Gõ tên → hiện gợi ý",
 			Duration = 5,
 		})
 	end,
