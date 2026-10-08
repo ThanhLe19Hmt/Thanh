@@ -1,15 +1,13 @@
 -- =========================================================
---  FEATURE: Random & Shop v36
---  - Bỏ filter dropdown (né bug NeoUI)
---  - Search + Enter → copy tên item → hiện display
---  - Dropdown vẫn chọn được bình thường
+--  FEATURE: Random & Shop v38
+--  - Dùng SetDisplayText mới của NeoUI
+--  - Enter → gán text trực tiếp, không bug
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
 		local Players = game:GetService("Players")
 		local LP = Players.LocalPlayer
 		local RS = game:GetService("ReplicatedStorage")
-		local CoreGui = game:GetService("CoreGui")
 		local NetworkEvent = RS.Modules.NetworkFramework.NetworkEvent
 
 		local function SafeRequire(paths)
@@ -67,7 +65,6 @@ return {
 			autoBuy = false, autoShopMode = "Diamond",
 		}
 
-		-- ===== MUA =====
 		local function BuyDiamondItem(itemName)
 			if not itemName or type(itemName) ~= "string" then return end
 			local point = tonumber(LP:GetAttribute("PointItem")) or 0
@@ -94,15 +91,12 @@ return {
 			NeoUI.Notify:Show({ Title = "✅ Mua Moon: " .. itemName, Description = "-" .. price, Duration = 2 })
 		end
 
-		-- ===== TÌM ITEM =====
 		local function FindDiamondByName(query)
 			if not query or query == "" then return nil end
 			local q = query:lower()
-			-- Exact
 			for _, d in ipairs(diamondList) do
 				if d.name:lower() == q then return d end
 			end
-			-- Partial
 			for _, d in ipairs(diamondList) do
 				if d.name:lower():find(q, 1, true) then return d end
 			end
@@ -119,29 +113,6 @@ return {
 				if m.name:lower():find(q, 1, true) then return m end
 			end
 			return nil
-		end
-
-		-- ⭐ HÀM COPY TÊN VÀO DISPLAY DROPDOWN
-		-- Tìm TextButton (mainBtn) và set display text trực tiếp
-		local function SetDropdownDisplayText(sectionParent, text)
-			if not sectionParent then return end
-			-- Tìm tất cả TextButton trong section, cái nào có display text
-			pcall(function()
-				for _, desc in ipairs(sectionParent:GetDescendants()) do
-					if desc:IsA("TextButton") then
-						local display = desc:FindFirstChildOfClass("TextLabel")
-						if display and display.Text ~= "" and (
-							display.Text == "Chọn..." or 
-							display.Text:find(" %)") or
-							display.Text:find("table:")
-						) then
-							-- Set trực tiếp text
-							display.Text = text
-							return true
-						end
-					end
-				end
-			end)
 		end
 
 		local function ToggleRandom()
@@ -170,9 +141,7 @@ return {
 			NeoUI.Notify:Show({ Title = State.runningMoon and "▶️ Moon ON" or "⏹️ Moon OFF", Duration = 2 })
 		end
 
-		-- =======================================================
-		--  SECTION 1: QUAY
-		-- =======================================================
+		-- ===== QUAY =====
 		local QuaySec = Tab:CreateSection("🎰 Auto Quay")
 		local QuayRow = QuaySec:TwoColumn()
 
@@ -193,11 +162,10 @@ return {
 		QuayRow.Right:Button({ Title = "▶️ Bật / Dừng", Callback = ToggleMoon })
 
 		-- =======================================================
-		--  SECTION 2: DIAMOND SHOP
+		--  DIAMOND SHOP
 		-- =======================================================
 		local DiamondSec = Tab:CreateSection("💎 Diamond (" .. #diamondOptions .. " item)")
 
-		-- ⭐ Dropdown — full 95 item, KHÔNG filter
 		local diamondDrop = DiamondSec:Dropdown({
 			Title = "Chọn Item",
 			Options = diamondOptions,
@@ -213,15 +181,22 @@ return {
 			end,
 		})
 
-		-- ⭐ Search riêng — chỉ dùng để chọn nhanh
+		-- ⭐ Lưu display label reference
+		local diamondDisplayLabel = nil
+		task.spawn(function()
+			task.wait(1)
+			if diamondDrop and diamondDrop.GetDisplayLabel then
+				diamondDisplayLabel = diamondDrop:GetDisplayLabel()
+				print("[v38] Diamond display label:", diamondDisplayLabel ~= nil)
+			end
+		end)
+
 		local searchD = DiamondSec:Textbox({
-			Title = "🔍 Nhập tên + Ente 36r",
+			Title = "🔍 Nhập tên + Enter",
 			Placeholder = "VD: Wood, Duck",
 			Value = "",
-			-- ⭐ KHÔNG dùng Callback để tránh bug
 		})
 
-		-- ⭐ ENTER hook — tự tìm + mua + set display trực tiếp
 		task.spawn(function()
 			task.wait(1)
 			if searchD and searchD.Instance then
@@ -232,36 +207,29 @@ return {
 							local found = FindDiamondByName(q)
 							if found then
 								State.selectedItem = found.name
-								-- ⭐ Gán TEXT trực tiếp vào display (không dùng Set)
-								-- ⭐ Gán text TRỰC TIẾP vào TextLabel, KHÔNG dùng Set
-local function ForceSetDisplay(text)
-    if type(text) ~= "string" then return end
-    pcall(function()
-        for _, g in ipairs(CoreGui:GetChildren()) do
-            if g.Name:find("NeoUI_") then
-                for _, c in ipairs(g:GetDescendants()) do
-                    if c:IsA("TextLabel") then
-                        local t = c.Text
-                        if type(t) == "string" and (t == "Chọn..." or t:find("table:") or t:find(" %)") or t == "Chọn") then
-                            -- Chỉ set nếu label này nằm trong khung dropdown
-                            local parentBtn = c.Parent
-                            if parentBtn and parentBtn:IsA("TextButton") then
-                                c.Text = text
-                            end
-                        end
-                    end
-                end
-                break
-            end
-        end
-    end)
-end
-
--- Gọi khi Enter
-ForceSetDisplay(found.optStr)
+								
+								-- ⭐⭐⭐ CÁCH CHÍNH: Gán text trực tiếp vào display label
+								if diamondDisplayLabel and diamondDisplayLabel.Parent then
+									diamondDisplayLabel.Text = found.optStr
+									print("[v38] Set display:", found.optStr)
+								elseif diamondDrop and diamondDrop.SetDisplayText then
+									diamondDrop:SetDisplayText(found.optStr)
+								else
+									-- Fallback: dùng Set (có thể bị bug)
+									if diamondDrop and diamondDrop.Set then
+										pcall(function() diamondDrop:Set(found.optStr) end)
+									end
+								end
+								
+								-- Đợi 0.1s, force lại lần nữa (đề phòng NeoUI ghi đè)
+								task.wait(0.1)
+								if diamondDisplayLabel and diamondDisplayLabel.Parent then
+									diamondDisplayLabel.Text = found.optStr
+								end
+								
 								BuyDiamondItem(found.name)
 								NeoUI.Notify:Show({
-									Title = "✅ " .. found.name,
+									Title = "✅ Mua: " .. found.name,
 									Description = "-" .. found.price .. " Point",
 									Duration = 3,
 								})
@@ -275,7 +243,7 @@ ForceSetDisplay(found.optStr)
 		end)
 
 		DiamondSec:Button({
-			Title = "🔄 Mua lại item đã chọn",
+			Title = "🔄 Mua lại",
 			Callback = function()
 				if State.selectedItem then BuyDiamondItem(State.selectedItem)
 				else NeoUI.Notify:Show({ Title = "❌ Chưa chọn", Duration = 2 }) end
@@ -283,9 +251,10 @@ ForceSetDisplay(found.optStr)
 		})
 
 		-- =======================================================
-		--  SECTION 3: MOON SHOP
+		--  MOON SHOP
 		-- =======================================================
 		local moonDrop = nil
+		local moonDisplayLabel = nil
 		if #moonOptions > 0 then
 			local MoonSec = Tab:CreateSection("🌙 Moon (" .. #moonOptions .. " item)")
 
@@ -304,9 +273,17 @@ ForceSetDisplay(found.optStr)
 				end,
 			})
 
+			task.spawn(function()
+				task.wait(1)
+				if moonDrop and moonDrop.GetDisplayLabel then
+					moonDisplayLabel = moonDrop:GetDisplayLabel()
+					print("[v38] Moon display label:", moonDisplayLabel ~= nil)
+				end
+			end)
+
 			local searchM = MoonSec:Textbox({
 				Title = "🔍 Nhập tên + Enter",
-				Placeholder = "VD: Aura, Nuke",
+				Placeholder = "VD: Aura",
 				Value = "",
 			})
 
@@ -320,15 +297,26 @@ ForceSetDisplay(found.optStr)
 								local found = FindMoonByName(q)
 								if found then
 									State.selectedMoonItem = found.name
-									if moonDrop and moonDrop.Set then
-										pcall(function()
-											moonDrop:Set(found.optStr)
-										end)
+									
+									if moonDisplayLabel and moonDisplayLabel.Parent then
+										moonDisplayLabel.Text = found.optStr
+									elseif moonDrop and moonDrop.SetDisplayText then
+										moonDrop:SetDisplayText(found.optStr)
+									else
+										if moonDrop and moonDrop.Set then
+											pcall(function() moonDrop:Set(found.optStr) end)
+										end
 									end
+									
+									task.wait(0.1)
+									if moonDisplayLabel and moonDisplayLabel.Parent then
+										moonDisplayLabel.Text = found.optStr
+									end
+									
 									BuyMoonItem(found.name)
 									NeoUI.Notify:Show({
 										Title = "✅ Moon: " .. found.name,
-										Description = "-" .. found.price .. " Point",
+										Description = "-" .. found.price,
 										Duration = 3,
 									})
 								else
@@ -350,7 +338,42 @@ ForceSetDisplay(found.optStr)
 		end
 
 		-- =======================================================
-		--  SECTION 4: AUTO MUA
+		--  ⭐ WATCHDOG — Fix table:0x về tên đã chọn
+		-- =======================================================
+		task.spawn(function()
+			while true do
+				task.wait(0.2)
+				pcall(function()
+					-- Diamond display
+					if diamondDisplayLabel and diamondDisplayLabel.Parent then
+						local t = diamondDisplayLabel.Text
+						if type(t) == "string" and t:find("table:") then
+							-- Bị table → đổi về tên item đã chọn
+							if State.selectedItem and PointItemM and PointItemM[State.selectedItem] then
+								diamondDisplayLabel.Text = State.selectedItem .. " (" .. PointItemM[State.selectedItem] .. "P)"
+							else
+								diamondDisplayLabel.Text = "Chọn..."
+							end
+						end
+					end
+					
+					-- Moon display
+					if moonDisplayLabel and moonDisplayLabel.Parent then
+						local t = moonDisplayLabel.Text
+						if type(t) == "string" and t:find("table:") then
+							if State.selectedMoonItem and PointItemMoon and PointItemMoon[State.selectedMoonItem] then
+								moonDisplayLabel.Text = State.selectedMoonItem .. " (" .. PointItemMoon[State.selectedMoonItem] .. "P)"
+							else
+								moonDisplayLabel.Text = "Chọn..."
+							end
+						end
+					end
+				end)
+			end
+		end)
+
+		-- =======================================================
+		--  AUTO MUA
 		-- =======================================================
 		local AutoSec = Tab:CreateSection("🔁 Auto Mua")
 
@@ -387,8 +410,8 @@ ForceSetDisplay(found.optStr)
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "✅ v36 Loaded",
-			Description = "Không filter dropdown — không bug",
+			Title = "✅ v38 Loaded",
+			Description = "Direct display text",
 			Duration = 5,
 		})
 	end,
