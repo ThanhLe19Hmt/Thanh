@@ -2,8 +2,8 @@
     FarmFeatures Module: Tất cả tính năng farm
 ]]
 
-local Core = loadstring(game:HttpGet("URL_CORE"))()
-local Combat = loadstring(game:HttpGet("URL_COMBAT"))()
+local Core = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Core.lua"))()
+local Combat = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Combat.lua"))()
 
 local ReplicatedStorage = Core.Services.ReplicatedStorage
 local LocalPlayer = Core.Services.LocalPlayer
