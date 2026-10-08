@@ -26,7 +26,7 @@ return {
 		end
 
 		-- ⭐⭐⭐ DÁN LIST DUMP VÀO ĐÂY ⭐⭐⭐
-		local FALLBACK_DIAMOND = {
+	local FALLBACK_DIAMOND = {
 			-- ⭐ AUTO-DUMPED — 2026-10-08 11:49:34
 	{ name = "Bacon", price = 5 },
 	{ name = "Duck", price = 5 },
@@ -341,7 +341,7 @@ return {
 		end)
 
 		local searchD = DiamondSec:Textbox({
-			Title = "🔍 Nhập tên + Enter",
+			Title = "🔍 Nhập tên + Enter 12",
 			Placeholder = "VD: Wood, Duck",
 			Value = "",
 		})
