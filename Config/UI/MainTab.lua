@@ -665,4 +665,49 @@ function MainTab:InitShopDungeon(ShopDunCard, ShopDunInfoCard)
                                     local titleLbl = main:FindFirstChild("TitleLabel")
                                     if titleLbl and titleLbl.Text == AutoBuyDunItem then
                                         local btn = main:FindFirstChild("TextButton")
-                                        local priceLbl = btn and btn:FindFirstChild
+                                        local priceLbl = btn and btn:FindFirstChild("TextLabel")
+                                        ShopDunItemInfo:SetTitle("Item: " .. AutoBuyDunItem)
+                                        ShopDunItemInfo:SetContent("Price: " .. (priceLbl and priceLbl.Text or "?"))
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+
+    task.spawn(function()
+        while task.wait(0.5) do
+            if _G.AutoBuyDunRunning and AutoBuyDunItem then
+                pcall(function()
+                    local hud = Globals.LocalPlayer.PlayerGui:FindFirstChild("HUD")
+                    if not hud or not hud:FindFirstChild("Main") then return end
+                    local shop = hud.Main:FindFirstChild("Frame_ShopDungeon")
+                    if not shop then return end
+                    local sf = shop:FindFirstChild("ShopScrollingFrame")
+                    if not sf then return end
+                    for _, item in pairs(sf:GetChildren()) do
+                        if item:IsA("Frame") then
+                            local main = item:FindFirstChild("Main")
+                            if main then
+                                local titleLbl = main:FindFirstChild("TitleLabel")
+                                if titleLbl and titleLbl.Text == AutoBuyDunItem then
+                                    Globals.ReplicatedStorage.Modules.NetworkFramework.NetworkEvent
+                                        :FireServer("fire", nil, "BuyDungeonShop", AutoBuyDunItem)
+                                    print("[AutoBuyDun] Mua:", AutoBuyDunItem)
+                                    task.wait(0.3)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    end)
+end
+
+return MainTab
