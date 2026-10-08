@@ -1860,4 +1860,893 @@ task.spawn(function()
     end
 end)
 
+-- ============================================================
+-- BỔ SUNG: AUTO RAID BOSS v17
+-- ============================================================
+_G.RaidWaitingClear = false
+_G.RaidDying = false
+
+task.spawn(function()
+    print("[AutoRaid] ✅ task.spawn v17 đã khởi động!")
+    while task.wait(0.3) do
+        if _G.AutoRaidRunning then
+            local Data = RaidBossData and RaidBossData[_G.AutoRaidWho]
+            if Data and Data.Valid then
+                pcall(function()
+                    local char = LocalPlayer.Character
+                    local hum = char and char:FindFirstChild("Humanoid")
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    if not hum or not hrp then return end
+
+                    if hum.Health <= 0 then
+                        if not _G.RaidDying then
+                            _G.RaidDying = true
+                            _G.RaidWaitingClear = true
+                            print("[AutoRaid] Nhân vật chết → đợi boss biến mất...")
+                            for _, name in ipairs({"AutoRaidBP", "AutoRaidAP", "AutoRaidAO", "AutoRaidAtt"}) do
+                                if hrp:FindFirstChild(name) then hrp[name]:Destroy() end
+                            end
+                        end
+                        return
+                    else
+                        _G.RaidDying = false
+                    end
+
+                    local bf = workspace:FindFirstChild("Boss Fight")
+                    local baconFolder = bf and bf:FindFirstChild("Bacon of Grudge")
+
+                    if _G.RaidWaitingClear then
+                        if baconFolder then
+                            print("[AutoRaid] Đợi boss biến mất...")
+                            task.wait(1)
+                            return
+                        else
+                            print("[AutoRaid] Boss biến mất, mở raid mới!")
+                            _G.RaidWaitingClear = false
+                            task.wait(1)
+                        end
+                    end
+
+                    if baconFolder then
+                        local function TeleportTo(targetPart, offsetY, offsetX)
+                            if not hrp or not hrp.Parent or not targetPart then return end
+                            if hrp:FindFirstChild("AutoRaidBP") then hrp.AutoRaidBP:Destroy() end
+                            if hrp:FindFirstChild("AutoRaidAP") then hrp.AutoRaidAP:Destroy() end
+                            local targetPos = targetPart.Position + Vector3.new(offsetX or 0, offsetY or 25, 0)
+                            local targetCF = CFrame.new(targetPos, targetPart.Position)
+                            hrp.CFrame = targetCF
+                            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        end
+
+                        local function CleanupBP()
+                            for _, name in ipairs({"AutoRaidBP", "AutoRaidAP", "AutoRaidAO", "AutoRaidAtt"}) do
+                                if hrp:FindFirstChild(name) then hrp[name]:Destroy() end
+                            end
+                        end
+
+                        local function AttackTarget(targetPart, targetModel, offsetY, offsetX)
+                            if not targetPart or not targetModel then return end
+                            if not targetModel:FindFirstChild("Humanoid") then return end
+                            if targetModel.Humanoid.Health <= 0 then return end
+
+                            targetModel.Humanoid.WalkSpeed = 0
+                            targetModel.Humanoid.JumpPower = 0
+
+                            repeat task.wait(0.03)
+                                if not _G.AutoRaidRunning then break end
+                                if not targetModel.Parent then break end
+                                if targetModel.Humanoid.Health <= 0 then break end
+                                if hum.Health <= 0 then break end
+                                if not targetPart.Parent then break end
+                                TeleportTo(targetPart, offsetY, offsetX)
+                                EquipWeapon()
+                                AutoSkill()
+                                Attack()
+                            until false
+                            CleanupBP()
+                        end
+
+                        -- Ball 1
+                        local A1 = baconFolder:FindFirstChild("ArmorBall1")
+                        if A1 and A1:FindFirstChild("Humanoid") and A1.Humanoid.Health > 0 then
+                            print("[AutoRaid] Đánh ArmorBall1")
+                            AttackTarget(A1:FindFirstChild("HumanoidRootPart"), A1, _G.RaidBallOffsetY or 25, 0)
+                        end
+
+                        -- Ball 2
+                        local A2 = baconFolder:FindFirstChild("ArmorBall2")
+                        if _G.AutoRaidRunning and A2 and A2:FindFirstChild("Humanoid") and A2.Humanoid.Health > 0 then
+                            print("[AutoRaid] Đánh ArmorBall2")
+                            AttackTarget(A2:FindFirstChild("HumanoidRootPart"), A2, _G.RaidBallOffsetY or 25, 0)
+                        end
+
+                        -- Boss
+                        local BossBacon = baconFolder:FindFirstChild("Boss Bacon Sad")
+                        if _G.AutoRaidRunning and BossBacon and BossBacon:FindFirstChild("Humanoid") and BossBacon.Humanoid.Health > 0 then
+                            local bossHrp = BossBacon:FindFirstChild("HumanoidRootPart")
+                            if bossHrp then
+                                print("[AutoRaid] Đánh Boss Bacon Sad")
+                                AttackTarget(bossHrp, BossBacon, _G.RaidBossOffsetY or 55, 5)
+                            end
+                        end
+
+                        if _G.AutoRaidRunning then task.wait(2) end
+                    else
+                        print("[AutoRaid] Chưa vào map")
+                        for _, name in ipairs({"AutoRaidBP", "AutoRaidAP", "AutoRaidAO", "AutoRaidAtt"}) do
+                            if hrp:FindFirstChild(name) then hrp[name]:Destroy() end
+                        end
+
+                        local TPZone = workspace:FindFirstChild("TeleportBossFightZone")
+                        if TPZone and TPZone:FindFirstChild("Hitbox") then
+                            print("[AutoRaid] Vào portal (đợi vô hạn)")
+                            local Hitbox = TPZone.Hitbox
+                            hrp.Anchored = true
+                            local LastPrint = 0
+                            repeat task.wait(0.1)
+                                if not _G.AutoRaidRunning then break end
+                                if hrp.Parent then
+                                    hrp.CFrame = Hitbox.CFrame
+                                    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                                end
+                                if tick() - LastPrint > 3 then
+                                    LastPrint = tick()
+                                    print("[AutoRaid] Đang đợi portal teleport...")
+                                end
+                                if not TPZone.Parent then
+                                    print("[AutoRaid] Cổng biến mất, thoát loop")
+                                    break
+                                end
+                                if workspace:FindFirstChild("Boss Fight") then
+                                    print("[AutoRaid] Đã vào map!")
+                                    break
+                                end
+                            until false
+                            hrp.Anchored = false
+                            if workspace:FindFirstChild("Boss Fight") then
+                                print("[AutoRaid] Đã vào map, đợi 3s...")
+                                task.wait(3)
+                            else
+                                task.wait(1)
+                            end
+                        else
+                            if GetItemAmount("Portal Gun") < Data.PortalCost then
+                                _G.SeaNotify("❌ Không đủ Portal Gun", "Cần " .. Data.PortalCost .. " Portal Gun!", 4)
+                                _G.AutoRaidRunning = false
+                                return
+                            end
+
+                            print("[AutoRaid] Fire SpawnBossFight: " .. Data.Name)
+                            ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "SpawnBossFight", Data.Name)
+                            task.wait(2)
+
+                            local TPZone2 = workspace:FindFirstChild("TeleportBossFightZone")
+                            if TPZone2 and TPZone2:FindFirstChild("Hitbox") then
+                                print("[AutoRaid] Portal xuất hiện, vào Hitbox!")
+                                local Hitbox2 = TPZone2.Hitbox
+                                hrp.Anchored = true
+                                local LastPrint2 = 0
+                                repeat task.wait(0.1)
+                                    if not _G.AutoRaidRunning then break end
+                                    if hrp.Parent then
+                                        hrp.CFrame = Hitbox2.CFrame
+                                        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                                    end
+                                    if tick() - LastPrint2 > 3 then
+                                        LastPrint2 = tick()
+                                        print("[AutoRaid] Đang đợi portal teleport...")
+                                    end
+                                    if not TPZone2.Parent then
+                                        print("[AutoRaid] Cổng biến mất, thoát loop")
+                                        break
+                                    end
+                                    if workspace:FindFirstChild("Boss Fight") then
+                                        print("[AutoRaid] Đã vào map!")
+                                        break
+                                    end
+                                until false
+                                hrp.Anchored = false
+                                if workspace:FindFirstChild("Boss Fight") then
+                                    print("[AutoRaid] Đã vào map, đợi 3s...")
+                                    task.wait(3)
+                                else
+                                    task.wait(1)
+                                end
+                            else
+                                task.wait(2)
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end)
+
+-- Cleanup khi tắt raid
+task.spawn(function()
+    while task.wait(0.5) do
+        if not _G.AutoRaidRunning then
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, name in ipairs({"AutoRaidBP", "AutoRaidAP", "AutoRaidAO", "AutoRaidAtt"}) do
+                    if hrp:FindFirstChild(name) then hrp[name]:Destroy() end
+                end
+                if hrp.Anchored and not workspace:FindFirstChild("Boss Fight") then
+                    hrp.Anchored = false
+                end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: AUTO DUNGEON (full logic)
+-- ============================================================
+task.spawn(function()
+    while task.wait() do
+        xpcall(function()
+            if not _G.Auto_Dungeon then return end
+            local char = LocalPlayer.Character
+            if not char then return end
+            local hum = char:FindFirstChild("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hum or not hrp then return end
+
+            -- Check HP thấp → bay lên trời
+            local HpPercent = (hum.Health / hum.MaxHealth) * 100
+            if HpPercent < _G.HealthPercent then
+                hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + 200, hrp.Position.Z)
+                task.wait(0.5)
+                return
+            end
+
+            local Dungeon
+            local DungeonId = char:GetAttribute("Dungeon")
+            local GuiService = game:GetService("GuiService")
+            local VirtualInputManager = game:GetService("VirtualInputManager")
+
+            -- Auto skip wave
+            if LocalPlayer.PlayerGui:FindFirstChild("WaveUI") and LocalPlayer.PlayerGui.WaveUI.AutoSkip.BackgroundColor3 == Color3.fromRGB(255, 69, 69) then
+                GuiService.SelectedObject = LocalPlayer.PlayerGui.WaveUI.AutoSkip
+                task.wait(0.1)
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+                task.wait(0.1)
+                GuiService.SelectedObject = nil
+            end
+
+            if DungeonId then
+                Dungeon = workspace.DungeonMap:FindFirstChild("Dungeon_" .. DungeonId)
+            end
+
+            if Dungeon then
+                -- Tìm mob gần nhất
+                local Target, MinDist = nil, math.huge
+                for _, Mob in ipairs(workspace.Mob:GetChildren()) do
+                    if Mob:IsA("Model") and Mob:FindFirstChild("Humanoid") and Mob:FindFirstChild("HumanoidRootPart") and Mob.Humanoid.Health > 0 then
+                        local dist = (Mob.HumanoidRootPart.Position - Dungeon:GetPivot().Position).Magnitude
+                        if dist <= 250 and dist < MinDist then
+                            MinDist = dist
+                            Target = Mob
+                        end
+                    end
+                end
+
+                if Target then
+                    local tHrp = Target.HumanoidRootPart
+                    Target.Humanoid.WalkSpeed = 0
+                    Target.Humanoid.JumpPower = 0
+
+                    local bp = hrp:FindFirstChild("DungeonBP")
+                    if not bp then
+                        bp = Instance.new("BodyPosition")
+                        bp.Name = "DungeonBP"
+                        bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                        bp.P = 100000
+                        bp.D = 3000
+                        bp.Parent = hrp
+                    end
+
+                    local targetPos = tHrp.Position + Vector3.new(0, _G.DungeonHeight or 25, 0)
+                    bp.Position = targetPos
+                    hrp.CFrame = CFrame.new(targetPos, tHrp.Position)
+
+                    EquipWeapon()
+                    AutoSkill()
+                    Attack()
+                else
+                    if hrp:FindFirstChild("DungeonBP") then
+                        hrp.DungeonBP:Destroy()
+                    end
+                end
+            else
+                -- Chưa vào dungeon
+                local TeleportZone = workspace:FindFirstChild("TeleportDungeonZone")
+                if TeleportZone and TeleportZone:FindFirstChild("Hitbox") then
+                    hrp.CFrame = TeleportZone.Hitbox.CFrame
+                else
+                    if GetItemAmount("Orb Dungeon") >= _G.Dungeon_UseValue then
+                        local NPC = workspace.NpcPrompt["Open Dungeon"].HumanoidRootPart
+                        hrp.CFrame = NPC.CFrame * CFrame.new(0, 5, 0)
+                        ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "SpawnDungeon", _G.Dungeon_UseValue)
+                    else
+                        local Diamond = LocalPlayer:GetAttribute("Diamond") or 0
+                        if Diamond >= 150 then
+                            ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "RandomItem", "x15")
+                        else
+                            local quest = GetQuest_Level(tonumber(LocalPlayer:GetAttribute("Level")))
+                            if not quest then return end
+                            local Frame = GetQuestFrame()
+                            local Text = Frame.Title.Text or ""
+                            if LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Title.Text ~= quest.Monster then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                            end
+                            if Frame.Visible and not string.find(Text, quest.Monster) then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                                repeat task.wait() until not Frame.Visible
+                            end
+                            if not Frame.Visible then
+                                local npc = quest.Quest:FindFirstChild("HumanoidRootPart")
+                                if npc then
+                                    hrp.CFrame = npc.CFrame * MethodFarm
+                                    task.wait(0.3)
+                                    local pro = npc:FindFirstChildOfClass("ProximityPrompt")
+                                    if pro then fireproximityprompt(pro) end
+                                end
+                            else
+                                for _, v in ipairs(workspace.Mob:GetChildren()) do
+                                    if v:IsA("Model") and v.Name == quest.Monster and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                                        v.Humanoid.WalkSpeed = 0
+                                        v.Humanoid.JumpPower = 0
+                                        hrp.CFrame = v.HumanoidRootPart.CFrame * MethodFarm
+                                        EquipWeapon()
+                                        AutoSkill()
+                                        Attack()
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end, print)
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: AUTO DUCK FULL
+-- ============================================================
+task.spawn(function()
+    while task.wait() do
+        if _G.Auto_DuckAutomatically then
+            pcall(function()
+                if workspace.Mob:FindFirstChild("Duck Monster") then
+                    for _, v in pairs(workspace.Mob:GetChildren()) do
+                        if v:IsA("Model") and v.Name == "Duck Monster" and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") and v.Humanoid.Health > 0 then
+                            v.Humanoid.WalkSpeed = 0
+                            v.Humanoid.JumpPower = 0
+                            repeat task.wait()
+                                EquipWeapon()
+                                AutoSkill()
+                                Attack()
+                                Teleport(v.HumanoidRootPart.CFrame * MethodFarm)
+                            until not _G.Auto_DuckAutomatically or not v.Parent or v.Humanoid.Health <= 0
+                            ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                        end
+                    end
+                else
+                    if workspace.Itemdrops:FindFirstChild("Duck Monster") then
+                        Teleport(workspace.Itemdrops:FindFirstChild("Duck Monster").CFrame)
+                    else
+                        local DuckItems = {"Duck", "Duck2", "Duck3", "Duck4", "Duck5", "Duck6", "Duck7"}
+                        local HaveAll = true
+                        for _, Item in ipairs(DuckItems) do
+                            if GetItemAmount(Item) <= 0 then
+                                HaveAll = false
+                                break
+                            end
+                        end
+                        if HaveAll then
+                            local Point = tonumber(LocalPlayer:GetAttribute("PointItem")) or 0
+                            if Point > 750 and GetItemAmount("Duck6") <= 0 then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "BuyGaranteeRandomItem", "Duck6")
+                            elseif Point > 850 and GetItemAmount("Duck7") <= 0 then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "BuyGaranteeRandomItem", "Duck7")
+                            else
+                                Teleport(workspace.NpcPrompt.DuckMonster.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
+                                fireproximityprompt(workspace.NpcPrompt.DuckMonster.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt"))
+                            end
+                        else
+                            local Diamond = LocalPlayer:GetAttribute("Diamond") or 0
+                            if Diamond >= 150 then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "RandomItem", "x15")
+                            else
+                                local quest = GetQuest_Level(tonumber(LocalPlayer:GetAttribute("Level")))
+                                if not quest then return end
+                                local Frame = GetQuestFrame()
+                                local Text = Frame.Title.Text or ""
+                                if LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Title.Text ~= quest.Monster then
+                                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                                end
+                                if Frame.Visible and not string.find(Text, quest.Monster) then
+                                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                                    repeat task.wait() until not Frame.Visible
+                                end
+                                if not Frame.Visible then
+                                    local npc = quest.Quest:FindFirstChild("HumanoidRootPart")
+                                    if npc then
+                                        Teleport(npc.CFrame * CFrame.new(0, 5, 0))
+                                        task.wait(0.3)
+                                        local pro_xim = npc:FindFirstChildOfClass("ProximityPrompt")
+                                        if pro_xim then fireproximityprompt(pro_xim) end
+                                    end
+                                else
+                                    for _, v in pairs(workspace.Mob:GetChildren()) do
+                                        if v:IsA("Model") and v.Name == quest.Monster and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                                            local hrp = v:FindFirstChild("HumanoidRootPart")
+                                            if hrp then
+                                                v.Humanoid.WalkSpeed = 0
+                                                v.Humanoid.JumpPower = 0
+                                                repeat task.wait()
+                                                    EquipWeapon()
+                                                    AutoSkill()
+                                                    Attack()
+                                                    Teleport(hrp.CFrame * MethodFarm)
+                                                until not _G.Auto_DuckAutomatically or v.Humanoid.Health <= 0
+                                            end
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: AUTO FARM BOSS FULL
+-- ============================================================
+task.spawn(function()
+    while task.wait() do
+        if _G.Auto_FarmBoss_Automatically then
+            pcall(function()
+                if workspace.Boss:FindFirstChildOfClass("Model") then
+                    for _, v in pairs(workspace.Boss:GetChildren()) do
+                        if table.find(Bosses, v.Name) and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") and v.Humanoid.Health > 0 then
+                            v.Humanoid.WalkSpeed = 0
+                            v.Humanoid.JumpPower = 0
+                            repeat
+                                task.wait()
+                                EquipWeapon()
+                                AutoSkill()
+                                Attack()
+                                Teleport(v.HumanoidRootPart.CFrame * MethodFarm)
+                            until not _G.Auto_FarmBoss_Automatically or not v.Parent or v.Humanoid.Health <= 0
+                            ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                        end
+                    end
+                else
+                    if GetItemAmount("Orb Boss") >= 1 then
+                        ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "SummonBoss", _G.Select_Boss)
+                    else
+                        local Diamond = LocalPlayer:GetAttribute("Diamond") or 0
+                        if Diamond >= 150 then
+                            ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "RandomItem", "x15")
+                        else
+                            local quest = GetQuest_Level(tonumber(LocalPlayer:GetAttribute("Level")))
+                            if not quest then return end
+                            local Frame = GetQuestFrame()
+                            local Text = Frame.Title.Text or ""
+                            if LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Title.Text ~= quest.Monster then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                            end
+                            if Frame.Visible and not string.find(Text, quest.Monster) then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                                repeat task.wait() until not Frame.Visible
+                            end
+                            if not Frame.Visible then
+                                local npc = quest.Quest:FindFirstChild("HumanoidRootPart")
+                                if npc then
+                                    Teleport(npc.CFrame * MethodFarm)
+                                    task.wait(0.3)
+                                    local pro_xim = npc:FindFirstChildOfClass("ProximityPrompt")
+                                    if pro_xim then fireproximityprompt(pro_xim) end
+                                end
+                            else
+                                for _, v in pairs(workspace.Mob:GetChildren()) do
+                                    if v:IsA("Model") and v.Name == quest.Monster and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                                        local hrp = v:FindFirstChild("HumanoidRootPart")
+                                        if hrp then
+                                            v.Humanoid.WalkSpeed = 0
+                                            v.Humanoid.JumpPower = 0
+                                            repeat task.wait()
+                                                EquipWeapon()
+                                                AutoSkill()
+                                                Attack()
+                                                Teleport(hrp.CFrame * MethodFarm)
+                                            until not _G.Auto_FarmBoss_Automatically or v.Humanoid.Health <= 0
+                                        end
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: AUTO BACON THIEF
+-- ============================================================
+local CurrentSpawn = 1
+task.spawn(function()
+    while task.wait() do
+        pcall(function()
+            if not _G.Auto_BaconThief then return end
+            local Spawns = workspace.MobSpawnGroup:GetChildren()
+            local Spawn = Spawns[CurrentSpawn]
+            if not Spawn then
+                CurrentSpawn = 1
+                return
+            end
+            local ChestRef = Spawn:FindFirstChild("ChestRef", true)
+            if ChestRef then
+                local Target
+                local Distance = 30
+                for _, Mob in ipairs(workspace.Mob:GetChildren()) do
+                    if Mob:IsA("Model") and Mob.Name == "Bacon Thief" and Mob:FindFirstChild("HumanoidRootPart") and Mob:FindFirstChild("Humanoid") and Mob.Humanoid.Health > 0 then
+                        local Mag = (Mob.HumanoidRootPart.Position - ChestRef.Position).Magnitude
+                        if Mag < Distance then
+                            Distance = Mag
+                            Target = Mob
+                        end
+                    end
+                end
+                if Target then
+                    Target.Humanoid.WalkSpeed = 0
+                    Target.Humanoid.JumpPower = 0
+                    EquipWeapon()
+                    AutoSkill()
+                    Attack()
+                    Teleport(Target.HumanoidRootPart.CFrame * MethodFarm)
+                else
+                    local Prompt = ChestRef:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if Prompt and Prompt.Parent and Prompt.ActionText == "Open" then
+                        Teleport(ChestRef.CFrame * CFrame.new(0, 3, 0))
+                        fireproximityprompt(Prompt)
+                    else
+                        CurrentSpawn = CurrentSpawn + 1
+                    end
+                end
+            else
+                CurrentSpawn = CurrentSpawn + 1
+            end
+        end)
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: AUTO RAID MOON (Sea 1)
+-- ============================================================
+task.spawn(function()
+    while task.wait() do
+        pcall(function()
+            if _G.Auto_Raid then
+                if game.PlaceId == 82878101790702 then
+                    for _, v in pairs(workspace.Mob:GetChildren()) do
+                        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") and v.Humanoid.Health > 0 then
+                            v.Humanoid.WalkSpeed = 0
+                            v.Humanoid.JumpPower = 0
+                            repeat task.wait()
+                                EquipWeapon()
+                                AutoSkill()
+                                Attack()
+                                Teleport(v.HumanoidRootPart.CFrame * MethodFarm)
+                            until not _G.Auto_Raid or not v.Parent or v.Humanoid.Health <= 0
+                        end
+                    end
+                else
+                    if workspace:FindFirstChild("TeleportMoonZone") then
+                        Teleport(workspace:FindFirstChild("TeleportMoonZone").Hitbox:GetPivot() * CFrame.new(0, -8, 0))
+                    else
+                        if GetItemAmount("Space Ticket") >= 1 then
+                            Teleport(workspace.NpcPrompt.GoMoon.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0))
+                            fireproximityprompt(workspace.NpcPrompt.GoMoon.HumanoidRootPart:FindFirstChildOfClass("ProximityPrompt"))
+                        else
+                            local Diamond = LocalPlayer:GetAttribute("Diamond") or 0
+                            if Diamond >= 150 then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "RandomItem", "x15")
+                            else
+                                local quest = GetQuest_Level(tonumber(LocalPlayer:GetAttribute("Level")))
+                                if not quest then return end
+                                local Frame = GetQuestFrame()
+                                local Text = Frame.Title.Text or ""
+                                if LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Title.Text ~= quest.Monster then
+                                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                                end
+                                if Frame.Visible and not string.find(Text, quest.Monster) then
+                                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                                    repeat task.wait() until not Frame.Visible
+                                end
+                                if not Frame.Visible then
+                                    local npc = quest.Quest:FindFirstChild("HumanoidRootPart")
+                                    if npc then
+                                        Teleport(npc.CFrame * MethodFarm)
+                                        task.wait(0.3)
+                                        local pro_xim = npc:FindFirstChildOfClass("ProximityPrompt")
+                                        if pro_xim then fireproximityprompt(pro_xim) end
+                                    end
+                                else
+                                    for _, v in pairs(workspace.Mob:GetChildren()) do
+                                        if v:IsA("Model") and v.Name == quest.Monster and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                                            local hrp = v:FindFirstChild("HumanoidRootPart")
+                                            if hrp then
+                                                v.Humanoid.WalkSpeed = 0
+                                                v.Humanoid.JumpPower = 0
+                                                repeat task.wait()
+                                                    EquipWeapon()
+                                                    AutoSkill()
+                                                    Attack()
+                                                    Teleport(hrp.CFrame * MethodFarm)
+                                                until not _G.Auto_Raid or v.Humanoid.Health <= 0
+                                            end
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: AUTO CLOSE REWARD GUI
+-- ============================================================
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+            if not hud or not hud:FindFirstChild("Main") then return end
+
+            local closeList = {
+                {_G.Auto_Dungeon, "Frame_DungeonItem"},
+                {_G.AutoRaidRunning, "Frame_RaidbossItem"}
+            }
+
+            for _, entry in ipairs(closeList) do
+                if entry[1] then
+                    local fd = hud.Main:FindFirstChild(entry[2])
+                    if fd and fd.Visible then
+                        task.wait(2)
+                        local closeBtn = fd:FindFirstChild("Close_")
+                            or fd:FindFirstChild("Close")
+                            or fd:FindFirstChild("CloseButton")
+                            or fd:FindFirstChild("Exit")
+                        if closeBtn then
+                            pcall(function()
+                                if firesignal then
+                                    firesignal(closeBtn.MouseButton1Click)
+                                else
+                                    closeBtn:Activate()
+                                end
+                            end)
+                            print("[AutoClose] Đã đóng:", entry[2])
+                        else
+                            fd.Visible = false
+                            print("[AutoClose] Đã ẩn:", entry[2])
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: CRAFT TABLE LOOP + AUTO CLAIM
+-- ============================================================
+task.spawn(function()
+    while task.wait(0.5) do
+        if _G.AutoCraftRunning and _G.SelectedCraftItem then
+            pcall(function()
+                local Data = CraftingTable[_G.SelectedCraftItem]
+                if not Data or not Data.need then return end
+                local CanCraft = true
+                for Item, Need in pairs(Data.need) do
+                    if GetItemAmount(Item) < Need then
+                        CanCraft = false
+                        break
+                    end
+                end
+                if CanCraft then
+                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", _G.SelectedCraftItem, "Craft")
+                    print("[AutoCraft] Craft:", _G.SelectedCraftItem)
+                    task.wait(0.5)
+                end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(1) do
+        if _G.AutoClaimGuarantee and _G.SelectedCraftItem then
+            pcall(function()
+                local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+                if not hud or not hud:FindFirstChild("Main") then return end
+                local guar = hud.Main:FindFirstChild("Frame_Guarantee")
+                if not guar then return end
+                local sf = guar:FindFirstChild("ScrollingFrame")
+                if not sf then return end
+                local itemFrame = sf:FindFirstChild(_G.SelectedCraftItem)
+                if itemFrame then
+                    local main = itemFrame:FindFirstChild("Main")
+                    if main then
+                        local amtLbl = main:FindFirstChild("AmountLabel")
+                        if amtLbl then
+                            local txt = amtLbl.Text or ""
+                            local cur = tonumber(txt:match("^(%d+)"))
+                            local max = tonumber(txt:match("/(%d+)"))
+                            if cur and max and cur >= max then
+                                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "CraftTable", _G.SelectedCraftItem, "Guarantee")
+                                print("[AutoClaim] Claim:", _G.SelectedCraftItem, txt)
+                                task.wait(1)
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: UPDATE CRAFT INFO
+-- ============================================================
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            if not _G.SelectedCraftItem then return end
+            local Data = CraftingTable[_G.SelectedCraftItem]
+            if not Data or not Data.need then return end
+
+            local ConsumText = ""
+            local AvailText = ""
+            for Item, Need in pairs(Data.need) do
+                local Have = GetItemAmount(Item)
+                ConsumText = ConsumText .. "\n  " .. Item .. " x" .. Need
+                AvailText = AvailText .. "\n  " .. Item .. " " .. Have
+            end
+
+            local CraftedText = "0/2"
+            local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+            if hud and hud:FindFirstChild("Main") then
+                local guar = hud.Main:FindFirstChild("Frame_Guarantee")
+                if guar then
+                    local sf = guar:FindFirstChild("ScrollingFrame")
+                    if sf then
+                        local itemFrame = sf:FindFirstChild(_G.SelectedCraftItem)
+                        if itemFrame then
+                            local main = itemFrame:FindFirstChild("Main")
+                            if main then
+                                local amtLbl = main:FindFirstChild("AmountLabel")
+                                if amtLbl then CraftedText = amtLbl.Text end
+                            end
+                        end
+                    end
+                end
+            end
+
+            CraftInfoPara:SetTitle("Items: " .. _G.SelectedCraftItem)
+            CraftInfoPara:SetContent(
+                "Consumables: " .. (ConsumText ~= "" and ConsumText or " ---") ..
+                "\nCurrently Available: " .. (AvailText ~= "" and AvailText or " ---") ..
+                "\nCrafted Item: " .. CraftedText
+            )
+        end)
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: UPDATE ITEM REQUIREMENTS (Weapon Craft Info)
+-- ============================================================
+task.spawn(function()
+    while task.wait(0.1) do
+        pcall(function()
+            local Data = UseItems[_G.Select_Item]
+            if not Data then return end
+            local Inv = GetInventory()
+            local HaveWeapon = Inv[_G.Select_Item] and (Inv[_G.Select_Item].amount or 0) > 0
+            local Text = {}
+            table.insert(Text, "Need Class : " .. (Data.NeedClass or "None"))
+            table.insert(Text, "Need Beli : " .. tostring((Data.PlayerData and Data.PlayerData.Beli) or 0))
+            local LowestSet = math.huge
+            for Item, Need in pairs(Data.Inventory) do
+                local Have = Inv[Item] and Inv[Item].amount or 0
+                local Set = math.floor(Have / Need)
+                if Set < LowestSet then LowestSet = Set end
+            end
+            if LowestSet == math.huge then LowestSet = 0 end
+            table.insert(Text, "Have Set : " .. LowestSet)
+            table.insert(Text, "")
+            for Item, Need in pairs(Data.Inventory) do
+                local Have = Inv[Item] and Inv[Item].amount or 0
+                local Set = math.floor(Have / Need)
+                table.insert(Text, string.format("%s : %d/%d %s (Set : %d)",
+                    Item, Have, Need, Have >= Need and "✅" or "❌", Set))
+            end
+            Item_Auto:SetTitle("Item Requirements \n( " .. (HaveWeapon and _G.Select_Item .. " ✅" or _G.Select_Item .. " ❌") .. " )")
+            Item_Auto:SetContent(table.concat(Text, "\n"))
+        end)
+    end
+end)
+
+-- ============================================================
+-- BỔ SUNG: NOCLIP + ANTI-GRAVITY
+-- ============================================================
+task.spawn(function()
+    while task.wait() do
+        if _G.Auto_Farm_Level or _G.Auto_CraftWeapon or _G.Auto_Farm_Material 
+           or _G.Auto_FarmBoss_Automatically or _G.Auto_FarmBoss 
+           or _G.Auto_DuckAutomatically or _G.Auto_Duck or _G.Auto_Farm_Set 
+           or _G.Auto_Raid or _G.Auto_BaconThief or _G.Auto_Dungeon 
+           or _G.Auto_Piccolo or _G.Auto_DevilBoat then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local HRP = char and char:FindFirstChild("HumanoidRootPart")
+                if HRP then
+                    HRP.AssemblyAngularVelocity = Vector3.zero
+                    local Vel = HRP.AssemblyLinearVelocity
+                    HRP.AssemblyLinearVelocity = Vector3.new(0, Vel.Y, 0)
+                end
+            end)
+        end
+    end
+end)
+
+task.spawn(function()
+    pcall(function()
+        RunService.Stepped:Connect(function()
+            if _G.Auto_Farm_Level or _G.Auto_CraftWeapon or _G.Auto_Farm_Material 
+               or _G.Auto_FarmBoss_Automatically or _G.Auto_FarmBoss 
+               or _G.Auto_DuckAutomatically or _G.Auto_Duck or _G.Auto_Farm_Set 
+               or _G.Auto_Raid or _G.Auto_BaconThief or _G.Auto_Dungeon 
+               or _G.Auto_Piccolo or _G.Auto_DevilBoat then
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if not hrp:FindFirstChild("BodyClip") then
+                        local Noclip = Instance.new("BodyVelocity")
+                        Noclip.Name = "BodyClip"
+                        Noclip.Parent = hrp
+                        Noclip.MaxForce = Vector3.new(100000, 100000, 100000)
+                        Noclip.Velocity = Vector3.new(0, 0, 0)
+                    end
+                end
+            else
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp:FindFirstChild("BodyClip") then
+                    hrp.BodyClip:Destroy()
+                end
+            end
+        end)
+    end)
+end)
+
 print("[Sea 1] ✅ Load thành công!")
