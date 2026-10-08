@@ -1318,6 +1318,15 @@ function NeoUI:CreateWindow(opts)
 						display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
 					end
 				end
+					-- ⭐⭐⭐ METHOD MỚI: set display trực tiếp
+						handle.SetDisplayText = function(text)
+							if type(text) ~= "string" then return end
+							display.Text = text
+						end
+
+						handle.GetDisplayLabel = function()
+							return display
+						end
 				return handle
 			end
 
@@ -1853,6 +1862,16 @@ function NeoUI:CreateWindow(opts)
 							end
 
 							UpdateDisplay()
+						end
+						-- ⭐⭐⭐ METHOD MỚI: set display trực tiếp, không qua selected
+						handle.SetDisplayText = function(text)
+							if type(text) ~= "string" then return end
+							display.Text = text
+						end
+
+						-- ⭐⭐⭐ METHOD MỚI: lấy label display
+						handle.GetDisplayLabel = function()
+							return display
 						end
 						return handle
 					end
