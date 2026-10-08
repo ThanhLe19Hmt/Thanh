@@ -686,34 +686,72 @@ local ShopItemInfo = ShopRaidInfoCard:Paragraph({
     Content = "Chọn item từ dropdown"
 })
 
-local SelectedShopItem = nil
+-- Lưu selection vào _G
+_G.SelectedShopItem = nil
 local ShopItemDropdown = nil
 local LastShopItemsStr = ""
+local ShopDropdownInitialized = false
 
-local function RefreshShopDropdown(items)
+-- Hàm tạo/cập nhật dropdown
+local function UpdateShopDropdown(items)
+    if #items == 0 then return end
     local itemsStr = table.concat(items, ",")
     if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
     LastShopItemsStr = itemsStr
-    if ShopItemDropdown then
-        pcall(function() ShopItemDropdown:Destroy() end)
+
+    -- Nếu chưa có dropdown → tạo mới
+    if not ShopItemDropdown then
+        ShopItemDropdown = ShopRaidCard:Dropdown({
+            Title = "Select Items to Purchase",
+            Options = items,
+            Multi = false,
+            Callback = function(Value)
+                _G.SelectedShopItem = Value
+                ShopItemInfo:SetTitle("Item: " .. Value)
+                ShopItemInfo:SetContent("Đã chọn — bấm BUY để mua")
+                print("[ShopRaid] Đã chọn:", Value)
+            end
+        })
+        ShopDropdownInitialized = true
+    else
+        -- Đã có dropdown → thử update Options
+        local updated = false
+        pcall(function()
+            if ShopItemDropdown.Set then
+                ShopItemDropdown:Set(items)
+                updated = true
+            elseif ShopItemDropdown.UpdateOptions then
+                ShopItemDropdown:UpdateOptions(items)
+                updated = true
+            end
+        end)
+        -- Nếu không update được → Destroy + tạo mới
+        if not updated then
+            pcall(function() ShopItemDropdown:Destroy() end)
+            ShopItemDropdown = ShopRaidCard:Dropdown({
+                Title = "Select Items to Purchase",
+                Options = items,
+                Multi = false,
+                Callback = function(Value)
+                    _G.SelectedShopItem = Value
+                    ShopItemInfo:SetTitle("Item: " .. Value)
+                    ShopItemInfo:SetContent("Đã chọn — bấm BUY để mua")
+                    print("[ShopRaid] Đã chọn:", Value)
+                end
+            })
+        end
     end
-    ShopItemDropdown = ShopRaidCard:Dropdown({
-        Title = "Select Items to Purchase",
-        Options = items,
-        Multi = false,
-        Callback = function(Value) SelectedShopItem = Value end
-    })
 end
 
 ShopRaidCard:Button({
     Title = "BUY!!",
     Callback = function()
-        if not SelectedShopItem then
+        if not _G.SelectedShopItem then
             _G.SeaNotify("❌ Chưa chọn item", "Vui lòng chọn item trước!", 3)
             return
         end
-        ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "buy_raidshop", SelectedShopItem)
-        _G.SeaNotify("✅ Đã mua", SelectedShopItem, 3)
+        ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "buy_raidshop", _G.SelectedShopItem)
+        _G.SeaNotify("✅ Đã mua", _G.SelectedShopItem, 3)
     end
 })
 
@@ -728,11 +766,13 @@ local ShopDunItemInfo = ShopDunInfoCard:Paragraph({
     Content = "Chọn item từ dropdown"
 })
 
-local AutoBuyDunItem = nil
+-- Lưu selection vào _G
+_G.AutoBuyDunItem = nil
 _G.AutoBuyDunRunning = false
 local AutoBuyDunDropdown = nil
 local LastAutoBuyDunStr = ""
 
+-- Hàm lấy tất cả item Shop Dungeon (quét thật)
 local function GetAllShopDunItems()
     local items = {}
     local seen = {}
@@ -759,45 +799,69 @@ local function GetAllShopDunItems()
             end
         end
     end
-    local Defaults = {"Plastic", "Rope", "Glue Elephant", "Cow leather", "Stopwatch",
-        "Banana Leaf", "Scarf Old", "Snake leather", "Crocodile leather",
-        "Microphone", "Trainer Notes"}
-    for _, name in ipairs(Defaults) do
-        if not seen[name] then
-            seen[name] = true
-            table.insert(items, name)
-        end
-    end
     table.sort(items)
     return items
 end
 
-local function RefreshAutoBuyDunDropdown(items)
+-- Hàm update dropdown
+local function UpdateDunDropdown(items)
+    if #items == 0 then return end
     local itemsStr = table.concat(items, ",")
     if itemsStr == LastAutoBuyDunStr and AutoBuyDunDropdown then return end
     LastAutoBuyDunStr = itemsStr
-    if AutoBuyDunDropdown then
-        pcall(function() AutoBuyDunDropdown:Destroy() end)
+
+    if not AutoBuyDunDropdown then
+        AutoBuyDunDropdown = ShopDunCard:Dropdown({
+            Title = "Auto Buy Items",
+            Options = items,
+            Multi = false,
+            Callback = function(Value)
+                _G.AutoBuyDunItem = Value
+                ShopDunItemInfo:SetTitle("Item: " .. Value)
+                ShopDunItemInfo:SetContent("Đã chọn — bật Toggle Auto Buy")
+                print("[ShopDun] Đã chọn:", Value)
+            end
+        })
+    else
+        -- Thử update Options
+        local updated = false
+        pcall(function()
+            if AutoBuyDunDropdown.Set then
+                AutoBuyDunDropdown:Set(items)
+                updated = true
+            elseif AutoBuyDunDropdown.UpdateOptions then
+                AutoBuyDunDropdown:UpdateOptions(items)
+                updated = true
+            end
+        end)
+        if not updated then
+            pcall(function() AutoBuyDunDropdown:Destroy() end)
+            AutoBuyDunDropdown = ShopDunCard:Dropdown({
+                Title = "Auto Buy Items",
+                Options = items,
+                Multi = false,
+                Callback = function(Value)
+                    _G.AutoBuyDunItem = Value
+                    ShopDunItemInfo:SetTitle("Item: " .. Value)
+                    ShopDunItemInfo:SetContent("Đã chọn — bật Toggle Auto Buy")
+                    print("[ShopDun] Đã chọn:", Value)
+                end
+            })
+        end
     end
-    AutoBuyDunDropdown = ShopDunCard:Dropdown({
-        Title = "Auto Buy Items",
-        Options = items,
-        Multi = false,
-        Callback = function(Value) AutoBuyDunItem = Value end
-    })
 end
 
 ShopDunCard:Toggle({
     Title = "Auto Buy",
     Value = false,
     Callback = function(Value)
-        if Value and not AutoBuyDunItem then
+        if Value and not _G.AutoBuyDunItem then
             _G.SeaNotify("❌ Chưa chọn item", "Chọn item Auto Buy trước!", 3)
             _G.AutoBuyDunRunning = false
             return
         end
         _G.AutoBuyDunRunning = Value
-        _G.SeaNotify(Value and "▶️ Bật Auto Buy" or "⏹️ Tắt Auto Buy", AutoBuyDunItem or "N/A", 3)
+        _G.SeaNotify(Value and "▶️ Bật Auto Buy" or "⏹️ Tắt Auto Buy", _G.AutoBuyDunItem or "N/A", 3)
     end
 })
 
@@ -1507,30 +1571,30 @@ end)
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
-            local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-            if not hud or not hud:FindFirstChild("Main") then return end
-            local shop = hud.Main:FindFirstChild("Frame_ShopDungeon")
-            if not shop then return end
             local ptAttr = LocalPlayer:GetAttribute("DungeonPoint") or 0
             ShopDunInfoPara:SetTitle("DungeonPoint: " .. tostring(ptAttr))
+
+            -- Quét item thật + update dropdown
             local items = GetAllShopDunItems()
-            RefreshAutoBuyDunDropdown(items)
+            if #items > 0 then
+                UpdateDunDropdown(items)
+            end
         end)
     end
 end)
 
 task.spawn(function()
     while task.wait(0.5) do
-        if _G.AutoBuyDunRunning and AutoBuyDunItem then
+        if _G.AutoBuyDunRunning and _G.AutoBuyDunItem then
             pcall(function()
-                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "BuyDungeonShop", AutoBuyDunItem)
+                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "BuyDungeonShop", _G.AutoBuyDunItem)
                 task.wait(0.3)
             end)
         end
     end
 end)
 
--- ===== SHOP RAID LOOP =====
+-- ===== SHOP RAID LOOP (quét item thật + update info) =====
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -1538,12 +1602,16 @@ task.spawn(function()
             if not hud or not hud:FindFirstChild("Main") then return end
             local shop = hud.Main:FindFirstChild("Frame_ShopRaid")
             if not shop then return end
+
+            -- Update RaidPoint
             local rpLbl = shop:FindFirstChild("RaidPoint")
             local resetLbl = shop:FindFirstChild("Reset")
             if rpLbl and resetLbl then
                 ShopInfoPara:SetTitle(rpLbl.Text)
                 ShopInfoPara:SetContent(resetLbl.Text)
             end
+
+            -- Quét item thật từ shop
             local sf = shop:FindFirstChild("ScrollingFrame")
             if sf then
                 local items = {}
@@ -1557,7 +1625,7 @@ task.spawn(function()
                 end
                 if #items > 0 then
                     table.sort(items)
-                    RefreshShopDropdown(items)
+                    UpdateShopDropdown(items)
                 end
             end
         end)
