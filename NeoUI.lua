@@ -230,12 +230,24 @@ function DropdownPopup:Open(anchorBtn, options, onSelect)
 	local viewportY = workspace.CurrentCamera.ViewportSize.Y
 
 	local itemH = 26
-	local maxShow = math.min(#options, 12)
-	local popupH = maxShow * itemH + 8
+    -- ⭐ Giới hạn theo màn hình (mobile)
+    local viewportY = workspace.CurrentCamera.ViewportSize.Y
+    local maxH = math.min(viewportY * 0.55, 400)   -- Tối đa 55% màn hình hoặc 400px
 
-	local openUp = (absPos.Y + absSize.Y + popupH + 10 > viewportY)
-	local posY = openUp and (absPos.Y - popupH - 4) or (absPos.Y + absSize.Y + 4)
-	local posX = absPos.X
+	local viewportX = workspace.CurrentCamera.ViewportSize.X
+    -- ⭐ Giới hạn chiều cao popup theo màn hình (mobile)
+    local maxH = math.min(viewportY * 0.55, 400)
+    local maxShow = math.min(#options, math.floor((maxH - 8) / itemH))
+    local popupH = maxShow * itemH + 8
+    local cardW = math.max(absSize.X, 180)
+
+    -- Quyết định mở lên hay xuống
+    local openUp = (absPos.Y + absSize.Y + popupH + 10 > viewportY)
+    local posY = openUp and (absPos.Y - popupH - 4) or (absPos.Y + absSize.Y + 4)
+
+    -- ⭐ Clamp cả X và Y trong viewport
+    posY = math.clamp(posY, 8, viewportY - popupH - 8)
+    posX = math.clamp(absPos.X, 8, viewportX - cardW - 8)
 
 	local popup = Create("Frame", {
 		Parent = gui, BackgroundColor3 = THEME.Surface,
