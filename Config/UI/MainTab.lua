@@ -4,7 +4,8 @@
 ]]
 
 local MainTab = {}
-local Globals = _G.__Globals or Globals
+local Globals = _G.__Globals
+assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
 
 -- Pre-build item lists
 local WeaponAll, ItemAll, Bosses = {}, {}, {}
