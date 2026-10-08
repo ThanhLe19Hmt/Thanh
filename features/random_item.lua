@@ -233,11 +233,32 @@ return {
 							if found then
 								State.selectedItem = found.name
 								-- ⭐ Gán TEXT trực tiếp vào display (không dùng Set)
-								if diamondDrop and diamondDrop.Set then
-									pcall(function()
-										diamondDrop:Set(found.optStr)
-									end)
-								end
+								-- ⭐ Gán text TRỰC TIẾP vào TextLabel, KHÔNG dùng Set
+local function ForceSetDisplay(text)
+    if type(text) ~= "string" then return end
+    pcall(function()
+        for _, g in ipairs(CoreGui:GetChildren()) do
+            if g.Name:find("NeoUI_") then
+                for _, c in ipairs(g:GetDescendants()) do
+                    if c:IsA("TextLabel") then
+                        local t = c.Text
+                        if type(t) == "string" and (t == "Chọn..." or t:find("table:") or t:find(" %)") or t == "Chọn") then
+                            -- Chỉ set nếu label này nằm trong khung dropdown
+                            local parentBtn = c.Parent
+                            if parentBtn and parentBtn:IsA("TextButton") then
+                                c.Text = text
+                            end
+                        end
+                    end
+                end
+                break
+            end
+        end
+    end)
+end
+
+-- Gọi khi Enter
+ForceSetDisplay(found.optStr)
 								BuyDiamondItem(found.name)
 								NeoUI.Notify:Show({
 									Title = "✅ " .. found.name,
