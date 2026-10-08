@@ -1,5 +1,5 @@
 -- =========================================================
---  NEO UI - Lightweight Roblox Menu Framework v11
+--  NEO UI - Lightweight Roblox Menu Framework v12
 --  Pure UI - No game functionality
 --  Made by Marven
 -- =========================================================
@@ -205,6 +205,92 @@ local function randomPaletteDiffFrom(c1, c2, c3)
 		tries = tries + 1
 	until tries >= 8 or (pick.menu ~= c1 or pick.slider ~= c2 or pick.button ~= c3)
 	return pick
+end
+
+-- =========================================================
+--  ⭐ POPUP DROPDOWN SERVICE — dùng chung cho mọi Dropdown
+-- =========================================================
+local DropdownPopup = {}
+local activeDropdown = nil
+
+function DropdownPopup:Close()
+	if activeDropdown then
+		local ap = activeDropdown
+		activeDropdown = nil
+		if ap.catcher and ap.catcher.Parent then ap.catcher:Destroy() end
+		if ap.popup and ap.popup.Parent then ap.popup:Destroy() end
+	end
+end
+
+function DropdownPopup:Open(anchorBtn, options, onSelect)
+	DropdownPopup:Close()
+
+	local absPos = anchorBtn.AbsolutePosition
+	local absSize = anchorBtn.AbsoluteSize
+	local viewportY = workspace.CurrentCamera.ViewportSize.Y
+
+	local itemH = 26
+	local maxShow = math.min(#options, 12)
+	local popupH = maxShow * itemH + 8
+
+	local openUp = (absPos.Y + absSize.Y + popupH + 10 > viewportY)
+	local posY = openUp and (absPos.Y - popupH - 4) or (absPos.Y + absSize.Y + 4)
+	local posX = absPos.X
+
+	local popup = Create("Frame", {
+		Parent = gui, BackgroundColor3 = THEME.Surface,
+		Size = UDim2.fromOffset(math.max(absSize.X, 180), popupH),
+		Position = UDim2.fromOffset(posX, posY),
+		ZIndex = 2000, ClipsDescendants = true,
+	}, { Corner(8), Stroke(THEME.Border, 1.2, 0.3) })
+	Reg(Registry.Surface, popup, "BackgroundColor3")
+
+	local scroll = Create("ScrollingFrame", {
+		Parent = popup, BackgroundTransparency = 1,
+		Size = UDim2.new(1, -8, 1, -8),
+		Position = UDim2.new(0, 4, 0, 4),
+		ScrollBarThickness = 2, ScrollBarImageColor3 = THEME.Border,
+		CanvasSize = UDim2.new(0, 0, 0, #options * itemH),
+		BorderSizePixel = 0,
+	}, {
+		Create("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 2),
+		}),
+	})
+
+	for i, opt in ipairs(options) do
+		local ob = Create("TextButton", {
+			Parent = scroll, BackgroundColor3 = THEME.Background,
+			Text = tostring(opt), Font = FONT, TextSize = 11,
+			TextColor3 = THEME.Text,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, 0, 0, itemH - 2),
+			AutoButtonColor = false, LayoutOrder = i,
+		}, { Corner(4), Pad(8, 0, 0, 0) })
+		Reg(Registry.Background, ob, "BackgroundColor3")
+
+		ob.MouseEnter:Connect(function()
+			Tween(ob, { BackgroundColor3 = THEME.SurfaceHover }, 0.12)
+		end)
+		ob.MouseLeave:Connect(function()
+			Tween(ob, { BackgroundColor3 = THEME.Background }, 0.12)
+		end)
+		ob.MouseButton1Click:Connect(function()
+			local chosen = opt
+			DropdownPopup:Close()
+			if onSelect then task.spawn(onSelect, chosen) end
+		end)
+	end
+
+	-- Catcher để đóng khi click ngoài
+	local catcher = Create("TextButton", {
+		Parent = gui, BackgroundTransparency = 1, Text = "",
+		Size = UDim2.new(1, 0, 1, 0), ZIndex = 1999,
+	})
+	catcher.MouseButton1Click:Connect(function() DropdownPopup:Close() end)
+
+	activeDropdown = { popup = popup, catcher = catcher }
 end
 
 -- =========================================================
@@ -965,6 +1051,7 @@ function NeoUI:CreateWindow(opts)
 
 			local Section = {}
 
+			-- ===== Toggle =====
 			function Section:Toggle(cfg)
 				cfg = cfg or {}
 				local state = cfg.Value == true
@@ -1006,6 +1093,7 @@ function NeoUI:CreateWindow(opts)
 				return { Set = set, Get = function() return state end }
 			end
 
+			-- ===== Button =====
 			function Section:Button(cfg)
 				cfg = cfg or {}
 				local btn = Create("TextButton", {
@@ -1021,6 +1109,7 @@ function NeoUI:CreateWindow(opts)
 				return { Instance = btn }
 			end
 
+			-- ===== Slider =====
 			function Section:Slider(cfg)
 				cfg = cfg or {}
 				local minV, maxV, val = cfg.Min or 0, cfg.Max or 100, cfg.Value or (cfg.Min or 0)
@@ -1092,6 +1181,7 @@ function NeoUI:CreateWindow(opts)
 				return { Set = set, Get = function() return val end }
 			end
 
+			-- ===== Textbox =====
 			function Section:Textbox(cfg)
 				cfg = cfg or {}
 				local wrap = Create("Frame", {
@@ -1125,19 +1215,23 @@ function NeoUI:CreateWindow(opts)
 					Tween(box:FindFirstChildOfClass("UIStroke"), { Color = THEME.Border }, 0.15)
 					if cfg.Callback then task.spawn(cfg.Callback, box.Text) end
 				end)
-				return { Set = function(v) box.Text = tostring(v) end, Get = function() return box.Text end }
+				return {
+					Set = function(v) box.Text = tostring(v) end,
+					Get = function() return box.Text end,
+					Instance = box,
+				}
 			end
 
+			-- ===== ⭐ Dropdown dùng POPUP =====
 			function Section:Dropdown(cfg)
 				cfg = cfg or {}
 				local options = cfg.Options or {}
 				local isMulti = cfg.Multi == true
 				local selected = isMulti and (type(cfg.Value) == "table" and cfg.Value or {}) or (cfg.Value or options[1])
-				local opened = false
 
 				local wrap = Create("Frame", {
 					Parent = itemHolder, BackgroundColor3 = THEME.Surface,
-					Size = UDim2.new(1, 0, 0, 56), ClipsDescendants = true,
+					Size = UDim2.new(1, 0, 0, 56),
 				}, { Corner(6) })
 				Reg(Registry.Surface, wrap, "BackgroundColor3")
 
@@ -1147,6 +1241,7 @@ function NeoUI:CreateWindow(opts)
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Position = UDim2.new(0, 10, 0, 6), Size = UDim2.new(1, -20, 0, 16),
 				})
+
 				local mainBtn = Create("TextButton", {
 					Parent = wrap, BackgroundColor3 = THEME.Background,
 					Text = "", Size = UDim2.new(1, -20, 0, 24),
@@ -1156,121 +1251,65 @@ function NeoUI:CreateWindow(opts)
 
 				local display = Create("TextLabel", {
 					Parent = mainBtn, BackgroundTransparency = 1,
-					Text = "Chọn...", Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
+					Text = isMulti and "Chọn..." or (selected and tostring(selected) or "Chọn..."),
+					Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -30, 1, 0),
+					TextTruncate = Enum.TextTruncate.AtEnd,
 				})
 				local arrow = Create("TextLabel", {
 					Parent = mainBtn, BackgroundTransparency = 1,
 					Text = "▾", Font = FONT_B, TextSize = 12, TextColor3 = THEME.TextDim,
 					Position = UDim2.new(1, -22, 0, 0), Size = UDim2.new(0, 20, 1, 0),
 				})
-				local listHolder = Create("Frame", {
-					Parent = wrap, BackgroundTransparency = 1,
-					Size = UDim2.new(1, -20, 0, 0), Position = UDim2.new(0, 10, 0, 54),
-					AutomaticSize = Enum.AutomaticSize.Y,
-				}, {
-					Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }),
-				})
 
-				local optBtns = {}
-				local function render()
-					for _, b in ipairs(optBtns) do b:Destroy() end
-					optBtns = {}
-					for _, opt in ipairs(options) do
-						local isSel = isMulti and table.find(selected, opt) or (not isMulti and selected == opt)
-						local ob = Create("TextButton", {
-							Parent = listHolder,
-							BackgroundColor3 = isSel and THEME.AccentDark or THEME.Background,
-							BackgroundTransparency = isSel and 0 or 0.5,
-							Text = tostring(opt), Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
-							TextXAlignment = Enum.TextXAlignment.Left,
-							Size = UDim2.new(1, 0, 0, 24), AutoButtonColor = false,
-						}, { Corner(4), Pad(8, 0, 0, 0) })
-						Reg(Registry.Background, ob, "BackgroundColor3")
-						AddPress(ob, 0.97)
-						table.insert(optBtns, ob)
-						ob.MouseButton1Click:Connect(function()
-							if isMulti then
-								local idx = table.find(selected, opt)
-								if idx then table.remove(selected, idx) else table.insert(selected, opt) end
-							else
-								selected = opt; opened = false
-							end
-							render()
-							if isMulti then
-								local t = {}
-								for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-								display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
-							else
-								display.Text = tostring(selected)
-							end
-							if cfg.Callback then task.spawn(cfg.Callback, selected) end
-							if not isMulti then
-								Tween(arrow, { Rotation = 0 }, 0.2)
-								Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
-							end
-						end)
-					end
-				end
-				render()
 				if isMulti then
 					local t = {}
 					for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
 					display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
 				else
-					display.Text = tostring(selected)
+					display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
 				end
 
 				mainBtn.MouseButton1Click:Connect(function()
-					opened = not opened
-					if opened then
-						Tween(wrap, { Size = UDim2.new(1, 0, 0, 56 + #options * 26 + 6) }, 0.25, Enum.EasingStyle.Quart)
-						Tween(arrow, { Rotation = 180 }, 0.25)
-					else
-						Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
-						Tween(arrow, { Rotation = 0 }, 0.25)
-					end
+					-- ⭐ Mở popup dropdown
+					DropdownPopup:Open(mainBtn, options, function(chosen)
+						if isMulti then
+							local idx = table.find(selected, chosen)
+							if idx then table.remove(selected, idx) else table.insert(selected, chosen) end
+							local t = {}
+							for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+							display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+							if cfg.Callback then task.spawn(cfg.Callback, selected) end
+						else
+							selected = chosen
+							display.Text = tostring(selected)
+							if cfg.Callback then task.spawn(cfg.Callback, chosen) end
+						end
+					end)
 				end)
-				
 				AddPress(mainBtn, 0.98)
-				if cfg.Callback then task.spawn(cfg.Callback, selected) end
 
-				-- ⭐ Handle với Refresh method
 				local handle = {}
 				handle.Get = function() return selected end
-				handle.Set = function(v) selected = v; render() end
-
-				-- ⭐ Refresh Options runtime
+				handle.Set = function(v)
+					selected = v
+					display.Text = tostring(v)
+				end
 				handle.Refresh = function(newOptions, keepSelection)
 					options = newOptions or options
 					keepSelection = keepSelection ~= false
-
-					-- Xử lý selection khi options đổi
-					if isMulti then
-						if keepSelection and type(selected) == "table" then
+					if not keepSelection then
+						selected = isMulti and {} or options[1]
+					else
+						if isMulti then
 							local kept = {}
 							for _, v in ipairs(selected) do
-								if table.find(options, v) then
-									table.insert(kept, v)
-								end
+								if table.find(options, v) then table.insert(kept, v) end
 							end
 							selected = kept
-						else
-							selected = {}
-						end
-					else
-						if not (keepSelection and table.find(options, selected)) then
-							selected = options[1]
 						end
 					end
-
-					-- Rebuild lại list
-					for _, b in ipairs(optBtns) do b:Destroy() end
-					optBtns = {}
-					render()
-
-					-- Update display text
 					if isMulti then
 						local t = {}
 						for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
@@ -1278,19 +1317,11 @@ function NeoUI:CreateWindow(opts)
 					else
 						display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
 					end
-
-					-- Nếu đang mở thì tween lại size
-					if opened then
-						local newH = 56 + #options * 26 + 6
-						Tween(wrap, { Size = UDim2.new(1, 0, 0, newH) }, 0.2, Enum.EasingStyle.Quart)
-					end
-
-					if cfg.Callback then task.spawn(cfg.Callback, selected) end
 				end
-
 				return handle
 			end
 
+			-- ===== Paragraph =====
 			function Section:Paragraph(cfg)
 				cfg = cfg or {}
 				local wrap = Create("Frame", {
@@ -1324,6 +1355,7 @@ function NeoUI:CreateWindow(opts)
 				}
 			end
 
+			-- ===== ColorRow =====
 			function Section:ColorRow(cfg)
 				cfg = cfg or {}
 				local color = cfg.Value or THEME.Accent
@@ -1382,8 +1414,6 @@ function NeoUI:CreateWindow(opts)
 					}, { Corner(5), Stroke(THEME.Border, 1, 0.6) })
 					Reg(Registry.Background, rndBtn, "BackgroundColor3")
 					AddPress(rndBtn)
-					rndBtn.MouseEnter:Connect(function() Tween(rndBtn, { BackgroundColor3 = THEME.SurfaceHover }, 0.12) end)
-					rndBtn.MouseLeave:Connect(function() Tween(rndBtn, { BackgroundColor3 = THEME.Background }, 0.12) end)
 					rndBtn.MouseButton1Click:Connect(function()
 						local nc = cfg.RandomFn()
 						if typeof(nc) == "Color3" then color = nc end
@@ -1423,7 +1453,7 @@ function NeoUI:CreateWindow(opts)
 				}
 			end
 
-									-- ⭐ ListRow — hiện danh sách item dạng key: value
+			-- ===== ListRow =====
 			function Section:ListRow(cfg)
 				cfg = cfg or {}
 				local wrap = Create("Frame", {
@@ -1454,9 +1484,7 @@ function NeoUI:CreateWindow(opts)
 						Parent = list, BackgroundTransparency = 1,
 						Size = UDim2.new(1, 0, 0, 20), LayoutOrder = order,
 					})
-
-					-- Key label — bên trái, cho 45% bề rộng
-					local keyLbl = Create("TextLabel", {
+					Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(key) .. ":",
 						Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
@@ -1465,15 +1493,12 @@ function NeoUI:CreateWindow(opts)
 						Size = UDim2.new(0.45, -4, 1, 0),
 						Position = UDim2.new(0, 0, 0, 0),
 					})
-
-					-- Value label — bên phải, 55%
 					local valLbl = Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(value),
 						Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
 						TextXAlignment = Enum.TextXAlignment.Right,
 						TextTruncate = Enum.TextTruncate.AtEnd,
-						TextScaled = false,
 						Size = UDim2.new(0.55, -4, 1, 0),
 						Position = UDim2.new(0.45, 4, 0, 0),
 					})
@@ -1499,36 +1524,26 @@ function NeoUI:CreateWindow(opts)
 						createRow(item.key, item.value, i)
 					end
 				end
-
 				function handle:UpdateItem(key, value)
 					local lbl = valueLabels[key]
 					if lbl and lbl.Parent then
-						local newText = tostring(value)
-						if lbl.Text ~= newText then
-							lbl.Text = newText
-						end
+						local t = tostring(value)
+						if lbl.Text ~= t then lbl.Text = t end
 						return true
 					end
 					return false
 				end
-
 				function handle:UpdateItems(map)
-					for key, value in pairs(map or {}) do
-						local lbl = valueLabels[key]
-						if lbl and lbl.Parent then
-							lbl.Text = tostring(value)
-						end
+					for k, v in pairs(map or {}) do
+						local lbl = valueLabels[k]
+						if lbl and lbl.Parent then lbl.Text = tostring(v) end
 					end
 				end
-
 				function handle:SetTitle(t) titleLbl.Text = tostring(t) end
-
-				print("[NeoUI] ListRow created with", #(cfg.Items or {}), "items")
-
-				return handle  -- ⭐ QUAN TRỌNG — phải có return
+				return handle
 			end
 
-						-- ⭐ 2 CỘT — chia section thành trái/phải
+			-- ===== TwoColumn =====
 			function Section:TwoColumn()
 				local twoColWrap = Create("Frame", {
 					Parent = itemHolder, BackgroundTransparency = 1,
@@ -1560,21 +1575,14 @@ function NeoUI:CreateWindow(opts)
 					}),
 				})
 
-				-- Section ảo dùng chung toàn bộ logic gốc
-				-- Cách làm: tạo closure mới có cùng methods nhưng itemHolder = colFrame
-
-				local function buildVirtual(colFrame, colName)
+				-- ⭐ Section ảo — dùng chung API Section gốc nhưng itemHolder là colFrame
+				local function makeVirtual(colFrame)
 					local V = {}
-
-					local function makeHolder(parentFrame)
-						return Create("Frame", {
-							Parent = parentFrame, BackgroundTransparency = 1,
-							Size = UDim2.new(1, 0, 0, 0),
-							AutomaticSize = Enum.AutomaticSize.Y,
-						})
-					end
-
-					-- Tạo holder ẩn bên trong colFrame để các method gốc có thể parent vào
+					-- Kế thừa toàn bộ method từ Section gốc — nhưng override itemHolder
+					-- Cách: gọi Section:Method với proxy
+					-- Đơn giản hơn: copy method nhưng thay "itemHolder" bằng "colFrame"
+					-- Ở đây mình tạo holder con giống hệt Section gốc
+					
 					local vHolder = Create("Frame", {
 						Parent = colFrame, BackgroundTransparency = 1,
 						Size = UDim2.new(1, 0, 0, 0),
@@ -1585,33 +1593,12 @@ function NeoUI:CreateWindow(opts)
 							Padding = UDim.new(0, 6),
 						}),
 					})
-
-					-- ⭐ Ghi đè biến itemHolder bằng cách REBIND closure
-					-- Kỹ thuật: dùng lại toàn bộ Section gốc nhưng
-					-- với itemHolder = vHolder bằng cách patch tạm
-					local originalHolder = itemHolder
-					itemHolder = vHolder
-
-					-- Clone các method
-					for k, fn in pairs(Section) do
-						V[k] = fn
-					end
-
-					-- Khôi phục
-					itemHolder = originalHolder
-
-					-- ⚠️ Vấn đề: các method gốc capture itemHolder lúc định nghĩa.
-					-- Nên cách này KHÔNG hoạt động.
-					-- Cần phải viết lại từ đầu — xem phương án B bên dưới.
-
-					return V
-				end
-
-				-- Phương án B: Section ảo tự implement
-				local function makeRealVirtual(colFrame)
-					local V = {}
-
-					-- Button
+					
+					-- ⭐ Trick: gán metatable để V proxy sang Section
+					-- nhưng itemHolder gốc vẫn trỏ vào vHolder
+					-- Cần tạo closure mới wrap mỗi method gốc
+					
+					-- Đơn giản nhất: re-define từng method con
 					function V:Button(cfg)
 						cfg = cfg or {}
 						local btn = Create("TextButton", {
@@ -1631,7 +1618,6 @@ function NeoUI:CreateWindow(opts)
 						return { Instance = btn }
 					end
 
-					-- Toggle
 					function V:Toggle(cfg)
 						cfg = cfg or {}
 						local state = cfg.Value == true
@@ -1640,7 +1626,6 @@ function NeoUI:CreateWindow(opts)
 							Size = UDim2.new(1, 0, 0, SIZE.RowH),
 						}, { Corner(6) })
 						Reg(Registry.Surface, row, "BackgroundColor3")
-
 						Create("TextLabel", {
 							Parent = row, BackgroundTransparency = 1,
 							Text = cfg.Title or "Toggle", Font = FONT_M, TextSize = 12,
@@ -1648,7 +1633,6 @@ function NeoUI:CreateWindow(opts)
 							TextXAlignment = Enum.TextXAlignment.Left,
 							Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -70, 1, 0),
 						})
-
 						local track = Create("Frame", {
 							Parent = row,
 							BackgroundColor3 = state and THEME.Button or THEME.Border,
@@ -1656,19 +1640,16 @@ function NeoUI:CreateWindow(opts)
 							Position = UDim2.new(1, -48, 0.5, -10),
 						}, { Create("UICorner", { CornerRadius = UDim.new(1, 0) }) })
 						Reg(Registry.Button, track, "BackgroundColor3")
-
 						local knob = Create("Frame", {
 							Parent = track, BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 							Size = UDim2.fromOffset(14, 14),
 							Position = state and UDim2.new(1, -17, 0.5, -7)
 								or UDim2.new(0, 3, 0.5, -7),
 						}, { Create("UICorner", { CornerRadius = UDim.new(1, 0) }) })
-
 						local clicker = Create("TextButton", {
 							Parent = row, BackgroundTransparency = 1, Text = "",
 							Size = UDim2.new(1, 0, 1, 0),
 						})
-
 						local function set(v)
 							state = v
 							track.BackgroundColor3 = state and THEME.Button or THEME.Border
@@ -1678,12 +1659,10 @@ function NeoUI:CreateWindow(opts)
 							}, 0.2, Enum.EasingStyle.Quart)
 							if cfg.Callback then task.spawn(cfg.Callback, state) end
 						end
-
 						clicker.MouseButton1Click:Connect(function() set(not state) end)
 						return { Set = set, Get = function() return state end }
 					end
 
-					-- Textbox
 					function V:Textbox(cfg)
 						cfg = cfg or {}
 						local wrap = Create("Frame", {
@@ -1691,7 +1670,6 @@ function NeoUI:CreateWindow(opts)
 							Size = UDim2.new(1, 0, 0, 50),
 						}, { Corner(6) })
 						Reg(Registry.Surface, wrap, "BackgroundColor3")
-
 						Create("TextLabel", {
 							Parent = wrap, BackgroundTransparency = 1,
 							Text = cfg.Title or "Textbox", Font = FONT_M, TextSize = 12,
@@ -1711,7 +1689,6 @@ function NeoUI:CreateWindow(opts)
 							Size = UDim2.new(1, -20, 0, 22),
 						}, { Corner(6), Stroke(THEME.Border, 1, 0.5), Pad(8, 0, 0, 0) })
 						Reg(Registry.Background, box, "BackgroundColor3")
-
 						box.Focused:Connect(function()
 							Tween(box, { BackgroundColor3 = THEME.SurfaceHover }, 0.15)
 							Tween(box:FindFirstChildOfClass("UIStroke"), { Color = THEME.Accent }, 0.15)
@@ -1727,7 +1704,100 @@ function NeoUI:CreateWindow(opts)
 						}
 					end
 
-					-- ListRow (key: value)
+					-- ⭐ Dropdown cho TwoColumn — dùng POPUP
+					function V:Dropdown(cfg)
+						cfg = cfg or {}
+						local options = cfg.Options or {}
+						local isMulti = cfg.Multi == true
+						local selected = isMulti and (type(cfg.Value) == "table" and cfg.Value or {}) or (cfg.Value or options[1])
+
+						local wrap = Create("Frame", {
+							Parent = colFrame, BackgroundColor3 = THEME.Surface,
+							Size = UDim2.new(1, 0, 0, 56),
+						}, { Corner(6) })
+						Reg(Registry.Surface, wrap, "BackgroundColor3")
+
+						Create("TextLabel", {
+							Parent = wrap, BackgroundTransparency = 1,
+							Text = cfg.Title or "Dropdown", Font = FONT_M, TextSize = 12, TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.new(0, 10, 0, 6), Size = UDim2.new(1, -20, 0, 16),
+						})
+
+						local mainBtn = Create("TextButton", {
+							Parent = wrap, BackgroundColor3 = THEME.Background,
+							Text = "", Size = UDim2.new(1, -20, 0, 24),
+							Position = UDim2.new(0, 10, 0, 26), AutoButtonColor = false,
+						}, { Corner(6), Stroke(THEME.Border, 1, 0.5) })
+						Reg(Registry.Background, mainBtn, "BackgroundColor3")
+
+						local display = Create("TextLabel", {
+							Parent = mainBtn, BackgroundTransparency = 1,
+							Text = "Chọn...", Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -30, 1, 0),
+							TextTruncate = Enum.TextTruncate.AtEnd,
+						})
+						local arrow = Create("TextLabel", {
+							Parent = mainBtn, BackgroundTransparency = 1,
+							Text = "▾", Font = FONT_B, TextSize = 12, TextColor3 = THEME.TextDim,
+							Position = UDim2.new(1, -22, 0, 0), Size = UDim2.new(0, 20, 1, 0),
+						})
+
+						if isMulti then
+							local t = {}
+							for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+							display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+						else
+							display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
+						end
+
+						mainBtn.MouseButton1Click:Connect(function()
+							DropdownPopup:Open(mainBtn, options, function(chosen)
+								if isMulti then
+									local idx = table.find(selected, chosen)
+									if idx then table.remove(selected, idx) else table.insert(selected, chosen) end
+									local t = {}
+									for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+									display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+									if cfg.Callback then task.spawn(cfg.Callback, selected) end
+								else
+									selected = chosen
+									display.Text = tostring(selected)
+									if cfg.Callback then task.spawn(cfg.Callback, chosen) end
+								end
+							end)
+						end)
+						AddPress(mainBtn, 0.98)
+
+						local handle = {}
+						handle.Get = function() return selected end
+						handle.Set = function(v) selected = v; display.Text = tostring(v) end
+						handle.Refresh = function(newOptions, keepSelection)
+							options = newOptions or options
+							keepSelection = keepSelection ~= false
+							if not keepSelection then
+								selected = isMulti and {} or options[1]
+							else
+								if isMulti then
+									local kept = {}
+									for _, v in ipairs(selected) do
+										if table.find(options, v) then table.insert(kept, v) end
+									end
+									selected = kept
+								end
+							end
+							if isMulti then
+								local t = {}
+								for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
+								display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+							else
+								display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
+							end
+						end
+						return handle
+					end
+
 					function V:ListRow(cfg)
 						cfg = cfg or {}
 						local wrap = Create("Frame", {
@@ -1760,36 +1830,31 @@ function NeoUI:CreateWindow(opts)
 						local valueLabels = {}
 
 						local function createRow(key, value, order)
-					local row = Create("Frame", {
-						Parent = list, BackgroundTransparency = 1,
-						Size = UDim2.new(1, 0, 0, 20), LayoutOrder = order,
-					})
-
-					-- Key label — bên trái, cho 45% bề rộng
-					local keyLbl = Create("TextLabel", {
-						Parent = row, BackgroundTransparency = 1,
-						Text = tostring(key) .. ":",
-						Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
-						TextXAlignment = Enum.TextXAlignment.Left,
-						TextTruncate = Enum.TextTruncate.AtEnd,
-						Size = UDim2.new(0.45, -4, 1, 0),
-						Position = UDim2.new(0, 0, 0, 0),
-					})
-
-					-- Value label — bên phải, 55%
-					local valLbl = Create("TextLabel", {
-						Parent = row, BackgroundTransparency = 1,
-						Text = tostring(value),
-						Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
-						TextXAlignment = Enum.TextXAlignment.Right,
-						TextTruncate = Enum.TextTruncate.AtEnd,
-						TextScaled = false,
-						Size = UDim2.new(0.55, -4, 1, 0),
-						Position = UDim2.new(0.45, 4, 0, 0),
-					})
-					valueLabels[key] = valLbl
-					return row
-				end
+							local row = Create("Frame", {
+								Parent = list, BackgroundTransparency = 1,
+								Size = UDim2.new(1, 0, 0, 20), LayoutOrder = order,
+							})
+							Create("TextLabel", {
+								Parent = row, BackgroundTransparency = 1,
+								Text = tostring(key) .. ":",
+								Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
+								TextXAlignment = Enum.TextXAlignment.Left,
+								TextTruncate = Enum.TextTruncate.AtEnd,
+								Size = UDim2.new(0.45, -4, 1, 0),
+								Position = UDim2.new(0, 0, 0, 0),
+							})
+							local valLbl = Create("TextLabel", {
+								Parent = row, BackgroundTransparency = 1,
+								Text = tostring(value),
+								Font = FONT_B, TextSize = 11, TextColor3 = THEME.Text,
+								TextXAlignment = Enum.TextXAlignment.Right,
+								TextTruncate = Enum.TextTruncate.AtEnd,
+								Size = UDim2.new(0.55, -4, 1, 0),
+								Position = UDim2.new(0.45, 4, 0, 0),
+							})
+							valueLabels[key] = valLbl
+							return row
+						end
 
 						if cfg.Items then
 							for i, item in ipairs(cfg.Items) do
@@ -1799,7 +1864,6 @@ function NeoUI:CreateWindow(opts)
 
 						local handle = {}
 						handle.Instance = wrap
-
 						function handle:SetItems(items)
 							for _, c in ipairs(list:GetChildren()) do
 								if c:IsA("Frame") then c:Destroy() end
@@ -1828,7 +1892,7 @@ function NeoUI:CreateWindow(opts)
 						return handle
 					end
 
-					-- ⭐ StatRow — hàng có key | value | nút +
+					-- ⭐ StatRow
 					function V:StatRow(cfg)
 						cfg = cfg or {}
 						local row = Create("Frame", {
@@ -1837,7 +1901,7 @@ function NeoUI:CreateWindow(opts)
 						}, { Corner(6) })
 						Reg(Registry.Surface, row, "BackgroundColor3")
 
-						local keyLbl = Create("TextLabel", {
+						Create("TextLabel", {
 							Parent = row, BackgroundTransparency = 1,
 							Text = cfg.Key or "Stat",
 							Font = FONT_M, TextSize = 11, TextColor3 = THEME.Text,
@@ -1867,12 +1931,6 @@ function NeoUI:CreateWindow(opts)
 						}, { Corner(5), Stroke(THEME.Border, 1, 0.6) })
 						Reg(Registry.Button, plusBtn, "BackgroundColor3")
 						AddPress(plusBtn, 0.88)
-						plusBtn.MouseEnter:Connect(function()
-							Tween(plusBtn, { BackgroundColor3 = THEME.ButtonHover }, 0.12)
-						end)
-						plusBtn.MouseLeave:Connect(function()
-							Tween(plusBtn, { BackgroundColor3 = THEME.Button }, 0.12)
-						end)
 						plusBtn.MouseButton1Click:Connect(function()
 							if cfg.OnAdd then task.spawn(cfg.OnAdd) end
 						end)
@@ -1880,7 +1938,6 @@ function NeoUI:CreateWindow(opts)
 						local handle = {}
 						handle.Instance = row
 						handle.SetValue = function(_self, v)
-							-- hỗ trợ cả statMelee:SetValue(x) và statMelee.SetValue(x)
 							local value = v
 							if value == nil then value = _self end
 							local t = tostring(value)
@@ -1889,204 +1946,12 @@ function NeoUI:CreateWindow(opts)
 						handle.GetValue = function() return valLbl.Text end
 						return handle
 					end
-					-- ⭐ Dropdown (cho TwoColumn) — FIXED
-					function V:Dropdown(cfg)
-						cfg = cfg or {}
-						local options = cfg.Options or {}
-						local isMulti = cfg.Multi == true
-						local selected = isMulti and (type(cfg.Value) == "table" and cfg.Value or {}) or (cfg.Value or options[1])
-						local opened = false
-
-						local wrap = Create("Frame", {
-							Parent = colFrame, BackgroundColor3 = THEME.Surface,
-							Size = UDim2.new(1, 0, 0, 56), ClipsDescendants = true,
-						}, { Corner(6) })
-						Reg(Registry.Surface, wrap, "BackgroundColor3")
-
-						Create("TextLabel", {
-							Parent = wrap, BackgroundTransparency = 1,
-							Text = cfg.Title or "Dropdown", Font = FONT_M, TextSize = 12, TextColor3 = THEME.Text,
-							TextXAlignment = Enum.TextXAlignment.Left,
-							Position = UDim2.new(0, 10, 0, 6), Size = UDim2.new(1, -20, 0, 16),
-						})
-						local mainBtn = Create("TextButton", {
-							Parent = wrap, BackgroundColor3 = THEME.Background,
-							Text = "", Size = UDim2.new(1, -20, 0, 24),
-							Position = UDim2.new(0, 10, 0, 26), AutoButtonColor = false,
-						}, { Corner(6), Stroke(THEME.Border, 1, 0.5) })
-						Reg(Registry.Background, mainBtn, "BackgroundColor3")
-
-						local display = Create("TextLabel", {
-							Parent = mainBtn, BackgroundTransparency = 1,
-							Text = "Chọn...", Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
-							TextXAlignment = Enum.TextXAlignment.Left,
-							Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -30, 1, 0),
-						})
-						local arrow = Create("TextLabel", {
-							Parent = mainBtn, BackgroundTransparency = 1,
-							Text = "▾", Font = FONT_B, TextSize = 12, TextColor3 = THEME.TextDim,
-							Position = UDim2.new(1, -22, 0, 0), Size = UDim2.new(0, 20, 1, 0),
-						})
-						local listHolder = Create("Frame", {
-							Parent = wrap, BackgroundTransparency = 1,
-							Size = UDim2.new(1, -20, 0, 0), Position = UDim2.new(0, 10, 0, 54),
-							AutomaticSize = Enum.AutomaticSize.Y,
-						}, {
-							Create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2) }),
-						})
-
-						local optBtns = {}
-						local function render()
-							for _, b in ipairs(optBtns) do b:Destroy() end
-							optBtns = {}
-							for _, opt in ipairs(options) do
-								local isSel = isMulti and table.find(selected, opt) or (not isMulti and selected == opt)
-								local ob = Create("TextButton", {
-									Parent = listHolder,
-									BackgroundColor3 = isSel and THEME.AccentDark or THEME.Background,
-									BackgroundTransparency = isSel and 0 or 0.5,
-									Text = tostring(opt), Font = FONT, TextSize = 11, TextColor3 = THEME.Text,
-									TextXAlignment = Enum.TextXAlignment.Left,
-									Size = UDim2.new(1, 0, 0, 24), AutoButtonColor = false,
-								}, { Corner(4), Pad(8, 0, 0, 0) })
-								Reg(Registry.Background, ob, "BackgroundColor3")
-								AddPress(ob, 0.97)
-								table.insert(optBtns, ob)
-								ob.MouseButton1Click:Connect(function()
-									local chosenOption = opt
-									if isMulti then
-										local idx = table.find(selected, chosenOption)
-										if idx then table.remove(selected, idx) else table.insert(selected, chosenOption) end
-									else
-										selected = chosenOption
-										opened = false
-									end
-									render()
-									if isMulti then
-										local t = {}
-										for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-										display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
-									else
-										display.Text = tostring(selected)
-									end
-									if cfg.Callback then task.spawn(cfg.Callback, chosenOption) end
-									if not isMulti then
-										Tween(arrow, { Rotation = 0 }, 0.2)
-										Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
-									end
-								end)
-							end
-						end
-						render()
-						if isMulti then
-							local t = {}
-							for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-							display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
-						else
-							display.Text = tostring(selected)
-						end
-
-						mainBtn.MouseButton1Click:Connect(function()
-							opened = not opened
-							if opened then
-								Tween(wrap, { Size = UDim2.new(1, 0, 0, 56 + #options * 26 + 6) }, 0.25, Enum.EasingStyle.Quart)
-								Tween(arrow, { Rotation = 180 }, 0.25)
-							else
-								Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
-								Tween(arrow, { Rotation = 0 }, 0.25)
-							end
-						end)
-						AddPress(mainBtn, 0.98)
-
-						local handle = {}
-						function handle.Get() return selected end
-						function handle.Set(v) selected = v; display.Text = tostring(v); render() end
-
-						-- ⭐ Refresh: KHÔNG auto-fire callback, giữ selection
-						function handle.Refresh(newOptions, keepSelection)
-							options = newOptions or options
-							keepSelection = keepSelection ~= false
-
-							if isMulti then
-								if keepSelection and type(selected) == "table" then
-									local kept = {}
-									for _, v in ipairs(selected) do
-										if table.find(options, v) then table.insert(kept, v) end
-									end
-									selected = kept
-								else
-									selected = {}
-								end
-							else
-								if keepSelection and table.find(options, selected) then
-									-- giữ selection
-								else
-									-- selection không còn trong options → giữ nhưng không match
-									-- KHÔNG auto-set về options[1]
-								end
-							end
-
-							for _, b in ipairs(optBtns) do b:Destroy() end
-							optBtns = {}
-							render()
-
-							if isMulti then
-								local t = {}
-								for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-								display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
-							else
-								display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
-							end
-
-							if opened then
-								local newH = 56 + #options * 26 + 6
-								Tween(wrap, { Size = UDim2.new(1, 0, 0, newH) }, 0.2, Enum.EasingStyle.Quart)
-							end
-							-- ⭐ KHÔNG fire callback
-						end
-
-						return handle
-					end
-					
-					-- ⭐ Paragraph (cho TwoColumn)
-					function V:Paragraph(cfg)
-						cfg = cfg or {}
-						local wrap = Create("Frame", {
-							Parent = colFrame, BackgroundColor3 = THEME.Surface, BackgroundTransparency = 0.3,
-							Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-						}, { Corner(6), Stroke(THEME.Border, 1, 0.7), Pad(10, 10, 10, 10) })
-						Reg(Registry.Surface, wrap, "BackgroundColor3")
-						Reg(Registry.Border, wrap:FindFirstChildOfClass("UIStroke"), "Color")
-
-						if cfg.Title then
-							Create("TextLabel", {
-								Parent = wrap, BackgroundTransparency = 1,
-								Text = cfg.Title, Font = FONT_B, TextSize = 12, TextColor3 = THEME.Text,
-								TextXAlignment = Enum.TextXAlignment.Left,
-								Size = UDim2.new(1, 0, 0, 16),
-							})
-						end
-						local contentLbl = Create("TextLabel", {
-							Parent = wrap, BackgroundTransparency = 1,
-							Text = cfg.Content or "", Font = FONT, TextSize = 11, TextColor3 = THEME.TextDim,
-							TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
-							TextWrapped = true,
-							Position = cfg.Title and UDim2.new(0, 0, 0, 20) or UDim2.new(0, 0, 0, 0),
-							Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LineHeight = 1.2,
-						})
-						return {
-							SetContent = function(t) contentLbl.Text = tostring(t) end,
-							SetTitle = function(t)
-								contentLbl.Position = (t and t ~= "") and UDim2.new(0, 0, 0, 20) or UDim2.new(0, 0, 0, 0)
-							end,
-						}
-					end
 
 					return V
 				end
 
-				local Left = makeRealVirtual(leftCol)
-				local Right = makeRealVirtual(rightCol)
+				local Left = makeVirtual(leftCol)
+				local Right = makeVirtual(rightCol)
 
 				return { Left = Left, Right = Right, LeftFrame = leftCol, RightFrame = rightCol }
 			end
