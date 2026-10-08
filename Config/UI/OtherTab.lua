@@ -1,15 +1,14 @@
 --[[
     UI/OtherTab.lua
-    Tab "Other" - Sell, Status, Random Chest, Guarantee, Craft Table
 ]]
 
-local OtherTab = {}
 local Globals = _G.__Globals
-assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
+assert(Globals, "[OtherTab] _G.__Globals chưa được set!")
+
+local Utils = Globals.Utils
+local OtherTab = {}
 
 function OtherTab:Init(Window)
-    local Library = Globals.Library
-
     -- Build Sell items
     local SellItems = {}
     for name in pairs(Globals.Economy) do
@@ -17,7 +16,7 @@ function OtherTab:Init(Window)
     end
     table.sort(SellItems)
 
-    -- Build Guarantee point lists
+    -- Build Guarantee lists
     local Poitem, PoiteMoon = {}, {}
     for item, price in pairs(Globals.PointItemM) do
         table.insert(Poitem, {Name = item, Price = price})
@@ -35,17 +34,17 @@ function OtherTab:Init(Window)
         PoiteMoon[i] = d.Name .. " / " .. d.Price .. " Point"
     end
 
-    local Tab3 = Window:CreateTab("Other", false, false)
+    local Tab3     = Window:CreateTab("Other", false, false)
     local SItem    = Tab3:CreatePage("Sell Item / Status")
     local RandomM  = Tab3:CreatePage("Random Chest")
     local CraftPg  = Tab3:CreatePage("Craft Table")
 
-    local SellCard        = SItem:CreateSection("💰 Auto Sell", "Left")
-    local StatusCard      = SItem:CreateSection("📊 Status", "Right")
-    local DiamondChest    = RandomM:CreateSection("💎 Diamond Chest", "Right")
-    local GuaranteeDiamond= RandomM:CreateSection("🎖️ Guarantee Gem Point", "Right")
-    local MoonChest       = RandomM:CreateSection("🌙 Moon Chest", "Left")
-    local GuaranteeMoon   = RandomM:CreateSection("☄️ Guarantee Moon Point", "Left")
+    local SellCard         = SItem:CreateSection("💰 Auto Sell", "Left")
+    local StatusCard       = SItem:CreateSection("📊 Status", "Right")
+    local DiamondChest     = RandomM:CreateSection("💎 Diamond Chest", "Right")
+    local GuaranteeDiamond = RandomM:CreateSection("🎖️ Guarantee Gem Point", "Right")
+    local MoonChest        = RandomM:CreateSection("🌙 Moon Chest", "Left")
+    local GuaranteeMoon    = RandomM:CreateSection("☄️ Guarantee Moon Point", "Left")
 
     -- ===== SELL =====
     SellCard:Dropdown({
@@ -142,7 +141,9 @@ function OtherTab:Init(Window)
         Callback = function(v) _G.Auto_Guarantee_Moon = v end
     })
 
-    OtherTab.CraftPage = CraftPg
+    -- ===== ✅ CRAFT TABLE (bị mất nút vì không gọi) =====
+    local AutoCraftTable = loadstring(game:HttpGet(Globals.BASE .. "/Features/AutoCraftTable.lua"))()
+    AutoCraftTable(CraftPg)
 end
 
 return OtherTab
