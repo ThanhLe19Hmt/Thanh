@@ -1,9 +1,8 @@
 -- =========================================================
---  FEATURE: Random & Shop v40
---  + Gợi ý tên khi nhập (duck → Duck, Duck2, Duck3...)
---  + Nhập kiểu nào cũng khớp (Duck7, duck7, Duck 7, duck 7)
---  + Shop EventMoon bên phải
---  + Nút "Mua 1 lần" cho cả 2 shop
+--  FEATURE: Random & Shop v41
+--  + Gộp Tìm + Gợi ý (gõ → dropdown filter)
+--  + Fix Shop Moon (thử nhiều path)
+--  + Fix dropdown vượt khung
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
@@ -27,7 +26,18 @@ return {
 			return nil
 		end
 
-		-- ⭐ FALLBACK list Diamond (đã dump)
+		-- ⭐⭐ THỬ NHIỀU PATH MOON
+		local PointItemM = SafeRequire({ "Modules.GaranteeRandomItem", "Modules.GuaranteeRandomItem" })
+		local PointItemMoon = SafeRequire({
+			"Modules.GuaranteeEventMoon",
+			"Modules.GaranteeEventMoon",
+			"Modules.EventMoonGuarantee",
+			"Modules.MoonGuarantee",
+			"Modules.GuaranteeItemMoon",
+			"Modules.EventMoon",
+			"Modules.MoonItem",
+		})
+
 		local FALLBACK_DIAMOND = {
 			{ name = "Bacon", price = 5 }, { name = "Duck", price = 5 },
 			{ name = "Fish", price = 5 }, { name = "Iron", price = 5 },
@@ -79,14 +89,14 @@ return {
 			{ name = "Aura Rainbow", price = 1250 },
 		}
 
-		local FALLBACK_MOON = {}
-
-		local PointItemM = SafeRequire({ "Modules.GaranteeRandomItem", "Modules.GuaranteeRandomItem" })
-		local PointItemMoon = SafeRequire({ "Modules.GuaranteeEventMoon", "Modules.GuaranteeEventMoon" })
+		local FALLBACK_MOON = {
+			-- Nếu có list Moon, dán vào đây
+		}
 
 		local diamondList, moonList = {}, {}
 		local diamondOptions, moonOptions = {}, {}
 
+		-- Build Diamond
 		if PointItemM then
 			for n, p in pairs(PointItemM) do
 				table.insert(diamondList, { name = n, price = p, optStr = n .. " (" .. p .. "P)" })
@@ -110,6 +120,7 @@ return {
 			end
 		end
 
+		-- Build Moon
 		if PointItemMoon then
 			for n, p in pairs(PointItemMoon) do
 				table.insert(moonList, { name = n, price = p, optStr = n .. " (" .. p .. "P)" })
@@ -133,25 +144,22 @@ return {
 			end
 		end
 
-		print("[v40] Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions)
+		print("[v41] Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions)
+		if #moonOptions == 0 then
+			print("[v41] Moon module chưa tìm thấy — chạy test tìm module Moon")
+		end
 
-		-- =======================================================
-		--  ⭐ HÀM SO SÁNH TÊN LINH HOẠT
-		--  "Duck 7", "duck7", "Duck7", "DUCK_7" → đều match "Duck7"
-		-- =======================================================
+		-- ⭐ Normalize tên
 		local function NormalizeName(s)
-			-- Bỏ khoảng trắng, dấu gạch dưới, dấu gạch ngang, lowercase
 			return tostring(s):lower():gsub("[%s_%-]", "")
 		end
 
 		local function FindDiamondByName(query)
 			if not query or query == "" then return nil end
 			local qNorm = NormalizeName(query)
-			-- Exact match (normalized)
 			for _, d in ipairs(diamondList) do
 				if NormalizeName(d.name) == qNorm then return d end
 			end
-			-- Partial
 			for _, d in ipairs(diamondList) do
 				if NormalizeName(d.name):find(qNorm, 1, true) then return d end
 			end
@@ -170,50 +178,6 @@ return {
 			return nil
 		end
 
-		-- ⭐ Tìm TẤT CẢ item khớp (để gợi ý)
-		local function FindAllDiamond(query)
-			if not query or query == "" then return {} end
-			local qNorm = NormalizeName(query)
-			local matches = {}
-			-- Exact first
-			for _, d in ipairs(diamondList) do
-				if NormalizeName(d.name) == qNorm then
-					table.insert(matches, d)
-				end
-			end
-			-- Partial
-			if #matches == 0 then
-				for _, d in ipairs(diamondList) do
-					if NormalizeName(d.name):find(qNorm, 1, true) then
-						table.insert(matches, d)
-					end
-				end
-			end
-			return matches
-		end
-
-		local function FindAllMoon(query)
-			if not query or query == "" then return {} end
-			local qNorm = NormalizeName(query)
-			local matches = {}
-			for _, m in ipairs(moonList) do
-				if NormalizeName(m.name) == qNorm then
-					table.insert(matches, m)
-				end
-			end
-			if #matches == 0 then
-				for _, m in ipairs(moonList) do
-					if NormalizeName(m.name):find(qNorm, 1, true) then
-						table.insert(matches, m)
-					end
-				end
-			end
-			return matches
-		end
-
-		-- =======================================================
-		--  STATE
-		-- =======================================================
 		local State = {
 			running = false, mode = "x15",
 			runningMoon = false, modeMoon = "x15",
@@ -305,10 +269,9 @@ return {
 		--  SHOP (Diamond trái + Moon phải)
 		-- =======================================================
 		local ShopSec = Tab:CreateSection("Shop")
-
 		local ShopRow = ShopSec:TwoColumn()
 
-		-- ===== DIAMOND SHOP (TRÁI) =====
+		-- ===== DIAMOND SHOP =====
 		local diamondDrop = ShopRow.Left:Dropdown({
 			Title = "Diamond",
 			Options = diamondOptions,
@@ -318,51 +281,38 @@ return {
 					local name = v:match("^(.-) %(")
 					if name then
 						State.selectedItem = name
-						print("[v40] Diamond chọn:", name)
+						print("[v41] Diamond chọn:", name)
 					end
 				end
 			end,
 		})
 
-		local diamondDisplayLabel = nil
-		task.spawn(function()
-			task.wait(1)
-			if diamondDrop and diamondDrop.GetDisplayLabel then
-				diamondDisplayLabel = diamondDrop:GetDisplayLabel()
-			end
-		end)
-
-		-- ⭐ Ô gợi ý cho Diamond
+		-- ⭐⭐ Ô TÌM GỘP — nhập xong filter dropdown luôn
 		local searchD = ShopRow.Left:Textbox({
-			Title = "Tìm",
-			Placeholder = "VD: duck",
+			Title = "Tìm (nhập để lọc)",
+			Placeholder = "VD: orb, duck, wood",
 			Value = "",
-		})
-
-		-- ⭐ Bảng gợi ý (ẩn/hiện)
-		local suggestD = ShopRow.Left:Dropdown({
-			Title = "Gợi ý",
-			Options = { "..." },
-			Value = nil,
 			Callback = function(v)
-				if v and type(v) == "string" and v ~= "..." then
-					local name = v:match("^(.-) %(")
-					if name then
-						State.selectedItem = name
-						if diamondDisplayLabel and diamondDisplayLabel.Parent then
-							diamondDisplayLabel.Text = name .. " (" .. (function()
-								for _, d in ipairs(diamondList) do
-									if d.name == name then return d.price end
-								end
-								return 0
-							end)() .. "P)"
+				local q = v or ""
+				if diamondDrop and diamondDrop.Refresh then
+					if q == "" then
+						diamondDrop:Refresh(diamondOptions, true)
+					else
+						local qNorm = NormalizeName(q)
+						local filt = {}
+						for _, d in ipairs(diamondList) do
+							if NormalizeName(d.name):find(qNorm, 1, true) then
+								table.insert(filt, d.optStr)
+							end
+						end
+						if #filt > 0 then
+							diamondDrop:Refresh(filt, true)
 						end
 					end
 				end
 			end,
 		})
 
-		-- ⭐ Nút "Mua 1 lần"
 		ShopRow.Left:Button({
 			Title = "MUA 1 LẦN",
 			Callback = function()
@@ -374,36 +324,9 @@ return {
 			end,
 		})
 
-		-- ⭐ Hook search để CẬP NHẬT GỢI Ý (không mua)
-		task.spawn(function()
-			task.wait(1)
-			if searchD and searchD.Instance then
-				searchD.Instance:GetPropertyChangedSignal("Text"):Connect(function()
-					local q = searchD.Instance.Text
-					if q and q ~= "" then
-						local matches = FindAllDiamond(q)
-						local suggOpts = {}
-						for _, d in ipairs(matches) do
-							table.insert(suggOpts, d.optStr)
-						end
-						if #suggOpts > 0 and suggestD and suggestD.Refresh then
-							suggestD:Refresh(suggOpts, true)
-						end
-					else
-						if suggestD and suggestD.Refresh then
-							suggestD:Refresh({ "..." }, false)
-						end
-					end
-				end)
-			end
-		end)
-
-		-- ===== MOON SHOP (PHẢI) =====
-		local moonDrop = nil
-		local moonDisplayLabel = nil
-
+		-- ===== MOON SHOP =====
 		if #moonOptions > 0 then
-			moonDrop = ShopRow.Right:Dropdown({
+			local moonDrop = ShopRow.Right:Dropdown({
 				Title = "Moon",
 				Options = moonOptions,
 				Value = nil,
@@ -412,34 +335,32 @@ return {
 						local name = v:match("^(.-) %(")
 						if name then
 							State.selectedMoonItem = name
-							print("[v40] Moon chọn:", name)
+							print("[v41] Moon chọn:", name)
 						end
 					end
 				end,
 			})
 
-			task.spawn(function()
-				task.wait(1)
-				if moonDrop and moonDrop.GetDisplayLabel then
-					moonDisplayLabel = moonDrop:GetDisplayLabel()
-				end
-			end)
-
 			local searchM = ShopRow.Right:Textbox({
-				Title = "Tìm",
+				Title = "Tìm (nhập để lọc)",
 				Placeholder = "VD: aura",
 				Value = "",
-			})
-
-			local suggestM = ShopRow.Right:Dropdown({
-				Title = "Gợi ý",
-				Options = { "..." },
-				Value = nil,
 				Callback = function(v)
-					if v and type(v) == "string" and v ~= "..." then
-						local name = v:match("^(.-) %(")
-						if name then
-							State.selectedMoonItem = name
+					local q = v or ""
+					if moonDrop and moonDrop.Refresh then
+						if q == "" then
+							moonDrop:Refresh(moonOptions, true)
+						else
+							local qNorm = NormalizeName(q)
+							local filt = {}
+							for _, m in ipairs(moonList) do
+								if NormalizeName(m.name):find(qNorm, 1, true) then
+									table.insert(filt, m.optStr)
+								end
+							end
+							if #filt > 0 then
+								moonDrop:Refresh(filt, true)
+							end
 						end
 					end
 				end,
@@ -455,33 +376,10 @@ return {
 					end
 				end,
 			})
-
-			task.spawn(function()
-				task.wait(1)
-				if searchM and searchM.Instance then
-					searchM.Instance:GetPropertyChangedSignal("Text"):Connect(function()
-						local q = searchM.Instance.Text
-						if q and q ~= "" then
-							local matches = FindAllMoon(q)
-							local suggOpts = {}
-							for _, m in ipairs(matches) do
-								table.insert(suggOpts, m.optStr)
-							end
-							if #suggOpts > 0 and suggestM and suggestM.Refresh then
-								suggestM:Refresh(suggOpts, true)
-							end
-						else
-							if suggestM and suggestM.Refresh then
-								suggestM:Refresh({ "..." }, false)
-							end
-						end
-					end)
-				end
-			end)
 		else
-			ShopRow.Right:ListRow({
+			local MoonNotice = ShopRow.Right:ListRow({
 				Title = "Moon",
-				Items = { { key = "Trạng thái", value = "Không có data" } },
+				Items = { { key = "Trạng thái", value = "Chưa load module" } },
 			})
 		end
 
@@ -523,7 +421,7 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "v40 Loaded",
+			Title = "v41 Loaded",
 			Description = "Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions,
 			Duration = 5,
 		})
