@@ -1,7 +1,6 @@
 -- =========================================================
 --  FEATURE: Random & Shop v39
---  - Fallback dùng list ĐẦY ĐỦ dump từ game
---  - Không còn hardcode 8 item
+--  Fallback dùng list đầy đủ dump từ game
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
@@ -25,131 +24,126 @@ return {
 			return nil
 		end
 
-		-- ⭐⭐⭐ DÁN LIST DUMP VÀO ĐÂY ⭐⭐⭐
-	local FALLBACK_DIAMOND = {
-	{ name = "Bacon", price = 5 },
-	{ name = "Duck", price = 5 },
-	{ name = "Fish", price = 5 },
-	{ name = "Iron", price = 5 },
-	{ name = "Bandage", price = 10 },
-	{ name = "Boxing Sandbag", price = 10 },
-	{ name = "Duck2", price = 10 },
-	{ name = "Dumbbell 25 KG", price = 10 },
-	{ name = "Old Wood", price = 10 },
-	{ name = "Orb Red", price = 10 },
-	{ name = "Wood", price = 10 },
-	{ name = "Black Shoes", price = 25 },
-	{ name = "Boxing Gloves", price = 25 },
-	{ name = "Duck3", price = 25 },
-	{ name = "Iron Shark Teeth", price = 25 },
-	{ name = "Old Iron", price = 25 },
-	{ name = "Old Rock", price = 25 },
-	{ name = "Orb Blue", price = 25 },
-	{ name = "Orb Spirit", price = 25 },
-	{ name = "Orb Yellow", price = 25 },
-	{ name = "Vegetable", price = 25 },
-	{ name = "Black Belt", price = 50 },
-	{ name = "Black Iron", price = 50 },
-	{ name = "Chef Hat", price = 50 },
-	{ name = "Cursed Iron", price = 50 },
-	{ name = "Cursed Wood", price = 50 },
-	{ name = "Duck4", price = 50 },
-	{ name = "Orb Boss", price = 50 },
-	{ name = "Orb Dungeon", price = 50 },
-	{ name = "Pipe", price = 50 },
-	{ name = "Rot Banana", price = 50 },
-	{ name = "Space Ticket", price = 50 },
-	{ name = "Spatula", price = 50 },
-	{ name = "Tomato", price = 50 },
-	{ name = "Aura Blue", price = 250 },
-	{ name = "Aura Brown", price = 250 },
-	{ name = "Aura Orange", price = 250 },
-	{ name = "Aura Purple", price = 250 },
-	{ name = "Aura White", price = 250 },
-	{ name = "Banana", price = 250 },
-	{ name = "Book of Rokuogan", price = 250 },
-	{ name = "Carrot", price = 250 },
-	{ name = "Cheese", price = 250 },
-	{ name = "Chicken Bone", price = 250 },
-	{ name = "Chicken Nugget", price = 250 },
-	{ name = "Cornstarch", price = 250 },
-	{ name = "Dragon Fang", price = 250 },
-	{ name = "Duck5", price = 250 },
-	{ name = "Egg", price = 250 },
-	{ name = "Frying Pan", price = 250 },
-	{ name = "Gold", price = 250 },
-	{ name = "Grains of Rice", price = 250 },
-	{ name = "Holy Gold", price = 250 },
-	{ name = "Holy Iron", price = 250 },
-	{ name = "Holy Stone", price = 250 },
-	{ name = "Holy Wood", price = 250 },
-	{ name = "Orb Black", price = 250 },
-	{ name = "Orb Devil", price = 250 },
-	{ name = "Orb Green", price = 250 },
-	{ name = "Orb Purple", price = 250 },
-	{ name = "Orb Sand", price = 250 },
-	{ name = "Orb Water", price = 250 },
-	{ name = "Pharaoh's Staff", price = 250 },
-	{ name = "Scarf Old", price = 250 },
-	{ name = "Shield Hoplon", price = 250 },
-	{ name = "Stopwatch", price = 250 },
-	{ name = "Vegetable Oil", price = 250 },
-	{ name = "Wind Stone", price = 250 },
-	{ name = "Wolf Fang", price = 250 },
-	{ name = "Aura Black", price = 750 },
-	{ name = "Aura Green", price = 750 },
-	{ name = "Aura Pink", price = 750 },
-	{ name = "Aura Red", price = 750 },
-	{ name = "Aura Yellow", price = 750 },
-	{ name = "Bee", price = 750 },
-	{ name = "Book of Busoshoku Haki", price = 750 },
-	{ name = "Cake Monster", price = 750 },
-	{ name = "Devil Heart", price = 750 },
-	{ name = "Duck6", price = 750 },
-	{ name = "Heart of Envy", price = 750 },
-	{ name = "Khaw Phad Kai", price = 750 },
-	{ name = "Microphone", price = 750 },
-	{ name = "Orb Dragon", price = 750 },
-	{ name = "Orb Fire", price = 750 },
-	{ name = "Orb Fried Chicken", price = 750 },
-	{ name = "Orb Rainbow", price = 750 },
-	{ name = "Shadow Diary", price = 750 },
-	{ name = "Shadow Iron", price = 750 },
-	{ name = "Spear", price = 750 },
-	{ name = "Sugar Bag", price = 750 },
-	{ name = "Thompson Gun", price = 750 },
-	{ name = "Trainer Notes", price = 750 },
-	{ name = "Duck7", price = 850 },
-	{ name = "Magic Evolution", price = 850 },
-	{ name = "Aura Rainbow", price = 1250 },
-}
-
-		local FALLBACK_MOON = {
-			-- Dán list Moon vào đây
+		local FALLBACK_DIAMOND = {
+			{ name = "Bacon", price = 5 },
+			{ name = "Duck", price = 5 },
+			{ name = "Fish", price = 5 },
+			{ name = "Iron", price = 5 },
+			{ name = "Bandage", price = 10 },
+			{ name = "Boxing Sandbag", price = 10 },
+			{ name = "Duck2", price = 10 },
+			{ name = "Dumbbell 25 KG", price = 10 },
+			{ name = "Old Wood", price = 10 },
+			{ name = "Orb Red", price = 10 },
+			{ name = "Wood", price = 10 },
+			{ name = "Black Shoes", price = 25 },
+			{ name = "Boxing Gloves", price = 25 },
+			{ name = "Duck3", price = 25 },
+			{ name = "Iron Shark Teeth", price = 25 },
+			{ name = "Old Iron", price = 25 },
+			{ name = "Old Rock", price = 25 },
+			{ name = "Orb Blue", price = 25 },
+			{ name = "Orb Spirit", price = 25 },
+			{ name = "Orb Yellow", price = 25 },
+			{ name = "Vegetable", price = 25 },
+			{ name = "Black Belt", price = 50 },
+			{ name = "Black Iron", price = 50 },
+			{ name = "Chef Hat", price = 50 },
+			{ name = "Cursed Iron", price = 50 },
+			{ name = "Cursed Wood", price = 50 },
+			{ name = "Duck4", price = 50 },
+			{ name = "Orb Boss", price = 50 },
+			{ name = "Orb Dungeon", price = 50 },
+			{ name = "Pipe", price = 50 },
+			{ name = "Rot Banana", price = 50 },
+			{ name = "Space Ticket", price = 50 },
+			{ name = "Spatula", price = 50 },
+			{ name = "Tomato", price = 50 },
+			{ name = "Aura Blue", price = 250 },
+			{ name = "Aura Brown", price = 250 },
+			{ name = "Aura Orange", price = 250 },
+			{ name = "Aura Purple", price = 250 },
+			{ name = "Aura White", price = 250 },
+			{ name = "Banana", price = 250 },
+			{ name = "Book of Rokuogan", price = 250 },
+			{ name = "Carrot", price = 250 },
+			{ name = "Cheese", price = 250 },
+			{ name = "Chicken Bone", price = 250 },
+			{ name = "Chicken Nugget", price = 250 },
+			{ name = "Cornstarch", price = 250 },
+			{ name = "Dragon Fang", price = 250 },
+			{ name = "Duck5", price = 250 },
+			{ name = "Egg", price = 250 },
+			{ name = "Frying Pan", price = 250 },
+			{ name = "Gold", price = 250 },
+			{ name = "Grains of Rice", price = 250 },
+			{ name = "Holy Gold", price = 250 },
+			{ name = "Holy Iron", price = 250 },
+			{ name = "Holy Stone", price = 250 },
+			{ name = "Holy Wood", price = 250 },
+			{ name = "Orb Black", price = 250 },
+			{ name = "Orb Devil", price = 250 },
+			{ name = "Orb Green", price = 250 },
+			{ name = "Orb Purple", price = 250 },
+			{ name = "Orb Sand", price = 250 },
+			{ name = "Orb Water", price = 250 },
+			{ name = "Pharaoh's Staff", price = 250 },
+			{ name = "Scarf Old", price = 250 },
+			{ name = "Shield Hoplon", price = 250 },
+			{ name = "Stopwatch", price = 250 },
+			{ name = "Vegetable Oil", price = 250 },
+			{ name = "Wind Stone", price = 250 },
+			{ name = "Wolf Fang", price = 250 },
+			{ name = "Aura Black", price = 750 },
+			{ name = "Aura Green", price = 750 },
+			{ name = "Aura Pink", price = 750 },
+			{ name = "Aura Red", price = 750 },
+			{ name = "Aura Yellow", price = 750 },
+			{ name = "Bee", price = 750 },
+			{ name = "Book of Busoshoku Haki", price = 750 },
+			{ name = "Cake Monster", price = 750 },
+			{ name = "Devil Heart", price = 750 },
+			{ name = "Duck6", price = 750 },
+			{ name = "Heart of Envy", price = 750 },
+			{ name = "Khaw Phad Kai", price = 750 },
+			{ name = "Microphone", price = 750 },
+			{ name = "Orb Dragon", price = 750 },
+			{ name = "Orb Fire", price = 750 },
+			{ name = "Orb Fried Chicken", price = 750 },
+			{ name = "Orb Rainbow", price = 750 },
+			{ name = "Shadow Diary", price = 750 },
+			{ name = "Shadow Iron", price = 750 },
+			{ name = "Spear", price = 750 },
+			{ name = "Sugar Bag", price = 750 },
+			{ name = "Thompson Gun", price = 750 },
+			{ name = "Trainer Notes", price = 750 },
+			{ name = "Duck7", price = 850 },
+			{ name = "Magic Evolution", price = 850 },
+			{ name = "Aura Rainbow", price = 1250 },
 		}
 
-		-- ===== BUILD LISTS =====
+		local FALLBACK_MOON = {}
+
 		local PointItemM = SafeRequire({ "Modules.GaranteeRandomItem", "Modules.GuaranteeRandomItem" })
 		local PointItemMoon = SafeRequire({ "Modules.GuaranteeEventMoon", "Modules.GuaranteeEventMoon" })
 
 		local diamondList, moonList = {}, {}
 		local diamondOptions, moonOptions = {}, {}
 
-		-- Diamond: ưu tiên load từ game
 		if PointItemM then
-			print("[v39] Diamond: load từ game")
+			print("[v39] Diamond: load tu game")
 			for n, p in pairs(PointItemM) do
 				table.insert(diamondList, { name = n, price = p, optStr = n .. " (" .. p .. "P)" })
 			end
-			table.sort(diamondList, function(a, b) 
+			table.sort(diamondList, function(a, b)
 				if a.price == b.price then return a.name < b.name end
-				return a.price < b.price 
+				return a.price < b.price
 			end)
 			for _, d in ipairs(diamondList) do
 				table.insert(diamondOptions, d.optStr)
 			end
 		elseif #FALLBACK_DIAMOND > 0 then
-			print("[v39] Diamond: dùng FALLBACK (", #FALLBACK_DIAMOND, "item )")
+			print("[v39] Diamond: dung FALLBACK (" .. #FALLBACK_DIAMOND .. " item)")
 			for _, d in ipairs(FALLBACK_DIAMOND) do
 				table.insert(diamondList, {
 					name = d.name,
@@ -160,25 +154,22 @@ return {
 			for _, d in ipairs(diamondList) do
 				table.insert(diamondOptions, d.optStr)
 			end
-		else
-			print("[v39] ⚠️ Diamond: KHÔNG có data")
 		end
 
-		-- Moon: tương tự
 		if PointItemMoon then
-			print("[v39] Moon: load từ game")
+			print("[v39] Moon: load tu game")
 			for n, p in pairs(PointItemMoon) do
 				table.insert(moonList, { name = n, price = p, optStr = n .. " (" .. p .. "P)" })
 			end
-			table.sort(moonList, function(a, b) 
+			table.sort(moonList, function(a, b)
 				if a.price == b.price then return a.name < b.name end
-				return a.price < b.price 
+				return a.price < b.price
 			end)
 			for _, m in ipairs(moonList) do
 				table.insert(moonOptions, m.optStr)
 			end
 		elseif #FALLBACK_MOON > 0 then
-			print("[v39] Moon: dùng FALLBACK (", #FALLBACK_MOON, "item )")
+			print("[v39] Moon: dung FALLBACK (" .. #FALLBACK_MOON .. " item)")
 			for _, m in ipairs(FALLBACK_MOON) do
 				table.insert(moonList, {
 					name = m.name,
@@ -189,11 +180,9 @@ return {
 			for _, m in ipairs(moonList) do
 				table.insert(moonOptions, m.optStr)
 			end
-		else
-			print("[v39] ⚠️ Moon: KHÔNG có data")
 		end
 
-		print("[v39] ✅ Diamond:", #diamondOptions, "| Moon:", #moonOptions)
+		print("[v39] Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions)
 
 		local State = {
 			running = false, mode = "x15",
@@ -209,18 +198,17 @@ return {
 			if PointItemM and PointItemM[itemName] then
 				price = PointItemM[itemName]
 			else
-				-- Tìm trong diamondList
 				for _, d in ipairs(diamondList) do
 					if d.name == itemName then price = d.price break end
 				end
 			end
 			if price > 0 and point < price then
-				NeoUI.Notify:Show({ Title = "❌ Thiếu Point", Description = itemName .. " (" .. price .. ")", Duration = 2 })
+				NeoUI.Notify:Show({ Title = "Thieu Point", Description = itemName .. " (" .. price .. ")", Duration = 2 })
 				return
 			end
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeRandomItem", itemName)
 			State.selectedItem = itemName
-			NeoUI.Notify:Show({ Title = "✅ Mua: " .. itemName, Description = "-" .. price .. " Point", Duration = 2 })
+			NeoUI.Notify:Show({ Title = "Mua: " .. itemName, Description = "-" .. price .. " Point", Duration = 2 })
 		end
 
 		local function BuyMoonItem(itemName)
@@ -235,12 +223,12 @@ return {
 				end
 			end
 			if price > 0 and point < price then
-				NeoUI.Notify:Show({ Title = "❌ Thiếu Moon", Description = itemName .. " (" .. price .. ")", Duration = 2 })
+				NeoUI.Notify:Show({ Title = "Thieu Moon", Description = itemName .. " (" .. price .. ")", Duration = 2 })
 				return
 			end
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeEventMoon", itemName)
 			State.selectedMoonItem = itemName
-			NeoUI.Notify:Show({ Title = "✅ Mua Moon: " .. itemName, Description = "-" .. price .. " Point", Duration = 2 })
+			NeoUI.Notify:Show({ Title = "Mua Moon: " .. itemName, Description = "-" .. price .. " Point", Duration = 2 })
 		end
 
 		local function FindDiamondByName(query)
@@ -277,7 +265,7 @@ return {
 					end
 				end)
 			end
-			NeoUI.Notify:Show({ Title = State.running and "▶️ Random ON" or "⏹️ Random OFF", Duration = 2 })
+			NeoUI.Notify:Show({ Title = State.running and "Random ON" or "Random OFF", Duration = 2 })
 		end
 
 		local function ToggleMoon()
@@ -290,11 +278,10 @@ return {
 					end
 				end)
 			end
-			NeoUI.Notify:Show({ Title = State.runningMoon and "▶️ Moon ON" or "⏹️ Moon OFF", Duration = 2 })
+			NeoUI.Notify:Show({ Title = State.runningMoon and "Moon ON" or "Moon OFF", Duration = 2 })
 		end
 
-		-- ===== QUAY =====
-		local QuaySec = Tab:CreateSection("🎰 Auto Quay")
+		local QuaySec = Tab:CreateSection("Auto Quay")
 		local QuayRow = QuaySec:TwoColumn()
 
 		QuayRow.Left:Dropdown({
@@ -303,7 +290,7 @@ return {
 			Value = "x15",
 			Callback = function(v) State.mode = v end,
 		})
-		QuayRow.Left:Button({ Title = "▶️ Bật / Dừng", Callback = ToggleRandom })
+		QuayRow.Left:Button({ Title = "Bat / Dung", Callback = ToggleRandom })
 
 		QuayRow.Right:Dropdown({
 			Title = "Moon",
@@ -311,13 +298,12 @@ return {
 			Value = "x15",
 			Callback = function(v) State.modeMoon = v end,
 		})
-		QuayRow.Right:Button({ Title = "▶️ Bật / Dừng", Callback = ToggleMoon })
+		QuayRow.Right:Button({ Title = "Bat / Dung", Callback = ToggleMoon })
 
-		-- ===== DIAMOND SHOP =====
-		local DiamondSec = Tab:CreateSection("💎 Diamond (" .. #diamondOptions .. " item)")
+		local DiamondSec = Tab:CreateSection("Diamond (" .. #diamondOptions .. " item)")
 
 		local diamondDrop = DiamondSec:Dropdown({
-			Title = "Chọn Item",
+			Title = "Chon Item",
 			Options = diamondOptions,
 			Value = nil,
 			Callback = function(v)
@@ -340,7 +326,7 @@ return {
 		end)
 
 		local searchD = DiamondSec:Textbox({
-			Title = "🔍 Nhập tên + Enter 12",
+			Title = "Nhap ten + Enter",
 			Placeholder = "VD: Wood, Duck",
 			Value = "",
 		})
@@ -366,12 +352,12 @@ return {
 								end
 								BuyDiamondItem(found.name)
 								NeoUI.Notify:Show({
-									Title = "✅ Mua: " .. found.name,
+									Title = "Mua: " .. found.name,
 									Description = "-" .. found.price .. " Point",
 									Duration = 3,
 								})
 							else
-								NeoUI.Notify:Show({ Title = "❌ Không tìm thấy", Description = q, Duration = 3 })
+								NeoUI.Notify:Show({ Title = "Khong tim thay", Description = q, Duration = 3 })
 							end
 						end
 					end
@@ -380,21 +366,20 @@ return {
 		end)
 
 		DiamondSec:Button({
-			Title = "🔄 Mua lại",
+			Title = "Mua lai",
 			Callback = function()
 				if State.selectedItem then BuyDiamondItem(State.selectedItem)
-				else NeoUI.Notify:Show({ Title = "❌ Chưa chọn", Duration = 2 }) end
+				else NeoUI.Notify:Show({ Title = "Chua chon", Duration = 2 }) end
 			end,
 		})
 
-		-- ===== MOON SHOP =====
 		local moonDrop = nil
 		local moonDisplayLabel = nil
 		if #moonOptions > 0 then
-			local MoonSec = Tab:CreateSection("🌙 Moon (" .. #moonOptions .. " item)")
+			local MoonSec = Tab:CreateSection("Moon (" .. #moonOptions .. " item)")
 
 			moonDrop = MoonSec:Dropdown({
-				Title = "Chọn Item",
+				Title = "Chon Item",
 				Options = moonOptions,
 				Value = nil,
 				Callback = function(v)
@@ -416,7 +401,7 @@ return {
 			end)
 
 			local searchM = MoonSec:Textbox({
-				Title = "🔍 Nhập tên + Enter",
+				Title = "Nhap ten + Enter",
 				Placeholder = "VD: Aura",
 				Value = "",
 			})
@@ -442,12 +427,12 @@ return {
 									end
 									BuyMoonItem(found.name)
 									NeoUI.Notify:Show({
-										Title = "✅ Moon: " .. found.name,
+										Title = "Moon: " .. found.name,
 										Description = "-" .. found.price,
 										Duration = 3,
 									})
 								else
-									NeoUI.Notify:Show({ Title = "❌ Không tìm thấy", Description = q, Duration = 3 })
+									NeoUI.Notify:Show({ Title = "Khong tim thay", Description = q, Duration = 3 })
 								end
 							end
 						end
@@ -456,15 +441,14 @@ return {
 			end)
 
 			MoonSec:Button({
-				Title = "🔄 Mua lại",
+				Title = "Mua lai",
 				Callback = function()
 					if State.selectedMoonItem then BuyMoonItem(State.selectedMoonItem)
-					else NeoUI.Notify:Show({ Title = "❌ Chưa chọn", Duration = 2 }) end
+					else NeoUI.Notify:Show({ Title = "Chua chon", Duration = 2 }) end
 				end,
 			})
 		end
 
-		-- ===== WATCHDOG =====
 		task.spawn(function()
 			while true do
 				task.wait(0.2)
@@ -480,10 +464,10 @@ return {
 								if found then
 									diamondDisplayLabel.Text = found.optStr
 								else
-									diamondDisplayLabel.Text = "Chọn..."
+									diamondDisplayLabel.Text = "Chon..."
 								end
 							else
-								diamondDisplayLabel.Text = "Chọn..."
+								diamondDisplayLabel.Text = "Chon..."
 							end
 						end
 					end
@@ -498,10 +482,10 @@ return {
 								if found then
 									moonDisplayLabel.Text = found.optStr
 								else
-									moonDisplayLabel.Text = "Chọn..."
+									moonDisplayLabel.Text = "Chon..."
 								end
 							else
-								moonDisplayLabel.Text = "Chọn..."
+								moonDisplayLabel.Text = "Chon..."
 							end
 						end
 					end
@@ -509,22 +493,21 @@ return {
 			end
 		end)
 
-		-- ===== AUTO MUA =====
-		local AutoSec = Tab:CreateSection("🔁 Auto Mua")
+		local AutoSec = Tab:CreateSection("Auto Mua")
 
 		AutoSec:Dropdown({
 			Title = "Shop auto",
-			Options = { "Chỉ Diamond", "Chỉ Moon", "Cả hai" },
-			Value = "Chỉ Diamond",
+			Options = { "Chi Diamond", "Chi Moon", "Ca hai" },
+			Value = "Chi Diamond",
 			Callback = function(v)
-				if v == "Chỉ Diamond" then State.autoShopMode = "Diamond"
-				elseif v == "Chỉ Moon" then State.autoShopMode = "Moon"
+				if v == "Chi Diamond" then State.autoShopMode = "Diamond"
+				elseif v == "Chi Moon" then State.autoShopMode = "Moon"
 				else State.autoShopMode = "Both" end
 			end,
 		})
 
 		AutoSec:Toggle({
-			Title = "Auto mua mỗi 3s",
+			Title = "Auto mua moi 3s",
 			Value = false,
 			Callback = function(v) State.autoBuy = v end,
 		})
@@ -545,7 +528,7 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "✅ v39 Loaded",
+			Title = "v39 Loaded",
 			Description = "Diamond: " .. #diamondOptions .. " | Moon: " .. #moonOptions,
 			Duration = 5,
 		})
