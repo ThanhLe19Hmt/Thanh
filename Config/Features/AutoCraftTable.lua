@@ -1,14 +1,15 @@
 --[[
     Features/AutoCraftTable.lua
-    Craft Table UI + Auto Craft + Auto Claim Guarantee
+    Trả về 1 function nhận CraftTablePage
 ]]
 
 local Globals = _G.__Globals
-assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
-local Utils   = Globals.Utils
+assert(Globals, "[AutoCraftTable] _G.__Globals chưa được set!")
+
+local Utils     = Globals.Utils
 local Inventory = Globals.Inventory
-local RS = Globals.ReplicatedStorage
-local LP = Globals.LocalPlayer
+local RS        = Globals.ReplicatedStorage
+local LP        = Globals.LocalPlayer
 
 return function(CraftTablePage)
     local CraftCard     = CraftTablePage:CreateSection("🔨 Craft Table", "Left")
@@ -112,7 +113,6 @@ return function(CraftTablePage)
         end
     })
 
-    -- Loop Auto Craft
     task.spawn(function()
         while task.wait(0.5) do
             if _G.AutoCraftRunning and _G.SelectedCraftItem then
@@ -137,14 +137,10 @@ return function(CraftTablePage)
         end
     end)
 
-    -- Auto Claim Guarantee
     _G.AutoClaimGuarantee = false
     CraftInfoCard:Toggle({
         Title = "Auto Claim Guarantee", Value = false,
-        Callback = function(v)
-            _G.AutoClaimGuarantee = v
-            print("[AutoClaim] Running:", v)
-        end
+        Callback = function(v) _G.AutoClaimGuarantee = v end
     })
 
     task.spawn(function()
@@ -168,7 +164,7 @@ return function(CraftTablePage)
                                 if cur and max and cur >= max then
                                     RS.Modules.NetworkFramework.NetworkEvent
                                         :FireServer("fire", nil, "CraftTable", _G.SelectedCraftItem, "Guarantee")
-                                    print("[AutoClaim] Claim:", _G.SelectedCraftItem, amtLbl.Text)
+                                    print("[AutoClaim] Claim:", _G.SelectedCraftItem)
                                     task.wait(1)
                                 end
                             end
@@ -179,7 +175,6 @@ return function(CraftTablePage)
         end
     end)
 
-    -- Loop update craft info
     task.spawn(function()
         local lastInfo = ""
         while task.wait(0.5) do
