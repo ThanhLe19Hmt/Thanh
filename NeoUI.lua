@@ -1455,18 +1455,18 @@ function NeoUI:CreateWindow(opts)
 						Size = UDim2.new(1, 0, 0, 20), LayoutOrder = order,
 					})
 
-					-- Key label — bên trái, cố định
+					-- Key label — bên trái, cho 45% bề rộng
 					local keyLbl = Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(key) .. ":",
 						Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
 						TextXAlignment = Enum.TextXAlignment.Left,
 						TextTruncate = Enum.TextTruncate.AtEnd,
-						Size = UDim2.new(0.4, -4, 1, 0),
+						Size = UDim2.new(0.45, -4, 1, 0),
 						Position = UDim2.new(0, 0, 0, 0),
 					})
 
-					-- Value label — bên phải, dài thì co lại, không tràn
+					-- Value label — bên phải, 55%
 					local valLbl = Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(value),
@@ -1474,8 +1474,8 @@ function NeoUI:CreateWindow(opts)
 						TextXAlignment = Enum.TextXAlignment.Right,
 						TextTruncate = Enum.TextTruncate.AtEnd,
 						TextScaled = false,
-						Size = UDim2.new(0.6, -4, 1, 0),
-						Position = UDim2.new(0.4, 4, 0, 0),
+						Size = UDim2.new(0.55, -4, 1, 0),
+						Position = UDim2.new(0.45, 4, 0, 0),
 					})
 					valueLabels[key] = valLbl
 					return row
@@ -1759,24 +1759,24 @@ function NeoUI:CreateWindow(opts)
 
 						local valueLabels = {}
 
-										local function createRow(key, value, order)
+						local function createRow(key, value, order)
 					local row = Create("Frame", {
 						Parent = list, BackgroundTransparency = 1,
 						Size = UDim2.new(1, 0, 0, 20), LayoutOrder = order,
 					})
 
-					-- Key label — bên trái, cố định
+					-- Key label — bên trái, cho 45% bề rộng
 					local keyLbl = Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(key) .. ":",
 						Font = FONT_M, TextSize = 11, TextColor3 = THEME.TextDim,
 						TextXAlignment = Enum.TextXAlignment.Left,
 						TextTruncate = Enum.TextTruncate.AtEnd,
-						Size = UDim2.new(0.4, -4, 1, 0),
+						Size = UDim2.new(0.45, -4, 1, 0),
 						Position = UDim2.new(0, 0, 0, 0),
 					})
 
-					-- Value label — bên phải, dài thì co lại, không tràn
+					-- Value label — bên phải, 55%
 					local valLbl = Create("TextLabel", {
 						Parent = row, BackgroundTransparency = 1,
 						Text = tostring(value),
@@ -1784,8 +1784,8 @@ function NeoUI:CreateWindow(opts)
 						TextXAlignment = Enum.TextXAlignment.Right,
 						TextTruncate = Enum.TextTruncate.AtEnd,
 						TextScaled = false,
-						Size = UDim2.new(0.6, -4, 1, 0),
-						Position = UDim2.new(0.4, 4, 0, 0),
+						Size = UDim2.new(0.55, -4, 1, 0),
+						Position = UDim2.new(0.45, 4, 0, 0),
 					})
 					valueLabels[key] = valLbl
 					return row
