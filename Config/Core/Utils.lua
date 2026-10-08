@@ -1,6 +1,5 @@
 --[[
     Core/Utils.lua
-    Helper functions dùng chung
 ]]
 
 local Utils = {}
@@ -12,9 +11,7 @@ local LocalPlayer       = Players.LocalPlayer
 -- ===== Teleport =====
 function Utils.Teleport(pos)
     local char = LocalPlayer.Character
-    if char then
-        char:PivotTo(pos)
-    end
+    if char then char:PivotTo(pos) end
 end
 
 -- ===== Anti AFK =====
@@ -36,7 +33,7 @@ function Utils.GetMethodFarm()
         return CFrame.new(0, 0, -d) * CFrame.Angles(0, math.rad(180), 0)
     elseif m == "Below" then
         return CFrame.new(0, -d, 0) * CFrame.Angles(math.rad(90), 0, 0)
-    else -- Upper / None / default
+    else
         return CFrame.new(0, d, 0) * CFrame.Angles(math.rad(-90), 0, 0)
     end
 end
@@ -59,12 +56,10 @@ function Utils.StartAutoCloseGUI()
             pcall(function()
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 if not hud or not hud:FindFirstChild("Main") then return end
-
                 local closeList = {
-                    {_G.Auto_Dungeon,     "Frame_DungeonItem"},
-                    {_G.AutoRaidRunning,  "Frame_RaidbossItem"}
+                    {_G.Auto_Dungeon,    "Frame_DungeonItem"},
+                    {_G.AutoRaidRunning, "Frame_RaidbossItem"}
                 }
-
                 for _, entry in ipairs(closeList) do
                     if entry[1] then
                         local fd = hud.Main:FindFirstChild(entry[2])
@@ -82,10 +77,8 @@ function Utils.StartAutoCloseGUI()
                                         closeBtn:Activate()
                                     end
                                 end)
-                                print("[AutoClose] Đã đóng:", entry[2])
                             else
                                 fd.Visible = false
-                                print("[AutoClose] Đã ẩn:", entry[2])
                             end
                         end
                     end
@@ -95,7 +88,7 @@ function Utils.StartAutoCloseGUI()
     end)
 end
 
--- ===== Noclip / BodyVelocity =====
+-- ===== Noclip =====
 function Utils.StartNoclipLoop()
     task.spawn(function()
         pcall(function()
@@ -112,11 +105,11 @@ function Utils.StartNoclipLoop()
                     if not hrp then return end
 
                     if not hrp:FindFirstChild("BodyClip") then
-                        local Noclip = Instance.new("BodyVelocity")
-                        Noclip.Name = "BodyClip"
-                        Noclip.Parent = hrp
-                        Noclip.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-                        Noclip.Velocity = Vector3.new(0, 0, 0)
+                        local bp = Instance.new("BodyVelocity")
+                        bp.Name = "BodyClip"
+                        bp.Parent = hrp
+                        bp.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                        bp.Velocity = Vector3.new(0, 0, 0)
                     end
                 else
                     local char = LocalPlayer.Character
@@ -132,7 +125,7 @@ function Utils.StartNoclipLoop()
     end)
 end
 
--- ===== Anti-gravity / freeze angular velocity =====
+-- ===== Anti-gravity =====
 function Utils.StartAntiGravityLoop()
     task.spawn(function()
         while task.wait() do
@@ -141,7 +134,6 @@ function Utils.StartAntiGravityLoop()
                 or _G.Auto_DuckAutomatically or _G.Auto_Duck or _G.Auto_Farm_Set
                 or _G.Auto_Raid or _G.Auto_BaconThief or _G.Auto_Dungeon
                 or _G.Auto_Piccolo then
-
                 pcall(function()
                     local char = LocalPlayer.Character
                     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -156,15 +148,24 @@ function Utils.StartAntiGravityLoop()
     end)
 end
 
--- ===== Notify wrapper =====
+-- ===== Notify (an toàn, dùng _G.__Globals) =====
 function Utils.Notify(title, desc, duration)
-    if Globals and Globals.Library then
-        Globals.Library:Notify({
+    local G = _G.__Globals
+    if not G then
+        print("[Notify]", title, "-", desc)
+        return
+    end
+    if not G.Library then
+        print("[Notify - no Library]", title, "-", desc)
+        return
+    end
+    pcall(function()
+        G.Library:Notify({
             Title = title,
             Description = desc,
             Duration = duration or 3
         })
-    end
+    end)
 end
 
 return Utils
