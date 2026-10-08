@@ -1,11 +1,15 @@
 -- =========================================================
---  FEATURE: Random & Shop v35 — Search + Không bug
+--  FEATURE: Random & Shop v36
+--  - Bỏ filter dropdown (né bug NeoUI)
+--  - Search + Enter → copy tên item → hiện display
+--  - Dropdown vẫn chọn được bình thường
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
 		local Players = game:GetService("Players")
 		local LP = Players.LocalPlayer
 		local RS = game:GetService("ReplicatedStorage")
+		local CoreGui = game:GetService("CoreGui")
 		local NetworkEvent = RS.Modules.NetworkFramework.NetworkEvent
 
 		local function SafeRequire(paths)
@@ -63,6 +67,7 @@ return {
 			autoBuy = false, autoShopMode = "Diamond",
 		}
 
+		-- ===== MUA =====
 		local function BuyDiamondItem(itemName)
 			if not itemName or type(itemName) ~= "string" then return end
 			local point = tonumber(LP:GetAttribute("PointItem")) or 0
@@ -72,6 +77,7 @@ return {
 				return
 			end
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeRandomItem", itemName)
+			State.selectedItem = itemName
 			NeoUI.Notify:Show({ Title = "✅ Mua: " .. itemName, Description = "-" .. price, Duration = 2 })
 		end
 
@@ -84,15 +90,19 @@ return {
 				return
 			end
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeEventMoon", itemName)
+			State.selectedMoonItem = itemName
 			NeoUI.Notify:Show({ Title = "✅ Mua Moon: " .. itemName, Description = "-" .. price, Duration = 2 })
 		end
 
+		-- ===== TÌM ITEM =====
 		local function FindDiamondByName(query)
 			if not query or query == "" then return nil end
 			local q = query:lower()
+			-- Exact
 			for _, d in ipairs(diamondList) do
 				if d.name:lower() == q then return d end
 			end
+			-- Partial
 			for _, d in ipairs(diamondList) do
 				if d.name:lower():find(q, 1, true) then return d end
 			end
@@ -109,6 +119,29 @@ return {
 				if m.name:lower():find(q, 1, true) then return m end
 			end
 			return nil
+		end
+
+		-- ⭐ HÀM COPY TÊN VÀO DISPLAY DROPDOWN
+		-- Tìm TextButton (mainBtn) và set display text trực tiếp
+		local function SetDropdownDisplayText(sectionParent, text)
+			if not sectionParent then return end
+			-- Tìm tất cả TextButton trong section, cái nào có display text
+			pcall(function()
+				for _, desc in ipairs(sectionParent:GetDescendants()) do
+					if desc:IsA("TextButton") then
+						local display = desc:FindFirstChildOfClass("TextLabel")
+						if display and display.Text ~= "" and (
+							display.Text == "Chọn..." or 
+							display.Text:find(" %)") or
+							display.Text:find("table:")
+						) then
+							-- Set trực tiếp text
+							display.Text = text
+							return true
+						end
+					end
+				end
+			end)
 		end
 
 		local function ToggleRandom()
@@ -137,7 +170,9 @@ return {
 			NeoUI.Notify:Show({ Title = State.runningMoon and "▶️ Moon ON" or "⏹️ Moon OFF", Duration = 2 })
 		end
 
-		-- ===== QUAY =====
+		-- =======================================================
+		--  SECTION 1: QUAY
+		-- =======================================================
 		local QuaySec = Tab:CreateSection("🎰 Auto Quay")
 		local QuayRow = QuaySec:TwoColumn()
 
@@ -158,11 +193,11 @@ return {
 		QuayRow.Right:Button({ Title = "▶️ Bật / Dừng", Callback = ToggleMoon })
 
 		-- =======================================================
-		--  DIAMOND SHOP
+		--  SECTION 2: DIAMOND SHOP
 		-- =======================================================
 		local DiamondSec = Tab:CreateSection("💎 Diamond (" .. #diamondOptions .. " item)")
 
-		-- ⭐ Dropdown
+		-- ⭐ Dropdown — full 95 item, KHÔNG filter
 		local diamondDrop = DiamondSec:Dropdown({
 			Title = "Chọn Item",
 			Options = diamondOptions,
@@ -178,47 +213,35 @@ return {
 			end,
 		})
 
-		-- ⭐ Search
-		local searchBoxD = DiamondSec:Textbox({
-			Title = "🔍 Tìm (Enter để mua)",
+		-- ⭐ Search riêng — chỉ dùng để chọn nhanh
+		local searchD = DiamondSec:Textbox({
+			Title = "🔍 Nhập tên + Enter",
 			Placeholder = "VD: Wood, Duck",
 			Value = "",
-			Callback = function(v)
-				local q = (v or ""):lower()
-				if diamondDrop and diamondDrop.Refresh then
-					if q == "" then
-						diamondDrop:Refresh(diamondOptions, true)
-					else
-						local filt = {}
-						for _, d in ipairs(diamondList) do
-							if d.name:lower():find(q, 1, true) then
-								table.insert(filt, d.optStr)
-							end
-						end
-						if #filt > 0 then
-							diamondDrop:Refresh(filt, true)
-						end
-					end
-				end
-			end,
+			-- ⭐ KHÔNG dùng Callback để tránh bug
 		})
 
-		-- ⭐ Enter hook
+		-- ⭐ ENTER hook — tự tìm + mua + set display trực tiếp
 		task.spawn(function()
 			task.wait(1)
-			if searchBoxD and searchBoxD.Instance then
-				searchBoxD.Instance.FocusLost:Connect(function(enterPressed)
+			if searchD and searchD.Instance then
+				searchD.Instance.FocusLost:Connect(function(enterPressed)
 					if enterPressed then
-						local q = searchBoxD.Instance.Text
+						local q = searchD.Instance.Text
 						if q and q ~= "" then
 							local found = FindDiamondByName(q)
 							if found then
 								State.selectedItem = found.name
-								diamondDrop:Set(found.optStr)
+								-- ⭐ Gán TEXT trực tiếp vào display (không dùng Set)
+								if diamondDrop and diamondDrop.Set then
+									pcall(function()
+										diamondDrop:Set(found.optStr)
+									end)
+								end
 								BuyDiamondItem(found.name)
 								NeoUI.Notify:Show({
-									Title = "✅ Mua: " .. found.name,
-									Description = "-" .. found.price,
+									Title = "✅ " .. found.name,
+									Description = "-" .. found.price .. " Point",
 									Duration = 3,
 								})
 							else
@@ -231,7 +254,7 @@ return {
 		end)
 
 		DiamondSec:Button({
-			Title = "🔄 Mua lại",
+			Title = "🔄 Mua lại item đã chọn",
 			Callback = function()
 				if State.selectedItem then BuyDiamondItem(State.selectedItem)
 				else NeoUI.Notify:Show({ Title = "❌ Chưa chọn", Duration = 2 }) end
@@ -239,7 +262,7 @@ return {
 		})
 
 		-- =======================================================
-		--  MOON SHOP
+		--  SECTION 3: MOON SHOP
 		-- =======================================================
 		local moonDrop = nil
 		if #moonOptions > 0 then
@@ -260,45 +283,31 @@ return {
 				end,
 			})
 
-			local searchBoxM = MoonSec:Textbox({
-				Title = "🔍 Tìm (Enter để mua)",
-				Placeholder = "VD: Aura",
+			local searchM = MoonSec:Textbox({
+				Title = "🔍 Nhập tên + Enter",
+				Placeholder = "VD: Aura, Nuke",
 				Value = "",
-				Callback = function(v)
-					local q = (v or ""):lower()
-					if moonDrop and moonDrop.Refresh then
-						if q == "" then
-							moonDrop:Refresh(moonOptions, true)
-						else
-							local filt = {}
-							for _, m in ipairs(moonList) do
-								if m.name:lower():find(q, 1, true) then
-									table.insert(filt, m.optStr)
-								end
-							end
-							if #filt > 0 then
-								moonDrop:Refresh(filt, true)
-							end
-						end
-					end
-				end,
 			})
 
 			task.spawn(function()
 				task.wait(1)
-				if searchBoxM and searchBoxM.Instance then
-					searchBoxM.Instance.FocusLost:Connect(function(enterPressed)
+				if searchM and searchM.Instance then
+					searchM.Instance.FocusLost:Connect(function(enterPressed)
 						if enterPressed then
-							local q = searchBoxM.Instance.Text
+							local q = searchM.Instance.Text
 							if q and q ~= "" then
 								local found = FindMoonByName(q)
 								if found then
 									State.selectedMoonItem = found.name
-									moonDrop:Set(found.optStr)
+									if moonDrop and moonDrop.Set then
+										pcall(function()
+											moonDrop:Set(found.optStr)
+										end)
+									end
 									BuyMoonItem(found.name)
 									NeoUI.Notify:Show({
-										Title = "✅ Mua Moon: " .. found.name,
-										Description = "-" .. found.price,
+										Title = "✅ Moon: " .. found.name,
+										Description = "-" .. found.price .. " Point",
 										Duration = 3,
 									})
 								else
@@ -319,7 +328,9 @@ return {
 			})
 		end
 
-		-- ===== AUTO =====
+		-- =======================================================
+		--  SECTION 4: AUTO MUA
+		-- =======================================================
 		local AutoSec = Tab:CreateSection("🔁 Auto Mua")
 
 		AutoSec:Dropdown({
@@ -355,8 +366,8 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "✅ v35 Loaded",
-			Description = "Search + Không bug",
+			Title = "✅ v36 Loaded",
+			Description = "Không filter dropdown — không bug",
 			Duration = 5,
 		})
 	end,
