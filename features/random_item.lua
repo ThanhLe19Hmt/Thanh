@@ -1,211 +1,180 @@
 -- =========================================================
---  FEATURE: Random & Shop v7 (Viết lại hoàn toàn)
---  Quét item trực tiếp từ ItemScrollingFrame
+--  FEATURE: Random & Shop v12 FINAL
+--  ✅ Remote chuẩn: BuyGaranteeRandomItem / BuyGaranteeEventMoon
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
 		local Players = game:GetService("Players")
 		local LP = Players.LocalPlayer
-		local VIM = game:GetService("VirtualInputManager")
+		local RS = game:GetService("ReplicatedStorage")
+		local NetworkEvent = RS.Modules.NetworkFramework.NetworkEvent
+		local HttpService = game:GetService("HttpService")
 
-		local DELAY = 0.5
+		-- Load module giá
+		local PointItemM = nil
+		local PointItemMoon = nil
+		pcall(function() PointItemM = require(RS.Modules.GuaranteeRandomItem) end)
+		pcall(function() PointItemMoon = require(RS.Modules.GuaranteeEventMoon) end)
 
-		-- =========================================================
-		--  HELPERS
-		-- =========================================================
-		local function GetHUD()
-			return LP.PlayerGui:FindFirstChild("HUD")
-		end
-
-		-- Lấy ItemScrollingFrame trong panel Random
-		local function GetScrollFrame()
-			local hud = GetHUD()
-			if not hud then return nil end
-			local main = hud:FindFirstChild("Main")
-			if not main then return nil end
-			local ri = main:FindFirstChild("Frame_RandomItem")
-			if not ri then return nil end
-			return ri:FindFirstChild("ItemScrollingFrame")
-		end
-
-		-- Đọc Points từ panel
-		local function ReadPoints()
-			local hud = GetHUD()
-			if not hud then return "N/A" end
-			local ri = hud.Main and hud.Main:FindFirstChild("Frame_RandomItem")
-			if not ri then return "N/A" end
-			local df = ri:FindFirstChild("DisplayFrame")
-			if not df then return "N/A" end
-			local pl = df:FindFirstChild("PointLabel")
-			return pl and pl.Text or "N/A"
-		end
-
-		-- Click button: firesignal + VIM
-		local function ClickButton(btn)
-			if not btn then return false end
-			
-			-- Thử firesignal
-			if firesignal then
-				pcall(function() firesignal(btn.Activated) end)
-				pcall(function() firesignal(btn.MouseButton1Click) end)
-			end
-			
-			-- VIM click (chắc chắn hơn)
-			local pos = btn.AbsolutePosition + btn.AbsoluteSize / 2
-			VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
-			task.wait(0.05)
-			VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
-			return true
-		end
-
-		-- =========================================================
-		--  SCAN ITEMS
-		-- =========================================================
-		local function ScanItems()
-			local list = {}
-			local scroll = GetScrollFrame()
-			if not scroll then 
-				print("[Random] Không có ItemScrollingFrame")
-				return list 
-			end
-
-			for _, child in ipairs(scroll:GetChildren()) do
-				if child:IsA("Frame") then
-					-- Bỏ qua Template
-					if child.Name ~= "Template" 
-						and child.Name ~= "ItemTemplate" 
-						and not child.Name:lower():find("template") then
-						
-						-- Tìm nút để click bên trong
-						local mainBtn = child:FindFirstChild("Main")
-						
-						table.insert(list, {
-							name = child.Name,
-							frame = child,
-							button = mainBtn,
-						})
-					end
-				end
-			end
-
-			table.sort(list, function(a, b) return a.name < b.name end)
-			print("[Random] Quét được", #list, "item")
-			return list
-		end
-
-		-- =========================================================
-		--  STATE
-		-- =========================================================
+		-- ===== STATE =====
 		local State = {
 			running = false,
 			mode = "x15",
 			count = 0,
 			selectedItem = nil,
-			autoShop = false,
-			itemList = {},
-			lastListKey = "",
+			selectedMoonItem = nil,
+			autoBuy = false,
 		}
 
-		-- =========================================================
-		--  RANDOM
-		-- =========================================================
-		local function GetRandomButton(mode)
-			local hud = GetHUD()
-			if not hud then return nil end
-			local df = hud.Main 
-				and hud.Main.Frame_RandomItem 
-				and hud.Main.Frame_RandomItem.DisplayFrame
-			if not df then return nil end
-			return df:FindFirstChild(mode)
+		-- ===== HELPERS =====
+		local function GetInventory()
+			local ok, data = pcall(function()
+				return HttpService:JSONDecode(LP:GetAttribute("Inventory") or "{}")
+			end)
+			return ok and data or {}
 		end
 
+		local function GetItemAmount(name)
+			local inv = GetInventory()
+			return (inv[name] and inv[name].amount) or 0
+		end
+
+		-- ===== RANDOM =====
 		local function ToggleRandom()
 			if State.running then
 				State.running = false
 				NeoUI.Notify:Show({ Title = "⏹️ Dừng quay", Duration = 2 })
 				return
 			end
-
 			State.running = true
 			State.count = 0
 			NeoUI.Notify:Show({
 				Title = "▶️ Bắt đầu " .. State.mode,
 				Duration = 2,
 			})
-			
 			task.spawn(function()
 				while State.running do
-					local btn = GetRandomButton(State.mode)
-					if btn then
-						ClickButton(btn)
+					pcall(function()
+						NetworkEvent:FireServer("fire", nil, "RandomItem", State.mode)
 						State.count = State.count + 1
-					else
-						print("[Random] Không tìm thấy nút", State.mode)
-					end
-					task.wait(DELAY)
+					end)
+					task.wait(0.1)
 				end
 			end)
 		end
 
-		-- =========================================================
-		--  SELECT ITEM
-		-- =========================================================
-		local function SelectItem(name)
-			-- Nếu list trống → quét lại
-			if #State.itemList == 0 then
-				State.itemList = ScanItems()
+		-- ===== MUA ITEM =====
+		local function BuyDiamondItem(itemName)
+			local point = tonumber(LP:GetAttribute("PointItem")) or 0
+			local price = (PointItemM and PointItemM[itemName]) or 0
+			
+			if price == 0 then
+				NeoUI.Notify:Show({
+					Title = "❌ Item không có giá",
+					Description = itemName,
+					Duration = 2,
+				})
+				return false
 			end
-
-			for _, item in ipairs(State.itemList) do
-				if item.name:lower() == name:lower() then
-					State.selectedItem = item.name
-
-					-- Ưu tiên click nút "Main" nếu có
-					if item.button then
-						print("[Random] Click vào nút Main của", item.name)
-						ClickButton(item.button)
-					else
-						-- Không có nút Main → click thẳng frame
-						print("[Random] Click thẳng vào frame", item.name)
-						ClickButton(item.frame)
-					end
-
-					NeoUI.Notify:Show({
-						Title = "✅ Đổi sang: " .. item.name,
-						Duration = 3,
-					})
-					return true
-				end
+			
+			if point < price then
+				NeoUI.Notify:Show({
+					Title = "❌ Không đủ Point",
+					Description = "Cần " .. price .. ", có " .. point,
+					Duration = 3,
+				})
+				return false
 			end
-
+			
+			NetworkEvent:FireServer("fire", nil, "BuyGaranteeRandomItem", itemName)
 			NeoUI.Notify:Show({
-				Title = "❌ Không tìm thấy",
-				Description = name,
+				Title = "✅ Mua: " .. itemName,
+				Description = "-" .. price .. " Point",
 				Duration = 2,
 			})
-			return false
+			print("[Shop] Mua:", itemName, "| Giá:", price, "| Còn:", point - price)
+			return true
 		end
 
-		-- =========================================================
-		--  UI
-		-- =========================================================
+		local function BuyMoonItem(itemName)
+			local point = tonumber(LP:GetAttribute("MoonPoint")) or 0
+			local price = (PointItemMoon and PointItemMoon[itemName]) or 0
+			
+			if price == 0 then
+				NeoUI.Notify:Show({
+					Title = "❌ Item không có giá",
+					Duration = 2,
+				})
+				return false
+			end
+			
+			if point < price then
+				NeoUI.Notify:Show({
+					Title = "❌ Không đủ Moon Point",
+					Description = "Cần " .. price .. ", có " .. point,
+					Duration = 3,
+				})
+				return false
+			end
+			
+			NetworkEvent:FireServer("fire", nil, "BuyGaranteeEventMoon", itemName)
+			NeoUI.Notify:Show({
+				Title = "✅ Mua Moon: " .. itemName,
+				Description = "-" .. price .. " Point",
+				Duration = 2,
+			})
+			return true
+		end
+
+		-- ===== BUILD DROPDOWN OPTIONS =====
+		local diamondOptions = {}
+		local diamondPriceMap = {}  -- { "Tên - Giá Point": "Tên gốc" }
+		if PointItemM then
+			local list = {}
+			for name, price in pairs(PointItemM) do
+				table.insert(list, { name = name, price = price })
+			end
+			table.sort(list, function(a, b) return a.price < b.price end)
+			for _, d in ipairs(list) do
+				local optStr = d.name .. " - " .. d.price .. " Point"
+				table.insert(diamondOptions, optStr)
+				diamondPriceMap[optStr] = d.name
+			end
+		end
+
+		local moonOptions = {}
+		local moonPriceMap = {}
+		if PointItemMoon then
+			local list = {}
+			for name, price in pairs(PointItemMoon) do
+				table.insert(list, { name = name, price = price })
+			end
+			table.sort(list, function(a, b) return a.price < b.price end)
+			for _, m in ipairs(list) do
+				local optStr = m.name .. " - " .. m.price .. " Point"
+				table.insert(moonOptions, optStr)
+				moonPriceMap[optStr] = m.name
+			end
+		end
+
+		-- ===== UI =====
 		local Sec = Tab:CreateSection("🎰 Random & Shop")
 
 		Sec:Paragraph({
 			Title = "Hướng dẫn",
-			Content = "Bên trái: Random. Bên phải: đổi item.\nMở panel Random Item game trước.",
+			Content = "Bên trái: bật quay chest.\nBên phải: chọn item + MUA bằng Point.",
 		})
 
 		local MainRow = Sec:TwoColumn()
 
-		-- ===== CỘT TRÁI =====
+		-- ===== CỘT TRÁI: RANDOM =====
 		local RandomInfo = MainRow.Left:ListRow({
 			Title = "🎰 Random",
 			Items = {
 				{ key = "Trạng thái", value = "❌ Dừng" },
 				{ key = "Mốc", value = "x15" },
 				{ key = "Đã quay", value = "0" },
-				{ key = "Points", value = "N/A" },
+				{ key = "Diamond", value = "N/A" },
 			},
 		})
 
@@ -232,95 +201,107 @@ return {
 			end,
 		})
 
-		-- ===== CỘT PHẢI =====
+		-- ===== CỘT PHẢI: SHOP =====
 		local ShopInfo = MainRow.Right:ListRow({
-			Title = "🛒 Shop Item",
+			Title = "🛒 Shop",
 			Items = {
 				{ key = "Đang chọn", value = "-" },
-				{ key = "Auto đổi", value = "❌ Tắt" },
-				{ key = "Số item", value = "0" },
+				{ key = "PointItem", value = "N/A" },
+				{ key = "MoonPoint", value = "N/A" },
+				{ key = "Đã mua", value = "0" },
 			},
 		})
 
-		local itemDropdown = MainRow.Right:Dropdown({
-			Title = "Đổi Item",
-			Options = { "⏳ Đang quét..." },
+		-- ⭐ Dropdown Diamond Point
+		MainRow.Right:Dropdown({
+			Title = "💎 Chọn Item (Diamond Point)",
+			Options = diamondOptions,
 			Value = nil,
 			Callback = function(v)
-				if v and v ~= "⏳ Đang quét..." and v ~= "❌ Không có item" then
-					SelectItem(v)
-				end
-			end,
-		})
-
-		-- Auto scan mỗi 1s
-		task.spawn(function()
-			task.wait(0.8)
-			while true do
-				local list = ScanItems()
-				State.itemList = list
-				
-				local names = {}
-				for _, it in ipairs(list) do
-					table.insert(names, it.name)
-				end
-				local key = table.concat(names, "|")
-				
-				if key ~= State.lastListKey and itemDropdown and itemDropdown.Refresh then
-					State.lastListKey = key
-					if #names > 0 then
-						itemDropdown:Refresh(names, true)
-					else
-						itemDropdown:Refresh({ "❌ Không có item" }, false)
+				if v then
+					local itemName = diamondPriceMap[v]
+					if itemName then
+						State.selectedItem = itemName
+						BuyDiamondItem(itemName)
 					end
 				end
-				task.wait(1)
-			end
-		end)
-
-		MainRow.Right:Toggle({
-			Title = "Auto đổi Shop",
-			Value = false,
-			Callback = function(v)
-				State.autoShop = v
-				NeoUI.Notify:Show({
-					Title = v and "✅ Auto ON" or "❌ Auto OFF",
-					Duration = 2,
-				})
 			end,
 		})
 
-		-- Auto shop loop
+		-- ⭐ Dropdown Moon Point
+		if #moonOptions > 0 then
+			MainRow.Right:Dropdown({
+				Title = "🌙 Chọn Item (Moon Point)",
+				Options = moonOptions,
+				Value = nil,
+				Callback = function(v)
+					if v then
+						local itemName = moonPriceMap[v]
+						if itemName then
+							State.selectedMoonItem = itemName
+							BuyMoonItem(itemName)
+						end
+					end
+				end,
+			})
+		end
+
+		-- Nút mua lại
+		MainRow.Right:Button({
+			Title = "🔄 Mua lại item đã chọn",
+			Callback = function()
+				if State.selectedItem then
+					BuyDiamondItem(State.selectedItem)
+				else
+					NeoUI.Notify:Show({ Title = "❌ Chưa chọn item", Duration = 2 })
+				end
+			end,
+		})
+
+		-- Toggle auto buy
+		MainRow.Right:Toggle({
+			Title = "Auto mua lại mỗi 3s",
+			Value = false,
+			Callback = function(v)
+				State.autoBuy = v
+			end,
+		})
+
+		-- ===== AUTO BUY LOOP =====
 		task.spawn(function()
 			while true do
 				task.wait(3)
-				if State.autoShop and State.selectedItem then
-					SelectItem(State.selectedItem)
+				if State.autoBuy and State.selectedItem then
+					BuyDiamondItem(State.selectedItem)
 				end
 			end
 		end)
 
-		-- Auto refresh status
+		-- ===== REFRESH =====
 		task.spawn(function()
 			task.wait(0.5)
 			while true do
 				task.wait(1)
 				pcall(function()
+					local diamond = LP:GetAttribute("Diamond") or 0
+					local pointItem = LP:GetAttribute("PointItem") or 0
+					local moonPoint = LP:GetAttribute("MoonPoint") or 0
+
 					RandomInfo:UpdateItem("Trạng thái", State.running and "✅ Đang chạy" or "❌ Dừng")
 					RandomInfo:UpdateItem("Mốc", State.mode)
 					RandomInfo:UpdateItem("Đã quay", tostring(State.count))
-					RandomInfo:UpdateItem("Points", ReadPoints())
+					RandomInfo:UpdateItem("Diamond", tostring(math.floor(diamond)))
 
 					ShopInfo:UpdateItem("Đang chọn", State.selectedItem or "-")
-					ShopInfo:UpdateItem("Auto đổi", State.autoShop and "✅ Bật" or "❌ Tắt")
-					ShopInfo:UpdateItem("Số item", tostring(#State.itemList))
+					ShopInfo:UpdateItem("PointItem", tostring(pointItem))
+					ShopInfo:UpdateItem("MoonPoint", tostring(moonPoint))
 				end)
 			end
 		end)
 
 		NeoUI.Notify:Show({
 			Title = "✅ Random & Shop",
-			Description = "Mở panel Random Item game để quét",
+			Description = "Chọn item từ dropdown để mua",
 			Duration = 3,
 		})
 	end,
