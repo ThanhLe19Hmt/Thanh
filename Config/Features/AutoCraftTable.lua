@@ -3,7 +3,8 @@
     Craft Table UI + Auto Craft + Auto Claim Guarantee
 ]]
 
-local Globals = _G.__Globals or Globals
+local Globals = _G.__Globals
+assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
 local Utils   = Globals.Utils
 local Inventory = Globals.Inventory
 local RS = Globals.ReplicatedStorage
