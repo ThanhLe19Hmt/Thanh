@@ -3,7 +3,8 @@
     Gọi tất cả feature modules
 ]]
 
-local Globals = _G.__Globals or Globals
+local Globals = _G.__Globals
+assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
 local Utils   = Globals.Utils
 
 -- Core loops
