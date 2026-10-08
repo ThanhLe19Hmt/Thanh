@@ -215,7 +215,7 @@ return {
 
 		-- ⭐ Search riêng — chỉ dùng để chọn nhanh
 		local searchD = DiamondSec:Textbox({
-			Title = "🔍 Nhập tên + Enter",
+			Title = "🔍 Nhập tên + Ente 36r",
 			Placeholder = "VD: Wood, Duck",
 			Value = "",
 			-- ⭐ KHÔNG dùng Callback để tránh bug
