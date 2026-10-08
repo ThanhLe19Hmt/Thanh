@@ -1,15 +1,15 @@
 -- =========================================================
---  FEATURE: Random & Shop v21
---  - Random trên, Shop dưới
---  - 2 Shop nằm NGANG (trái Diamond, phải Moon)
---  - Cả Dropdown + Search (Enter để chọn)
+--  FEATURE: Random & Shop v24 FINAL
+--  - Dùng Dropdown popup (không bị cắt)
+--  - Layout: Random trên, Shop dưới
+--  - 2 Shop nằm ngang (trái Diamond, phải Moon)
+--  - Search + Dropdown đều hoạt động
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
 		local Players = game:GetService("Players")
 		local LP = Players.LocalPlayer
 		local RS = game:GetService("ReplicatedStorage")
-		local UserInputService = game:GetService("UserInputService")
 		local NetworkEvent = RS.Modules.NetworkFramework.NetworkEvent
 
 		-- Load module
@@ -37,6 +37,9 @@ return {
 			"Modules.GaranteeEventMoon",
 		})
 
+		print("[Random] Diamond loaded:", PointItemM ~= nil)
+		print("[Random] Moon loaded:", PointItemMoon ~= nil)
+
 		-- ===== STATE =====
 		local State = {
 			running = false, mode = "x15", count = 0,
@@ -44,59 +47,35 @@ return {
 			selectedItem = nil, selectedMoonItem = nil,
 			autoBuy = false, boughtCount = 0,
 			autoShopMode = "Diamond",
+			searchDiamond = "",
+			searchMoon = "",
 		}
 
 		-- ===== BUILD DATA =====
 		local diamondList, moonList = {}, {}
-		local diamondLookup, moonLookup = {}, {}   -- name(lower) → {name, price, optStr}
-
 		if PointItemM then
 			for name, price in pairs(PointItemM) do
-				local entry = {
-					name = name, price = price,
-					optStr = name .. " (" .. price .. "P)",
-				}
-				table.insert(diamondList, entry)
-				diamondLookup[name:lower()] = entry
+				table.insert(diamondList, { name = name, price = price, optStr = name .. " (" .. price .. "P)" })
 			end
 			table.sort(diamondList, function(a, b) return a.price < b.price end)
 		end
-
 		if PointItemMoon then
 			for name, price in pairs(PointItemMoon) do
-				local entry = {
-					name = name, price = price,
-					optStr = name .. " (" .. price .. "P)",
-				}
-				table.insert(moonList, entry)
-				moonLookup[name:lower()] = entry
+				table.insert(moonList, { name = name, price = price, optStr = name .. " (" .. price .. "P)" })
 			end
 			table.sort(moonList, function(a, b) return a.price < b.price end)
 		end
 
-		local function GetDiamondOptions()
-			local arr = {}
-			for _, d in ipairs(diamondList) do table.insert(arr, d.optStr) end
-			return arr
+		-- ⭐ Build map option string → name
+		local diamondMap, moonMap = {}, {}
+		local diamondOptions, moonOptions = {}, {}
+		for _, d in ipairs(diamondList) do
+			table.insert(diamondOptions, d.optStr)
+			diamondMap[d.optStr] = d.name
 		end
-		local function GetMoonOptions()
-			local arr = {}
-			for _, m in ipairs(moonList) do table.insert(arr, m.optStr) end
-			return arr
-		end
-
-		-- ⭐ Tìm item từ option string — DUYỆT LIST, KHÔNG DÙNG MAP
-		local function FindDiamondByOptStr(optStr)
-			for _, d in ipairs(diamondList) do
-				if d.optStr == optStr then return d end
-			end
-			return nil
-		end
-		local function FindMoonByOptStr(optStr)
-			for _, m in ipairs(moonList) do
-				if m.optStr == optStr then return m end
-			end
-			return nil
+		for _, m in ipairs(moonList) do
+			table.insert(moonOptions, m.optStr)
+			moonMap[m.optStr] = m.name
 		end
 
 		-- ===== MUA =====
@@ -105,7 +84,7 @@ return {
 			local point = tonumber(LP:GetAttribute("PointItem")) or 0
 			local price = PointItemM and PointItemM[itemName] or 0
 			if price == 0 then
-				NeoUI.Notify:Show({ Title = "❌ Không có giá: " .. itemName, Duration = 2 })
+				NeoUI.Notify:Show({ Title = "❌ Không có giá", Description = itemName, Duration = 2 })
 				return false
 			end
 			if point < price then
@@ -123,7 +102,7 @@ return {
 			local point = tonumber(LP:GetAttribute("MoonPoint")) or 0
 			local price = PointItemMoon and PointItemMoon[itemName] or 0
 			if price == 0 then
-				NeoUI.Notify:Show({ Title = "❌ Không có giá: " .. itemName, Duration = 2 })
+				NeoUI.Notify:Show({ Title = "❌ Không có giá", Description = itemName, Duration = 2 })
 				return false
 			end
 			if point < price then
@@ -241,48 +220,32 @@ return {
 			},
 		})
 
-		-- ⭐ Dropdown Diamond
-		local diamondDropdown = nil
-		if #diamondList > 0 then
-			diamondDropdown = ShopRow.Left:Dropdown({
-				Title = "Chọn Item",
-				Options = GetDiamondOptions(),
-				Value = nil,
-				Callback = function(v)
-					if v and type(v) == "string" then
-						local entry = FindDiamondByOptStr(v)
-						if entry then
-							State.selectedItem = entry.name
-							BuyDiamondItem(entry.name)
-						end
+		local diamondDropdown = ShopRow.Left:Dropdown({
+			Title = "Chọn Item",
+			Options = diamondOptions,
+			Value = nil,
+			Callback = function(v)
+				if v and type(v) == "string" then
+					local itemName = diamondMap[v]
+					if itemName then
+						State.selectedItem = itemName
+						BuyDiamondItem(itemName)
+					else
+						print("[Shop] Không map được:", v)
 					end
-				end,
-			})
-		end
+				end
+			end,
+		})
 
-		-- ⭐ Textbox search Diamond
 		local searchDiamondBox = ShopRow.Left:Textbox({
-			Title = "🔍 Nhập tên (Enter để mua)",
-			Placeholder = "VD: Duck",
+			Title = "🔍 Tìm kiếm",
+			Placeholder = "VD: Duck, Wood",
 			Value = "",
 			Callback = function(v)
 				State.searchDiamond = v or ""
 			end,
 		})
 
-		-- ⭐ Bắt Enter cho search Diamond
-		-- Textbox của NeoUI có FocusLost → mình dùng thêm UserInputService
-		task.spawn(function()
-			while true do
-				task.wait(0.1)
-				if searchDiamondBox and searchDiamondBox.Instance then
-					-- Hook InputBegan vào textbox instance
-					-- Nhưng TextBox của NeoUI không có Instance → dùng cách khác
-				end
-			end
-		end)
-
-		-- Button để mua từ search
 		ShopRow.Left:Button({
 			Title = "🔍 Tìm & Mua",
 			Callback = function()
@@ -291,13 +254,14 @@ return {
 					NeoUI.Notify:Show({ Title = "❌ Chưa nhập tên", Duration = 2 })
 					return
 				end
-				-- Exact match trước
-				local entry = diamondLookup[q]
-				if entry then
-					State.selectedItem = entry.name
-					if diamondDropdown then diamondDropdown:Set(entry.optStr) end
-					BuyDiamondItem(entry.name)
-					return
+				-- Exact match
+				for _, d in ipairs(diamondList) do
+					if d.name:lower() == q then
+						State.selectedItem = d.name
+						if diamondDropdown then diamondDropdown:Set(d.optStr) end
+						BuyDiamondItem(d.name)
+						return
+					end
 				end
 				-- Gần đúng
 				for _, d in ipairs(diamondList) do
@@ -330,26 +294,25 @@ return {
 			},
 		})
 
-		local moonDropdown = nil
-		if #moonList > 0 then
-			moonDropdown = ShopRow.Right:Dropdown({
-				Title = "Chọn Item",
-				Options = GetMoonOptions(),
-				Value = nil,
-				Callback = function(v)
-					if v and type(v) == "string" then
-						local entry = FindMoonByOptStr(v)
-						if entry then
-							State.selectedMoonItem = entry.name
-							BuyMoonItem(entry.name)
-						end
+		local moonDropdown = ShopRow.Right:Dropdown({
+			Title = "Chọn Item",
+			Options = moonOptions,
+			Value = nil,
+			Callback = function(v)
+				if v and type(v) == "string" then
+					local itemName = moonMap[v]
+					if itemName then
+						State.selectedMoonItem = itemName
+						BuyMoonItem(itemName)
+					else
+						print("[Shop] Không map được:", v)
 					end
-				end,
-			})
-		end
+				end
+			end,
+		})
 
-		ShopRow.Right:Textbox({
-			Title = "🔍 Nhập tên (Enter để mua)",
+		local searchMoonBox = ShopRow.Right:Textbox({
+			Title = "🔍 Tìm kiếm",
 			Placeholder = "VD: Aura",
 			Value = "",
 			Callback = function(v)
@@ -365,12 +328,13 @@ return {
 					NeoUI.Notify:Show({ Title = "❌ Chưa nhập tên", Duration = 2 })
 					return
 				end
-				local entry = moonLookup[q]
-				if entry then
-					State.selectedMoonItem = entry.name
-					if moonDropdown then moonDropdown:Set(entry.optStr) end
-					BuyMoonItem(entry.name)
-					return
+				for _, m in ipairs(moonList) do
+					if m.name:lower() == q then
+						State.selectedMoonItem = m.name
+						if moonDropdown then moonDropdown:Set(m.optStr) end
+						BuyMoonItem(m.name)
+						return
+					end
 				end
 				for _, m in ipairs(moonList) do
 					if m.name:lower():find(q, 1, true) then
@@ -392,11 +356,11 @@ return {
 			end,
 		})
 
-		-- ===== SEARCH FILTER LOOP (giữ filter dropdown khi gõ) =====
+		-- ===== SEARCH FILTER LOOP =====
 		task.spawn(function()
 			local lastD, lastM = "", ""
 			while true do
-				task.wait(0.3)
+				task.wait(0.5)
 				if diamondDropdown and diamondDropdown.Refresh then
 					local q = (State.searchDiamond or ""):lower()
 					local filtered = {}
@@ -499,8 +463,8 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "✅ Random & Shop v21",
-			Description = "Dropdown + Search + Enter",
+			Title = "✅ Random & Shop v24",
+			Description = "Dropdown popup đã fix",
 			Duration = 3,
 		})
 	end,
