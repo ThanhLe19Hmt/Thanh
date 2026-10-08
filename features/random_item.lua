@@ -1,8 +1,8 @@
 -- =========================================================
---  FEATURE: Random & Shop v13
---  - Fix nil khi chọn item
---  - Fix title bị cắt
---  - Gộp Random Chest + Event Moon
+--  FEATURE: Random & Shop v14
+--  - Bỏ Paragraph trong TwoColumn (dùng ListRow thay thế)
+--  - Fix hiển thị N/A
+--  - Đảm bảo Moon Shop hiện
 -- =========================================================
 return {
 	Run = function(NeoUI, Tab)
@@ -18,29 +18,16 @@ return {
 		pcall(function() PointItemM = require(RS.Modules.GuaranteeRandomItem) end)
 		pcall(function() PointItemMoon = require(RS.Modules.GuaranteeEventMoon) end)
 
+		print("[Random] PointItemM loaded:", PointItemM ~= nil)
+		print("[Random] PointItemMoon loaded:", PointItemMoon ~= nil)
+
 		-- ===== STATE =====
 		local State = {
-			running = false,
-			mode = "x15",
-			count = 0,
-			-- Moon
-			runningMoon = false,
-			modeMoon = "x15",
-			countMoon = 0,
-			-- Shop
-			selectedItem = nil,
-			selectedMoonItem = nil,
-			autoBuy = false,
-			boughtCount = 0,
+			running = false, mode = "x15", count = 0,
+			runningMoon = false, modeMoon = "x15", countMoon = 0,
+			selectedItem = nil, selectedMoonItem = nil,
+			autoBuy = false, boughtCount = 0,
 		}
-
-		-- ===== HELPERS =====
-		local function GetInventory()
-			local ok, data = pcall(function()
-				return HttpService:JSONDecode(LP:GetAttribute("Inventory") or "{}")
-			end)
-			return ok and data or {}
-		end
 
 		-- ===== RANDOM CHEST =====
 		local function ToggleRandom()
@@ -86,32 +73,21 @@ return {
 
 		-- ===== MUA ITEM =====
 		local function BuyDiamondItem(itemName)
-			if not itemName or itemName == "" then
-				NeoUI.Notify:Show({ Title = "❌ Item không hợp lệ", Duration = 2 })
-				return false
-			end
-
+			if not itemName then return false end
 			local point = tonumber(LP:GetAttribute("PointItem")) or 0
 			local price = (PointItemM and PointItemM[itemName]) or 0
-
 			if price == 0 then
-				NeoUI.Notify:Show({
-					Title = "❌ Không có giá",
-					Description = itemName,
-					Duration = 2,
-				})
+				NeoUI.Notify:Show({ Title = "❌ Không có giá: " .. itemName, Duration = 2 })
 				return false
 			end
-
 			if point < price then
 				NeoUI.Notify:Show({
-					Title = "❌ Không đủ Point",
-					Description = "Cần " .. price .. ", có " .. point,
+					Title = "❌ Thiếu Point",
+					Description = "Cần " .. price .. " / Có " .. point,
 					Duration = 3,
 				})
 				return false
 			end
-
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeRandomItem", itemName)
 			State.boughtCount = State.boughtCount + 1
 			NeoUI.Notify:Show({
@@ -119,33 +95,25 @@ return {
 				Description = "-" .. price .. " Point",
 				Duration = 2,
 			})
-			print("[Shop] Mua:", itemName, "| Giá:", price, "| Còn:", point - price)
 			return true
 		end
 
 		local function BuyMoonItem(itemName)
-			if not itemName or itemName == "" then
-				NeoUI.Notify:Show({ Title = "❌ Item không hợp lệ", Duration = 2 })
-				return false
-			end
-
+			if not itemName then return false end
 			local point = tonumber(LP:GetAttribute("MoonPoint")) or 0
 			local price = (PointItemMoon and PointItemMoon[itemName]) or 0
-
 			if price == 0 then
-				NeoUI.Notify:Show({ Title = "❌ Không có giá", Duration = 2 })
+				NeoUI.Notify:Show({ Title = "❌ Không có giá: " .. itemName, Duration = 2 })
 				return false
 			end
-
 			if point < price then
 				NeoUI.Notify:Show({
-					Title = "❌ Không đủ Moon Point",
-					Description = "Cần " .. price .. ", có " .. point,
+					Title = "❌ Thiếu Moon Point",
+					Description = "Cần " .. price .. " / Có " .. point,
 					Duration = 3,
 				})
 				return false
 			end
-
 			NetworkEvent:FireServer("fire", nil, "BuyGaranteeEventMoon", itemName)
 			State.boughtCount = State.boughtCount + 1
 			NeoUI.Notify:Show({
@@ -157,10 +125,7 @@ return {
 		end
 
 		-- ===== BUILD DROPDOWN =====
-		-- Dùng map: option string → item name
-		-- Format: "Tên (X Point)" để không có ký tự lạ
-		local diamondOptions = {}
-		local diamondMap = {}
+		local diamondOptions, diamondMap = {}, {}
 		if PointItemM then
 			local list = {}
 			for name, price in pairs(PointItemM) do
@@ -174,8 +139,7 @@ return {
 			end
 		end
 
-		local moonOptions = {}
-		local moonMap = {}
+		local moonOptions, moonMap = {}, {}
 		if PointItemMoon then
 			local list = {}
 			for name, price in pairs(PointItemMoon) do
@@ -190,17 +154,14 @@ return {
 		end
 
 		-- ===== UI =====
-		local Sec = Tab:CreateSection("🎰 Auto Quay")
+		-- Dùng ListRow thay Paragraph để tránh lỗi
 
-		Sec:Paragraph({
-			Title = "Hướng dẫn",
-			Content = "Bên trái: Random Chest.\nBên phải: Event Moon Chest.",
-		})
+		-- SECTION 1: QUAY
+		local QuaySec = Tab:CreateSection("🎰 Auto Quay")
 
-		-- ⭐ HÀNG 1: 2 cột quay
-		local QuayRow = Sec:TwoColumn()
+		local QuayRow = QuaySec:TwoColumn()
 
-		-- ===== TRÁI: RANDOM CHEST =====
+		-- TRÁI: RANDOM
 		local RandomInfo = QuayRow.Left:ListRow({
 			Title = "🎰 Random",
 			Items = {
@@ -225,12 +186,10 @@ return {
 
 		QuayRow.Left:Button({
 			Title = "▶️ Bật / ⏹️ Dừng",
-			Callback = function()
-				ToggleRandom()
-			end,
+			Callback = ToggleRandom,
 		})
 
-		-- ===== PHẢI: EVENT MOON =====
+		-- PHẢI: MOON
 		local MoonInfo = QuayRow.Right:ListRow({
 			Title = "🌙 Event Moon",
 			Items = {
@@ -255,24 +214,17 @@ return {
 
 		QuayRow.Right:Button({
 			Title = "▶️ Bật / ⏹️ Dừng",
-			Callback = function()
-				ToggleMoon()
-			end,
+			Callback = ToggleMoon,
 		})
 
-		-- ===== SECTION 2: SHOP =====
+		-- SECTION 2: SHOP
 		local ShopSec = Tab:CreateSection("🛒 Shop Item")
-
-		ShopSec:Paragraph({
-			Title = "Mua item bằng Point",
-			Content = "Chọn item từ dropdown → tự mua ngay.",
-		})
 
 		local ShopRow = ShopSec:TwoColumn()
 
-		-- ===== TRÁI: DIAMOND SHOP =====
+		-- TRÁI: DIAMOND SHOP
 		local DiamondInfo = ShopRow.Left:ListRow({
-			Title = "💎 Diamond Shop",
+			Title = "💎 Diamond",
 			Items = {
 				{ key = "Đang chọn", value = "-" },
 				{ key = "PointItem", value = "N/A" },
@@ -291,36 +243,35 @@ return {
 						if itemName then
 							State.selectedItem = itemName
 							BuyDiamondItem(itemName)
-						else
-							print("[Shop] Không tìm thấy item:", v)
 						end
 					end
 				end,
 			})
 		else
-			ShopRow.Left:Paragraph({
-				Title = "❌ Không load được",
-				Content = "Không tìm thấy GuaranteeRandomItem module",
+			ShopRow.Left:ListRow({
+				Title = "⚠️ Không load",
+				Items = { { key = "Lỗi", value = "Module" } },
 			})
 		end
 
 		ShopRow.Left:Button({
-			Title = "🔄 Mua lại item đã chọn",
+			Title = "🔄 Mua lại",
 			Callback = function()
 				if State.selectedItem then
 					BuyDiamondItem(State.selectedItem)
 				else
-					NeoUI.Notify:Show({ Title = "❌ Chưa chọn item", Duration = 2 })
+					NeoUI.Notify:Show({ Title = "❌ Chưa chọn", Duration = 2 })
 				end
 			end,
 		})
 
-		-- ===== PHẢI: MOON SHOP =====
+		-- PHẢI: MOON SHOP
 		local MoonShopInfo = ShopRow.Right:ListRow({
-			Title = "🌙 Moon Shop",
+			Title = "🌙 Moon",
 			Items = {
 				{ key = "Đang chọn", value = "-" },
 				{ key = "MoonPoint", value = "N/A" },
+				{ key = "Số item", value = tostring(#moonOptions) },
 			},
 		})
 
@@ -339,57 +290,48 @@ return {
 					end
 				end,
 			})
+		else
+			ShopRow.Right:ListRow({
+				Title = "⚠️ Không load",
+				Items = { { key = "Lỗi", value = "Module Moon" } },
+			})
 		end
 
 		ShopRow.Right:Button({
-			Title = "🔄 Mua lại item Moon",
+			Title = "🔄 Mua lại",
 			Callback = function()
 				if State.selectedMoonItem then
 					BuyMoonItem(State.selectedMoonItem)
 				else
-					NeoUI.Notify:Show({ Title = "❌ Chưa chọn item", Duration = 2 })
+					NeoUI.Notify:Show({ Title = "❌ Chưa chọn", Duration = 2 })
 				end
 			end,
 		})
 
-		-- ===== AUTO BUY =====
+		-- SECTION 3: AUTO
 		local AutoSec = Tab:CreateSection("🔁 Auto Mua")
 
 		AutoSec:Toggle({
-			Title = "Auto mua lại mỗi 3s",
+			Title = "Auto mua mỗi 3s",
 			Value = false,
 			Callback = function(v)
 				State.autoBuy = v
-				NeoUI.Notify:Show({
-					Title = v and "✅ Auto Buy ON" or "❌ Auto Buy OFF",
-					Duration = 2,
-				})
 			end,
 		})
 
-		AutoSec:Paragraph({
-			Title = "Lưu ý",
-			Content = "Chọn item trước khi bật Auto Buy.\nScript sẽ tự mua lại mỗi 3 giây.",
-		})
-
-		-- ===== AUTO BUY LOOP =====
 		task.spawn(function()
 			while true do
 				task.wait(3)
 				if State.autoBuy then
-					if State.selectedItem then
-						BuyDiamondItem(State.selectedItem)
-					end
-					if State.selectedMoonItem then
-						BuyMoonItem(State.selectedMoonItem)
-					end
+					if State.selectedItem then BuyDiamondItem(State.selectedItem) end
+					if State.selectedMoonItem then BuyMoonItem(State.selectedMoonItem) end
 				end
 			end
 		end)
 
 		-- ===== REFRESH =====
 		task.spawn(function()
-			task.wait(0.5)
+			task.wait(1)
 			while true do
 				task.wait(1)
 				pcall(function()
@@ -397,19 +339,16 @@ return {
 					local pointItem = LP:GetAttribute("PointItem") or 0
 					local moonPoint = LP:GetAttribute("MoonPoint") or 0
 
-					-- Random
-					RandomInfo:UpdateItem("Trạng thái", State.running and "✅ Đang chạy" or "❌ Dừng")
+					RandomInfo:UpdateItem("Trạng thái", State.running and "✅ Chạy" or "❌ Dừng")
 					RandomInfo:UpdateItem("Mốc", State.mode)
 					RandomInfo:UpdateItem("Đã quay", tostring(State.count))
 					RandomInfo:UpdateItem("Diamond", tostring(math.floor(diamond)))
 
-					-- Moon
-					MoonInfo:UpdateItem("Trạng thái", State.runningMoon and "✅ Đang chạy" or "❌ Dừng")
+					MoonInfo:UpdateItem("Trạng thái", State.runningMoon and "✅ Chạy" or "❌ Dừng")
 					MoonInfo:UpdateItem("Mốc", State.modeMoon)
 					MoonInfo:UpdateItem("Đã quay", tostring(State.countMoon))
 					MoonInfo:UpdateItem("MoonPoint", tostring(moonPoint))
 
-					-- Shop
 					DiamondInfo:UpdateItem("Đang chọn", State.selectedItem or "-")
 					DiamondInfo:UpdateItem("PointItem", tostring(pointItem))
 					DiamondInfo:UpdateItem("Đã mua", tostring(State.boughtCount))
@@ -421,8 +360,8 @@ return {
 		end)
 
 		NeoUI.Notify:Show({
-			Title = "✅ Random & Shop v13",
-			Description = "Chọn item để mua",
+			Title = "✅ Random & Shop v14",
+			Description = "Đã sẵn sàng",
 			Duration = 3,
 		})
 	end,
