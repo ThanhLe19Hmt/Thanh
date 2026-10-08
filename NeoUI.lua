@@ -1998,13 +1998,12 @@ function NeoUI:CreateWindow(opts)
 						end)
 						AddPress(mainBtn, 0.98)
 
-						-- ⭐ Handle với Refresh — KHÔNG auto-fire callback
 						local handle = {}
-						handle.Get = function() return selected end
-						handle.GetSelected = function() return selected end
-						handle.Set = function(v) selected = v; render() end
+						function handle.Get() return selected end
+						function handle.Set(v) selected = v; display.Text = tostring(v); render() end
 
-						handle.Refresh = function(newOptions, keepSelection)
+						-- ⭐ Refresh: KHÔNG auto-fire callback, giữ selection
+						function handle.Refresh(newOptions, keepSelection)
 							options = newOptions or options
 							keepSelection = keepSelection ~= false
 
@@ -2019,8 +2018,11 @@ function NeoUI:CreateWindow(opts)
 									selected = {}
 								end
 							else
-								if not (keepSelection and table.find(options, selected)) then
-									selected = options[1]
+								if keepSelection and table.find(options, selected) then
+									-- giữ selection
+								else
+									-- selection không còn trong options → giữ nhưng không match
+									-- KHÔNG auto-set về options[1]
 								end
 							end
 
@@ -2040,6 +2042,7 @@ function NeoUI:CreateWindow(opts)
 								local newH = 56 + #options * 26 + 6
 								Tween(wrap, { Size = UDim2.new(1, 0, 0, newH) }, 0.2, Enum.EasingStyle.Quart)
 							end
+							-- ⭐ KHÔNG fire callback
 						end
 
 						return handle
