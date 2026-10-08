@@ -1,160 +1,202 @@
--- =========================================================
---  NEO HUB - Main Menu
---  Modules tự chạy khi load, KHÔNG cần bấm nút
--- =========================================================
+--[[
+    MarvenRiz Hub VIP - Main Entry
+]]
+
 repeat task.wait() until game:IsLoaded()
+    and game.Players.LocalPlayer
+    and game.Players.LocalPlayer.Character
 
-local Players = game:GetService("Players")
-local LP = Players.LocalPlayer
-
--- ===== CONFIG =====
-local GITHUB_BASE = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main"
-local UI_URL       = GITHUB_BASE .. "/NeoUI.lua?v=2"
-local FEATURES_URL = GITHUB_BASE .. "/features"
-
--- ===== LOAD UI =====
-local NeoUI = loadstring(game:HttpGet(UI_URL))()
-
-local loader = NeoUI.Loader:Show({
-	Title = "Neo Hub", Subtitle = "Đang khởi tạo", MinDuration = 1.5,
-})
-
--- =========================================================
---  MODULE LOADER
--- =========================================================
-local ModuleCache = {}
-
-local function LoadFeature(name)
-	if ModuleCache[name] then
-		return ModuleCache[name], nil
-	end
-
-	local url = FEATURES_URL .. "/" .. name .. ".lua?v=" .. tick()
-	print("[Neo] Đang tải module:", url)
-
-	local ok, code = pcall(function()
-		return game:HttpGet(url)
-	end)
-
-	if not ok or not code or #code < 50 then
-		warn("[Neo] Không tải được module:", name)
-		return nil, "Không tải được file"
-	end
-
-	if code:find("<!DOCTYPE") or code:find("404: Not Found") then
-		warn("[Neo] File không tồn tại:", name)
-		return nil, "File không tồn tại"
-	end
-
-	local lsOk, fn = pcall(loadstring, code)
-	if not lsOk or type(fn) ~= "function" then
-		warn("[Neo] Lỗi compile module:", name)
-		return nil, "Code không hợp lệ"
-	end
-
-	local runOk, mod = pcall(fn)
-	if not runOk then
-		warn("[Neo] Lỗi chạy module:", name, mod)
-		return nil, "Lỗi runtime"
-	end
-
-	ModuleCache[name] = mod
-	return mod, nil
+if game.PlaceId ~= 119091355492870 then
+    return warn("[MarvenRiz] Sai Place ID!")
 end
 
-local function RunFeature(name, tab)
-	local mod, err = LoadFeature(name)
-	if not mod then
-		warn("[Neo] Không chạy được feature:", name, err)
-		return false
-	end
+-- ============================================================
+-- LOAD MODULES (thay URL khi host)
+-- ============================================================
+local Core = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Core.ua"))()
+local Combat = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Combat.lua"))()
+local VIPUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/VIPUI.lua"))()
+local Farm = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Farm.lua"))()
 
-	if type(mod) == "table" and type(mod.Run) == "function" then
-		local ok, runErr = pcall(mod.Run, NeoUI, tab)
-		if not ok then
-			warn("[Neo] Lỗi khi chạy module:", name, runErr)
-			return false
-		end
-		return true
-	elseif type(mod) == "function" then
-		local ok, runErr = pcall(mod, NeoUI, tab)
-		if not ok then
-			warn("[Neo] Lỗi khi chạy function:", name, runErr)
-			return false
-		end
-		return true
-	end
-	warn("[Neo] Module không hợp lệ:", name, type(mod))
-	return false
+Core.Log.Info("Đang khởi tạo MarvenRiz Hub VIP...")
+
+-- ============================================================
+-- PRE-CACHE DATA
+-- ============================================================
+local ReplicatedStorage = Core.Services.ReplicatedStorage
+local LocalPlayer = Core.Services.LocalPlayer
+
+local Cache = {}
+local function SafeRequire(path)
+    local ok, m = pcall(function()
+        local node = ReplicatedStorage
+        for _, seg in ipairs(path) do
+            node = node:WaitForChild(seg, 5)
+        end
+        return require(node)
+    end)
+    return ok and m or {}
 end
 
--- =========================================================
---  MENU
--- =========================================================
-local Window = NeoUI:CreateWindow({ Title = "Neo Hub", Subtitle = "Rock Fruit" })
+Cache.UseItems     = SafeRequire({"Modules", "UseItems"})
+Cache.CraftingTable= SafeRequire({"Modules", "CraftingTable"})
+Cache.QuestModule  = SafeRequire({"Modules", "QuestModule"})
+Cache.ItemList     = SafeRequire({"Modules", "Itemlist"})
+Cache.SpawnBossList= SafeRequire({"Modules", "SpawnBossList"})
+Cache.Blacklist    = SafeRequire({"Modules", "BlacklistItemTrade"})
+Cache.AccessoryMod = SafeRequire({"Modules", "AccessoryModule"})
+Cache.PointItemM   = SafeRequire({"Modules", "GaranteeRandomItem"})
+Cache.PointMoon    = SafeRequire({"Modules", "GaranteeEventMoon"})
+Cache.Economy      = SafeRequire({"Modules", "Economy"})
 
--- ⭐ TAB 1: THÔNG TIN — tự load player_info
-local InfoTab = Window:CreateTab("Thông tin")
-task.spawn(function()
-	task.wait(0.5)
-	RunFeature("player_info", InfoTab)
-end)
+_G.UseItems = Cache.UseItems
+_G.CraftingTable = Cache.CraftingTable
+_G.Economy = Cache.Economy
 
--- ⭐ TAB 2: STATS — tự load add_stats
-local StatsTab = Window:CreateTab("Stats")
-task.spawn(function()
-	task.wait(0.6)
-	RunFeature("add_stats", StatsTab)
-end)
+-- Pre-build các list
+local function BuildSortedList(tbl, filter)
+    local list = {}
+    for k in pairs(tbl or {}) do
+        if not filter or filter(k) then table.insert(list, k) end
+    end
+    table.sort(list)
+    return list
+end
 
--- ⭐ TAB RANDOM & SHOP (gộp)
-local RandTab = Window:CreateTab("Random & Shop")
-task.spawn(function()
-	task.wait(0.7)
-	RunFeature("random_item", RandTab)
-end)
+local WeaponAll = BuildSortedList(Cache.UseItems)
+local Bosses    = BuildSortedList(Cache.SpawnBossList)
+local SellItems = BuildSortedList(Cache.Economy)
+local X2List    = {}
+for name in pairs(Cache.Blacklist or {}) do
+    if name:find("X2") then table.insert(X2List, name) end
+end
+table.sort(X2List)
 
--- ⭐ TAB 3: CÀI ĐẶT
-local SettingsTab = Window:CreateTab("Cài đặt")
-local SetSec = SettingsTab:CreateSection("🎨 Giao diện")
+-- Build ItemDrop map
+local MonsterDrop, ItemDrop, ItemToMob = {}, {}, {}
+local Itemdrops = workspace:WaitForChild("Itemdrops")
+for _, mob in ipairs(Itemdrops:GetChildren()) do
+    local sf = mob:FindFirstChild("ScrollingFrame", true)
+    if sf then
+        MonsterDrop[mob.Name] = {}
+        for _, v in ipairs(sf:GetDescendants()) do
+            if v:IsA("TextLabel") and not v.Text:find("%%") and v.Text ~= "" then
+                MonsterDrop[mob.Name][v.Text] = true
+                ItemDrop[v.Text] = ItemDrop[v.Text] or {}
+                table.insert(ItemDrop[v.Text], mob.Name)
+                ItemToMob[v.Text] = mob.Name
+            end
+        end
+    end
+end
 
-SetSec:Button({
-	Title = "🔄 Xoá cache Module",
-	Callback = function()
-		ModuleCache = {}
-		NeoUI.Notify:Show({
-			Title = "Đã xoá cache",
-			Description = "Chạy lại script để load mới",
-			Duration = 3,
-		})
-	end,
+local ItemAll = {}
+for name in pairs(ItemToMob) do
+    local data = Cache.ItemList[name]
+    if not (data and data.Type == "Accessory") then
+        table.insert(ItemAll, name)
+    end
+end
+table.sort(ItemAll)
+
+-- Export globals
+_G.BossList = Bosses
+_G.ItemDrop = ItemDrop
+_G.MonsterDrop = MonsterDrop
+
+-- Build Quest list
+local Quest_List = {}
+local NpcQuest = workspace:WaitForChild("NpcQuest")
+table.sort(Cache.QuestModule, function(a, b) return a.Level < b.Level end)
+for i, data in ipairs(Cache.QuestModule) do
+    local npc = NpcQuest:WaitForChild("NPC_Quest" .. i, 5)
+    if npc then
+        Quest_List[i] = {
+            Level = data.Level,
+            Monster = npc:GetAttribute("Name"),
+            Quest = npc,
+        }
+    end
+end
+_G.QuestList = Quest_List
+
+-- ============================================================
+-- INIT UI LIBRARY
+-- ============================================================
+local Library = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Ui_New.lua"
+))()
+
+local Window = Library:CreateWindow({
+    Title = "MarvenRiz VIP",
+    Subtitle = "Map: Rock Fruit | VIP Edition",
+    Size = UDim2.fromOffset(620, 480),
+    AccentColor = Color3.fromRGB(88, 101, 242),
+    SideBarWidth = 150,
+    Logo = "rbxassetid://87526284179554",
+    LogoSize = 32,
+    SphereText = false,
+    SphereImage = "rbxassetid://87526284179554",
+    SphereIconSize = 38,
+    Map = "RockFruit",
 })
 
-SetSec:Paragraph({
-	Title = "Hướng dẫn",
-	Content = "Các chức năng tự chạy khi vào tab.\nKhông cần bấm nút.\n\nMuốn thêm chức năng? Tạo file mới trong features/ rồi thêm RunFeature vào MainMenu.",
+-- Override Library:Notify → VIP Notifications
+local OriginalNotify = Library.Notify
+function Library:Notify(opts)
+    VIPUI.Notify(opts)
+end
+
+-- Init VIP components
+VIPUI.InitNotifications(game:GetService("CoreGui"))
+VIPUI.InitStatusHUD(game:GetService("CoreGui"))
+
+-- ============================================================
+-- KEYBINDS
+-- ============================================================
+VIPUI.RegisterKeybind(Enum.KeyCode.RightShift, function()
+    -- Toggle window (phụ thuộc vào lib của bạn)
+    if Window.Toggle then Window:Toggle() end
+end, "Toggle UI")
+
+VIPUI.RegisterKeybind(Enum.KeyCode.F1, function()
+    VIPUI.ToggleHUD()
+end, "Toggle Status HUD")
+
+VIPUI.RegisterKeybind(Enum.KeyCode.F2, function()
+    VIPUI.EmergencyStop()
+end, "Emergency Stop")
+
+-- ============================================================
+-- BUILD TABS
+-- ============================================================
+local TabSettings = Window:CreateTab("⚙️ Settings", true)
+local TabMain     = Window:CreateTab("🎯 Main")
+local TabBoss     = Window:CreateTab("👹 Boss")
+local TabRaid     = Window:CreateTab("🌋 Raid")
+local TabOther    = Window:CreateTab("🎁 Other")
+local TabConfig   = Window:CreateTab("💾 Config")
+
+-- ... (code build UI sections như file cũ, nhưng dùng biến đã có sẵn)
+
+-- ============================================================
+-- SETUP ANTI-AFK
+-- ============================================================
+Core.SetupAntiAFK()
+
+-- ============================================================
+-- AUTO-LOAD CONFIG
+-- ============================================================
+local MySaveManager = Library.SaveManager
+MySaveManager:BuildConfigTab(TabConfig)
+task.delay(1, function()
+    MySaveManager:LoadAutoloadConfig()
+end)
+
+Core.Log.Info("✅ MarvenRiz VIP đã khởi động thành công!")
+VIPUI.Notify({
+    Title = "★ Chào mừng VIP!",
+    Description = "MarvenRiz VIP đã sẵn sàng. F1: HUD | F2: Stop",
+    Type = "vip",
+    Duration = 5,
 })
-
--- ⭐ TAB 4: MÀU — tự load module theme
-local ColorTab = Window:CreateTab("Color")
-task.spawn(function()
-	task.wait(0.7)
-	RunFeature("theme", ColorTab)
-end)
-
--- =========================================================
---  REVEAL
--- =========================================================
-task.spawn(function()
-	task.wait(0.8)
-	loader:SetStatus("Hoàn tất!")
-	loader:SetProgress(1)
-	task.wait(0.3)
-	loader:Close()
-	Window:Reveal()
-	NeoUI.Notify:Show({
-		Title = "✅ Neo Hub",
-		Description = "Đã sẵn sàng!",
-		Duration = 3,
-	})
-end)
