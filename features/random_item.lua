@@ -15,8 +15,16 @@ return {
 		-- Load module giá
 		local PointItemM = nil
 		local PointItemMoon = nil
-		pcall(function() PointItemM = require(RS.Modules.GuaranteeRandomItem) end)
+		
+		pcall(function() PointItemM = require(RS.Modules.GaranteeRandomItem) end)
+		if not PointItemM then
+			pcall(function() PointItemM = require(RS.Modules.GuaranteeRandomItem) end)
+		end
+		
 		pcall(function() PointItemMoon = require(RS.Modules.GuaranteeEventMoon) end)
+		if not PointItemMoon then
+			pcall(function() PointItemMoon = require(RS.Modules.GaranteeEventMoon) end)
+		end
 
 		print("[Random] PointItemM loaded:", PointItemM ~= nil)
 		print("[Random] PointItemMoon loaded:", PointItemMoon ~= nil)
