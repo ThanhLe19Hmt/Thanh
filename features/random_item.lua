@@ -229,7 +229,15 @@ return {
 							local found = FindDiamondByName(q)
 							if found then
 								State.selectedItem = found.name
-								if diamondDrop then diamondDrop:Set(found.optStr) end
+								-- ⭐ Set text hiển thị trực tiếp, không dùng Set
+if diamondDrop and diamondDrop.Set then
+    local ok, err = pcall(function()
+        diamondDrop:Set(found.optStr)
+    end)
+    if not ok then
+        print("[v31] Set error:", err)
+    end
+end
 								BuyDiamondItem(found.name)
 								NeoUI.Notify:Show({
 									Title = "✅ Enter → Mua: " .. found.name,
