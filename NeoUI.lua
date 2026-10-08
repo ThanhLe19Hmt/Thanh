@@ -1889,8 +1889,7 @@ function NeoUI:CreateWindow(opts)
 						handle.GetValue = function() return valLbl.Text end
 						return handle
 					end
-					
-					-- ⭐ Dropdown (cho TwoColumn)
+					-- ⭐ Dropdown (cho TwoColumn) — FIXED
 					function V:Dropdown(cfg)
 						cfg = cfg or {}
 						local options = cfg.Options or {}
@@ -1954,11 +1953,13 @@ function NeoUI:CreateWindow(opts)
 								AddPress(ob, 0.97)
 								table.insert(optBtns, ob)
 								ob.MouseButton1Click:Connect(function()
+									local chosenOption = opt
 									if isMulti then
-										local idx = table.find(selected, opt)
-										if idx then table.remove(selected, idx) else table.insert(selected, opt) end
+										local idx = table.find(selected, chosenOption)
+										if idx then table.remove(selected, idx) else table.insert(selected, chosenOption) end
 									else
-										selected = opt; opened = false
+										selected = chosenOption
+										opened = false
 									end
 									render()
 									if isMulti then
@@ -1968,7 +1969,7 @@ function NeoUI:CreateWindow(opts)
 									else
 										display.Text = tostring(selected)
 									end
-									if cfg.Callback then task.spawn(cfg.Callback, selected) end
+									if cfg.Callback then task.spawn(cfg.Callback, chosenOption) end
 									if not isMulti then
 										Tween(arrow, { Rotation = 0 }, 0.2)
 										Tween(wrap, { Size = UDim2.new(1, 0, 0, 56) }, 0.25, Enum.EasingStyle.Quart)
@@ -1996,11 +1997,11 @@ function NeoUI:CreateWindow(opts)
 							end
 						end)
 						AddPress(mainBtn, 0.98)
-						if cfg.Callback then task.spawn(cfg.Callback, selected) end
 
-						-- ⭐ Handle với Refresh
+						-- ⭐ Handle với Refresh — KHÔNG auto-fire callback
 						local handle = {}
 						handle.Get = function() return selected end
+						handle.GetSelected = function() return selected end
 						handle.Set = function(v) selected = v; render() end
 
 						handle.Refresh = function(newOptions, keepSelection)
@@ -2039,8 +2040,6 @@ function NeoUI:CreateWindow(opts)
 								local newH = 56 + #options * 26 + 6
 								Tween(wrap, { Size = UDim2.new(1, 0, 0, newH) }, 0.2, Enum.EasingStyle.Quart)
 							end
-
-							if cfg.Callback then task.spawn(cfg.Callback, selected) end
 						end
 
 						return handle
