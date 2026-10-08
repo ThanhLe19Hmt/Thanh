@@ -13,7 +13,7 @@ end
 -- ============================================================
 -- LOAD MODULES (thay URL khi host)
 -- ============================================================
-local Core = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Core.ua"))()
+local Core = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Core.lua"))()
 local Combat = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Combat.lua"))()
 local VIPUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/VIPUI.lua"))()
 local Farm = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Farm.lua"))()
