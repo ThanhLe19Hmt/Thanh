@@ -29,7 +29,7 @@ local function LoadFeature(name)
 		return ModuleCache[name], nil
 	end
 
-	local url = FEATURES_URL .. "/" .. name .. ".lua"
+	local url = FEATURES_URL .. "/" .. name .. ".lua?v=" .. tick()
 	print("[Neo] Đang tải module:", url)
 
 	local ok, code = pcall(function()
