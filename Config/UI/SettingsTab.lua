@@ -1,14 +1,16 @@
 --[[
     UI/SettingsTab.lua
-    Tab "Settings" - Weapon, Skills, Method, Haki, VFX, Accessory, Potion
 ]]
 
-local SettingsTab = {}
 local Globals = _G.__Globals
-assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
-local Utils   = Globals.Utils
-local NoVFX   = Globals.NoVFX
+assert(Globals, "[SettingsTab] _G.__Globals chưa được set!")
 
+local Utils = Globals.Utils
+local NoVFX = Globals.NoVFX
+
+local SettingsTab = {}
+
+-- Build X2 list
 local X2List = {}
 for name in pairs(Globals.Blacklist) do
     if name:find("X2") then
@@ -17,12 +19,11 @@ for name in pairs(Globals.Blacklist) do
 end
 
 function SettingsTab:Init(Window)
-    local Library = Globals.Library
-    local Tab1 = Window:CreateTab("Settings", true, false)
+    local Tab1  = Window:CreateTab("Settings", true, false)
     local Page1 = Tab1:CreatePage("Main Settings")
     local Page2 = Tab1:CreatePage("Other Settings")
 
-    -- ===== Page 1 =====
+    -- ===== PAGE 1 =====
     local Weapon     = Page1:CreateSection("🗡️ Select Weapon", "Left")
     local AutoSkills = Page1:CreateSection("⚔️ Auto Skills", "Left")
     local Method     = Page1:CreateSection("🎯 Select Method Farm", "Right")
@@ -43,8 +44,7 @@ function SettingsTab:Init(Window)
         Callback = function(v) _G.Select_EquipWeapon = v end
     })
 
-    local skills = {"Z","X","C","V","F"}
-    for _, k in ipairs(skills) do
+    for _, k in ipairs({"Z", "X", "C", "V", "F"}) do
         AutoSkills:Toggle({
             Title = "Auto Skill " .. k,
             Value = false,
@@ -80,7 +80,7 @@ function SettingsTab:Init(Window)
         end
     })
 
-    -- ===== Page 2 =====
+    -- ===== PAGE 2 =====
     local Accessory = Page2:CreateSection("🎒 Accessory & Rebirth", "Right")
     local Potion    = Page2:CreateSection("🧪 Auto Use X2 Potion", "Left")
 
