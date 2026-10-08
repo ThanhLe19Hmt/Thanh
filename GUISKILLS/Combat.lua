@@ -2,7 +2,7 @@
     Combat Module: Skills, Attack, Equip, Farm helpers
 ]]
 
-local Core = loadstring(game:HttpGet("URL_CORE"))()  -- thay URL
+local Core = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/GUISKILLS/Core.lua"))()  -- thay URL
 local ReplicatedStorage = Core.Services.ReplicatedStorage
 local LocalPlayer = Core.Services.LocalPlayer
 
