@@ -408,7 +408,7 @@ LocalPlayer.Idled:Connect(function()
 	VirtualUser:CaptureController()
 	VirtualUser:ClickButton2(Vector2.new())
 end)
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/znesr99/gui/refs/heads/main/MarvenRizLib.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Ui_New.lua"))()
 local MySaveManager = Library.SaveManager
 local Window = Library:CreateWindow({
     Title = "MarvenRiz Hub",
@@ -3116,7 +3116,7 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 local Library = loadstring(game:HttpGet(
-	"https://raw.githubusercontent.com/znesr99/gui/refs/heads/main/MarvenRizLib.lua"
+	"https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Ui_New.lua"
 ))()
 
 local Window = Library:CreateWindow({
