@@ -3,7 +3,8 @@
     Random Diamond Chest, Moon Chest, Guarantee Points
 ]]
 
-local Globals = _G.__Globals or Globals
+local Globals = _G.__Globals
+assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
 local RS = Globals.ReplicatedStorage
 local LP = Globals.LocalPlayer
 
