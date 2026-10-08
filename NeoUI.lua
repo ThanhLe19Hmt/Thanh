@@ -1709,17 +1709,39 @@ function NeoUI:CreateWindow(opts)
 						cfg = cfg or {}
 						local options = cfg.Options or {}
 						local isMulti = cfg.Multi == true
-						local selected = isMulti and (type(cfg.Value) == "table" and cfg.Value or {}) or (cfg.Value or options[1])
+
+						-- ⭐ Xử lý selected ban đầu — KHÔNG BAO GIỜ LÀ TABLE
+						local selected
+						if isMulti then
+							if type(cfg.Value) == "table" then
+								selected = cfg.Value
+							else
+								selected = {}
+							end
+						else
+							if type(cfg.Value) == "string" or type(cfg.Value) == "number" then
+								selected = cfg.Value
+							else
+								-- Lấy options[1] nếu là string/number
+								local first = options[1]
+								if type(first) == "string" or type(first) == "number" then
+									selected = first
+								else
+									selected = nil
+								end
+							end
+						end
 
 						local wrap = Create("Frame", {
 							Parent = colFrame, BackgroundColor3 = THEME.Surface,
-							Size = UDim2.new(1, 0, 0, 56),
+							Size = UDim2.new(1, 0, 0, 56), ClipsDescendants = true,
 						}, { Corner(6) })
 						Reg(Registry.Surface, wrap, "BackgroundColor3")
 
 						Create("TextLabel", {
 							Parent = wrap, BackgroundTransparency = 1,
-							Text = cfg.Title or "Dropdown", Font = FONT_M, TextSize = 12, TextColor3 = THEME.Text,
+							Text = cfg.Title or "Dropdown", Font = FONT_M, TextSize = 12,
+							TextColor3 = THEME.Text,
 							TextXAlignment = Enum.TextXAlignment.Left,
 							Position = UDim2.new(0, 10, 0, 6), Size = UDim2.new(1, -20, 0, 16),
 						})
@@ -1744,26 +1766,42 @@ function NeoUI:CreateWindow(opts)
 							Position = UDim2.new(1, -22, 0, 0), Size = UDim2.new(0, 20, 1, 0),
 						})
 
-						if isMulti then
-							local t = {}
-							for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-							display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
-						else
-							display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
+						-- ⭐ Hàm update display AN TOÀN
+						local function UpdateDisplay()
+							if isMulti then
+								if type(selected) == "table" then
+									local t = {}
+									for _, v in ipairs(selected) do
+										if type(v) == "string" or type(v) == "number" then
+											table.insert(t, tostring(v))
+										end
+									end
+									display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+								else
+									display.Text = "Chọn..."
+								end
+							else
+								if type(selected) == "string" or type(selected) == "number" then
+									display.Text = tostring(selected)
+								else
+									display.Text = "Chọn..."
+								end
+							end
 						end
+
+						UpdateDisplay()
 
 						mainBtn.MouseButton1Click:Connect(function()
 							DropdownPopup:Open(mainBtn, options, function(chosen)
 								if isMulti then
+									if type(selected) ~= "table" then selected = {} end
 									local idx = table.find(selected, chosen)
 									if idx then table.remove(selected, idx) else table.insert(selected, chosen) end
-									local t = {}
-									for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-									display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
+									UpdateDisplay()
 									if cfg.Callback then task.spawn(cfg.Callback, selected) end
 								else
 									selected = chosen
-									display.Text = tostring(selected)
+									UpdateDisplay()
 									if cfg.Callback then task.spawn(cfg.Callback, chosen) end
 								end
 							end)
@@ -1772,28 +1810,49 @@ function NeoUI:CreateWindow(opts)
 
 						local handle = {}
 						handle.Get = function() return selected end
-						handle.Set = function(v) selected = v; display.Text = tostring(v) end
+						handle.Set = function(v)
+							-- ⭐ Không nhận table
+							if isMulti then
+								if type(v) == "table" then
+									selected = v
+								end
+							else
+								if type(v) == "string" or type(v) == "number" then
+									selected = v
+								end
+							end
+							UpdateDisplay()
+						end
 						handle.Refresh = function(newOptions, keepSelection)
 							options = newOptions or options
 							keepSelection = keepSelection ~= false
-							if not keepSelection then
-								selected = isMulti and {} or options[1]
-							else
-								if isMulti then
+
+							if isMulti then
+								if keepSelection and type(selected) == "table" then
 									local kept = {}
 									for _, v in ipairs(selected) do
 										if table.find(options, v) then table.insert(kept, v) end
 									end
 									selected = kept
+								else
+									selected = {}
+								end
+							else
+								-- ⭐ Đảm bảo selected vẫn là string/number
+								if keepSelection and (type(selected) == "string" or type(selected) == "number") and table.find(options, selected) then
+									-- giữ selected hiện tại
+								else
+									-- Không match → lấy options[1] nếu hợp lệ
+									local first = options[1]
+									if type(first) == "string" or type(first) == "number" then
+										selected = first
+									else
+										selected = nil
+									end
 								end
 							end
-							if isMulti then
-								local t = {}
-								for _, v in ipairs(selected) do table.insert(t, tostring(v)) end
-								display.Text = #t > 0 and table.concat(t, ", ") or "Chọn..."
-							else
-								display.Text = (selected ~= nil) and tostring(selected) or "Chọn..."
-							end
+
+							UpdateDisplay()
 						end
 						return handle
 					end
