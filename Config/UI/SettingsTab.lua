@@ -4,7 +4,8 @@
 ]]
 
 local SettingsTab = {}
-local Globals = _G.__Globals or Globals
+local Globals = _G.__Globals
+assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
 local Utils   = Globals.Utils
 local NoVFX   = Globals.NoVFX
 
