@@ -28,8 +28,6 @@ return {
 		-- ⭐⭐⭐ DÁN LIST DUMP VÀO ĐÂY ⭐⭐⭐
 		local FALLBACK_DIAMOND = {
 			-- ⭐ AUTO-DUMPED — 2026-10-08 11:49:34
-
-local FALLBACK_DIAMOND = {
 	{ name = "Bacon", price = 5 },
 	{ name = "Duck", price = 5 },
 	{ name = "Fish", price = 5 },
