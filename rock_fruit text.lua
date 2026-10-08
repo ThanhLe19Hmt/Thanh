@@ -2996,6 +2996,136 @@ task.spawn(function()
 		end)
 	end
 end)
+	-- ===== TAB GOKU =====
+local TabGoku = Window:CreateTab("Goku", false, false)
+local GokuPage = TabGoku:CreatePage("Npc Goku Gods")
+local GokuInfoCard = GokuPage:CreateSection("📊 Npc Goku Gods Info", "Left")
+local GokuActionCard = GokuPage:CreateSection("⚙️ Actions", "Right")
+
+local GokuInfoPara = GokuInfoCard:Paragraph({
+    Title = "Npc Count: ( đang quét... )",
+    Content = "Đang tìm NPC Goku Gods..."
+})
+
+-- Hàm quét NPC
+local function ScanGokuNPCs()
+    local found = {}
+    local searchRoots = {
+        workspace:FindFirstChild("Mob"),
+        workspace:FindFirstChild("Npc"),
+        workspace:FindFirstChild("NpcPrompt"),
+        workspace:FindFirstChild("NPCs"),
+        workspace
+    }
+    
+    local seen = {}
+    for _, root in ipairs(searchRoots) do
+        if root then
+            for _, obj in ipairs(root:GetDescendants()) do
+                if obj:IsA("Model") and not seen[obj] then
+                    local name = obj.Name
+                    -- Tìm NPC có tên chứa "Goku" hoặc attribute liên quan
+                    if name:lower():find("goku") 
+                       or name:lower():find("god")
+                       or obj:GetAttribute("IsGokuGod") 
+                       or obj:GetAttribute("GokuGod") then
+                        seen[obj] = true
+                        local hrp = obj:FindFirstChild("HumanoidRootPart")
+                        local hum = obj:FindFirstChild("Humanoid")
+                        table.insert(found, {
+                            Name = name,
+                            Model = obj,
+                            Position = hrp and hrp.Position or Vector3.zero,
+                            Health = hum and hum.Health or 0,
+                            HasPrompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true) ~= nil,
+                            Island = obj.Parent and obj.Parent.Name or "Unknown"
+                        })
+                    end
+                end
+            end
+        end
+    end
+    return found
+end
+
+-- Hàm click NPC
+local function ClickGokuNPC(npcData)
+    if not npcData or not npcData.Model then return false end
+    local prompt = npcData.Model:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = CFrame.new(npcData.Position + Vector3.new(0, 5, 0))
+            task.wait(0.2)
+            fireproximityprompt(prompt)
+            return true
+        end
+    end
+    return false
+end
+
+-- Auto Find & Click
+_G.AutoGokuFind = false
+GokuActionCard:Toggle({
+    Title = "Auto Find & Click NPC Goku Gods",
+    Value = false,
+    Callback = function(Value)
+        _G.AutoGokuFind = Value
+        Library:Notify({
+            Title = Value and "▶️ Bật Auto Goku" or "⏹️ Tắt Auto Goku",
+            Description = "Tự động tìm và bấm NPC",
+            Duration = 3
+        })
+    end
+})
+
+GokuActionCard:Button({
+    Title = "🔄 Refresh Now",
+    Callback = function()
+        local npcs = ScanGokuNPCs()
+        Library:Notify({
+            Title = "🔄 Đã quét",
+            Description = "Tìm thấy " .. #npcs .. " NPC",
+            Duration = 3
+        })
+    end
+})
+
+-- Loop cập nhật thông tin
+task.spawn(function()
+    while task.wait(1) do
+        pcall(function()
+            local npcs = ScanGokuNPCs()
+            local text = {}
+            table.insert(text, "Tổng số NPC: " .. #npcs)
+            table.insert(text, "─────────────────")
+            if #npcs == 0 then
+                table.insert(text, "❌ Không có NPC Goku Gods nào")
+            else
+                for i, npc in ipairs(npcs) do
+                    table.insert(text, string.format(
+                        "%d. %s\n   📍 Đảo: %s\n   ❤️ HP: %d\n   🖱️ Prompt: %s",
+                        i, npc.Name, npc.Island, npc.Health,
+                        npc.HasPrompt and "✅" or "❌"
+                    ))
+                end
+            end
+            GokuInfoPara:SetTitle("Npc Count: " .. #npcs)
+            GokuInfoPara:SetContent(table.concat(text, "\n"))
+            
+            -- Auto click
+            if _G.AutoGokuFind and #npcs > 0 then
+                for _, npc in ipairs(npcs) do
+                    if npc.HasPrompt then
+                        ClickGokuNPC(npc)
+                        break
+                    end
+                end
+            end
+        end)
+    end
+end)
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
     task.wait(1)
