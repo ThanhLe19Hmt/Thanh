@@ -3,7 +3,8 @@
     Auto Boss, Thief, Piccolo, Duck, DevilBoat
 ]]
 
-local Globals = _G.__Globals or Globals
+local Globals = _G.__Globals
+assert(Globals, "[Module] _G.__Globals chưa được set! Load Main.lua trước.")
 local Utils   = Globals.Utils
 local Combat  = Globals.Combat
 local RS      = Globals.ReplicatedStorage
