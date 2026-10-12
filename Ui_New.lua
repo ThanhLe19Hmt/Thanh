@@ -1130,40 +1130,126 @@ function Library:CreateWindow(options)
                     local DList = Create("UIListLayout", {Parent = ListFrame, SortOrder = Enum.SortOrder.LayoutOrder})
 
                     local function ToDisplay(v)
-                        if v == nil then return "" end
-                        return tostring(v)
-                    end
+    if v == nil then return "" end
+    
+    -- 🆕 FIX: Xử lý table rỗng → trả về "" (không hiện "table: 0x...")
+    if type(v) == "table" then
+        -- Nếu là table rỗng
+        if next(v) == nil then return "" end
+        -- Nếu là table có phần tử string → lấy phần tử đầu
+        for _, item in pairs(v) do
+            if type(item) == "string" and item ~= "" then
+                return item
+            end
+        end
+        -- Fallback: convert an toàn
+        local ok, str = pcall(tostring, v)
+        return ok and str or ""
+    end
+    
+    if type(v) == "string" then
+        return v
+    end
+    
+    local ok, str = pcall(tostring, v)
+    return ok and str or ""
+end
 
                     local function ValuesEqual(a, b)
                         return a == b
                     end
 
                     local function UpdateText()
-                        if isMulti then
-                            local txt = ""
-                            for _, v in pairs(selected) do txt = txt .. ToDisplay(v) .. ", " end
-                            MainBtn.Text = txt == "" and "Select Options..." or txt:sub(1, -3)
-                        else
-                            MainBtn.Text = (selected ~= nil) and ToDisplay(selected) or "Select..."
-                        end
-                    end
+    if isMulti then
+        -- 🆕 FIX: Nếu selected không phải table, ép thành table rỗng
+        if type(selected) ~= "table" then
+            selected = {}
+        end
+        
+        local txt = ""
+        for _, v in pairs(selected) do
+            local disp = ToDisplay(v)
+            if disp ~= "" then
+                txt = txt .. disp .. ", "
+            end
+        end
+        MainBtn.Text = (txt == "") and "Select Options..." or txt:sub(1, -3)
+    else
+        -- 🆕 FIX: Xử lý table rỗng/string rỗng cho single-select
+        local displayText = ""
+        
+        if type(selected) == "table" then
+            -- Table rỗng hoặc table không có string → placeholder
+            displayText = ToDisplay(selected)  -- ToDisplay đã xử lý table
+            if displayText == "" then
+                displayText = "Select..."
+            end
+        elseif type(selected) == "string" then
+            if selected == "" then
+                displayText = "Select..."
+            else
+                displayText = selected
+            end
+        elseif selected == nil then
+            displayText = "Select..."
+        else
+            displayText = ToDisplay(selected)
+            if displayText == "" then
+                displayText = "Select..."
+            end
+        end
+        
+        MainBtn.Text = displayText
+    end
+end
 
                     local function internalSet(v)
-                        selected = v
-                        UpdateText()
-                        for _, btn in ipairs(optionButtons) do
-                            local optVal = optionValues[btn]
-                            local isSel = false
-                            if isMulti then
-                                isSel = type(selected) == "table" and table.find(selected, optVal) ~= nil
-                            else
-                                isSel = ValuesEqual(selected, optVal)
-                            end
-                            Tween(btn, {TextColor3 = isSel and TextColor or SubTextColor}, 0.2)
-                            Tween(btn:FindFirstChild("Frame"), {Size = isSel and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 1, 0)}, 0.2)
-                        end
-                        if callback then callback(selected) end
+    -- 🆕 FIX: Sanitize value trước khi set
+    if isMulti then
+        -- Multi: phải là table
+        if type(v) ~= "table" then
+            v = {}
+        end
+    else
+        -- Single: KHÔNG cho phép table
+        if type(v) == "table" then
+            -- Nếu là table rỗng → nil
+            if next(v) == nil then
+                v = nil
+            else
+                -- Nếu là table có phần tử string → lấy phần tử đầu
+                local real = nil
+                for _, item in pairs(v) do
+                    if type(item) == "string" and item ~= "" then
+                        real = item
+                        break
                     end
+                end
+                v = real  -- Có thể là nil nếu không tìm được string
+            end
+        end
+        -- Nếu là string rỗng → nil
+        if type(v) == "string" and v == "" then
+            v = nil
+        end
+    end
+    
+    selected = v
+    UpdateText()
+    
+    for _, btn in ipairs(optionButtons) do
+        local optVal = optionValues[btn]
+        local isSel = false
+        if isMulti then
+            isSel = type(selected) == "table" and table.find(selected, optVal) ~= nil
+        else
+            isSel = (selected ~= nil) and ValuesEqual(selected, optVal)
+        end
+        Tween(btn, {TextColor3 = isSel and TextColor or SubTextColor}, 0.2)
+        Tween(btn:FindFirstChild("Frame"), {Size = isSel and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 1, 0)}, 0.2)
+    end
+    if callback then callback(selected) end
+end
 
                     local function RenderOptions(newOptions)
                         options = newOptions or options
