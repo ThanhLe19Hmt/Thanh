@@ -1029,7 +1029,7 @@ function Library:CreateWindow(options)
                     return ParaHandle
                 end
 
-                function Elements:AddToggle(name, default, callback, infoData)
+                function Elements:AddToggle(name, default, callback, infoData, id)
                     local state = default or false
                     local TogFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24)})
                     
@@ -1054,10 +1054,11 @@ function Library:CreateWindow(options)
 
                     if callback then callback(state) end
 
-                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return state end }
+                    local configKey = config and config.Id or name
+                    Window.ConfigElements[configKey] = { Set = internalSet, Get = function() return state end }
                 end
 
-                function Elements:AddSlider(name, min, max, default, callback, infoData)
+                function Elements:AddSlider(name, min, max, default, callback, infoData, id)
                     local val = default or min
                     local SliFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 45)})
                     
@@ -1093,10 +1094,11 @@ function Library:CreateWindow(options)
 
                     if callback then callback(val) end
 
-                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return val end }
+                    local configKey = config and config.Id or name
+                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return val end }
                 end
 
-                function Elements:AddDropdown(name, options, isMulti, default, callback, infoData)
+                function Elements:AddDropdown(name, options, isMulti, default, callback, infoData, id)
                     local selected
                     if isMulti then
                         selected = (type(default) == "table") and default or {}
@@ -1182,20 +1184,20 @@ end
             -- Table rỗng hoặc table không có string → placeholder
             displayText = ToDisplay(selected)  -- ToDisplay đã xử lý table
             if displayText == "" then
-                displayText = "Select..."
+                displayText = "Select Options..."
             end
         elseif type(selected) == "string" then
             if selected == "" then
-                displayText = "Select..."
+                displayText = "Select Options..."
             else
                 displayText = selected
             end
         elseif selected == nil then
-            displayText = "Select..."
+            displayText = "Select Options..."
         else
             displayText = ToDisplay(selected)
             if displayText == "" then
-                displayText = "Select..."
+                displayText = "Select Options..."
             end
         end
         
@@ -1365,7 +1367,8 @@ end
 
                     if callback then callback(selected) end
 
-                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return selected end }
+                    local configKey = config and config.Id or name
+                    Window.ConfigElements[configKey] = { Set = internalSet, Get = function() return selected end }
 
                     local DropdownHandle = {}
                     DropdownHandle.Refresh = function(_self, newOptions, preserveSelection)
@@ -1378,7 +1381,7 @@ end
                     return DropdownHandle
                 end
 
-                function Elements:AddTextbox(name, placeholder, default, callback, infoData)
+                function Elements:AddTextbox(name, placeholder, default, callback, infoData, id)
                     local TxtFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 50)})
                     Create("TextLabel", {Parent = TxtFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
                     local Input = Create("TextBox", {Parent = TxtFrame, PlaceholderText = placeholder or "Type here...", Text = default ~= nil and tostring(default) or "", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
@@ -1396,7 +1399,8 @@ end
 
                     if callback then callback(Input.Text) end
 
-                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return Input.Text end }
+                    local configKey = config and config.Id or name
+                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return Input.Text end }
                 end
 
                 function Elements:AddColorPicker(name, defaultColor, callback, infoData)
@@ -1500,7 +1504,7 @@ end
 
                     if callback then callback(color) end
 
-                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return color:ToHex() end }
+                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return state end }
                 end
 
                 function Elements:AddConfigManager(folderName)
@@ -1860,22 +1864,22 @@ end
 
                 function Elements:Toggle(config)
                     config = config or {}
-                    return self:AddToggle(config.Title, config.Value, config.Callback, BuildInfo(config))
+                    return self:AddToggle(config.Title, config.Value, config.Callback, BuildInfo(config), config.Id)
                 end
 
                 function Elements:Slider(config)
                     config = config or {}
-                    return self:AddSlider(config.Title, config.Min, config.Max, config.Value, config.Callback, BuildInfo(config))
+                    return self:AddSlider(config.Title, config.Min, config.Max, config.Value, config.Callback, BuildInfo(config), config.Id)
                 end
 
                 function Elements:Dropdown(config)
                     config = config or {}
-                    return self:AddDropdown(config.Title, config.Options, config.Multi, config.Value, config.Callback, BuildInfo(config))
+                    return self:AddDropdown(config.Title, config.Options, config.Multi, config.Value, config.Callback, BuildInfo(config), config.Id)
                 end
 
                 function Elements:Textbox(config)
                     config = config or {}
-                    return self:AddTextbox(config.Title, config.Placeholder, config.Value, config.Callback, BuildInfo(config))
+                    return self:AddTextbox(config.Title, config.Placeholder, config.Value, config.Callback, BuildInfo(config), config.Id)
                 end
 
                 function Elements:ColorPicker(config)
