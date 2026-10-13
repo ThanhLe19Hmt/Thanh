@@ -234,7 +234,6 @@ function SaveManager:Save(name)
     return true
 end
 
--- 🆕 FIX: Check ngôn ngữ khi Load
 function SaveManager:Load(name)
     if not self.Window or name == nil or name == "" then return false end
     local path = self.Folder .. "/" .. name .. ".json"
@@ -245,11 +244,10 @@ function SaveManager:Load(name)
         local currentLang = _G.Language or "en"
         if type(savedLang) == "string" and savedLang ~= currentLang then
             Library:Notify({
-                Title = "❌ Sai ngôn ngữ / Wrong Language",
+                Title = "❌ Sai ngôn ngữ",
                 Description = "Save này lưu bằng [" .. savedLang:upper() ..
-                              "]. Cần đổi sang [" .. savedLang:upper() .. "] trước khi Load.\n" ..
-                              "(Save this with [" .. savedLang:upper() .. "] language, please switch first.)",
-                Duration = 6
+                              "]. Vui lòng đổi sang [" .. savedLang:upper() .. "] trước khi Load.",
+                Duration = 5
             })
             return false
         end
@@ -318,7 +316,6 @@ function SaveManager:SetAutoloadEnabled(enabled)
     self:SetAutoloadData(data)
 end
 
--- 🆕 FIX: Bỏ qua SavedLanguage khi auto load
 function SaveManager:LoadAutoloadConfig()
     if not self.Window then return false end
     local data = self:GetAutoloadData()
@@ -327,7 +324,7 @@ function SaveManager:LoadAutoloadConfig()
     if ok and type(fdata) == "table" then
         for k, v in pairs(fdata) do
             if k == "SavedLanguage" then
-                -- bỏ qua
+                -- bỏ qua, không set runtime
             elseif self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
                 local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
                 if not setOk then
@@ -352,7 +349,6 @@ function SaveManager:BuildConfigTab(tab, folderName)
     if self.Window then
         UISection:Toggle({
             Title = "Transparency",
-            Id = "UITransparency",
             Desc = "Overrides main window background for a sleek 0.2 transparency visual.",
             Value = false,
             Callback = function(state)
@@ -758,11 +754,9 @@ function Library:CreateWindow(options)
     TabSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         local query = TabSearchBox.Text:lower()
         for _, tabInfo in ipairs(Window.Tabs) do
-            if query == "" or string.find(tabInfo.Txt.Text:lower(), query) then
-                tabInfo.Button.Visible = true
-            else
-                tabInfo.Button.Visible = false
-            end
+            local visible = (query == "" or string.find(tabInfo.Txt.Text:lower(), query))
+            tabInfo.Wrapper.Visible = visible
+            tabInfo.Button.Visible = visible
         end
     end)
 
@@ -813,15 +807,106 @@ function Library:CreateWindow(options)
             end
         end
 
-        local TabBtn = Create("TextButton", {Parent = TabContainer, Text = "", BackgroundColor3 = HoverColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35), AutoButtonColor = false})
+        -- 🆕 Wrapper chứa TabBtn + ScrollingFrame
+        local TabWrapper = Create("Frame", {
+            Parent = TabContainer,
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 35),
+            ClipsDescendants = true
+        })
+
+        local TabBtn = Create("TextButton", {
+            Parent = TabWrapper,
+            Text = "",
+            BackgroundColor3 = HoverColor,
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            AutoButtonColor = false,
+            ZIndex = 2
+        })
         Create("UICorner", {Parent = TabBtn, CornerRadius = UDim.new(0, 6)})
         AddBounce(TabBtn, 0.98)
-        local Indicator = Create("Frame", {Name = "Indicator", Parent = TabBtn, BackgroundColor3 = isLocked and Color3.fromRGB(255, 215, 0) or AccentColor, Size = UDim2.new(0, 3, 0, 0), Position = UDim2.new(0, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5)})
+
+        local Indicator = Create("Frame", {
+            Name = "Indicator",
+            Parent = TabBtn,
+            BackgroundColor3 = isLocked and Color3.fromRGB(255, 215, 0) or AccentColor,
+            Size = UDim2.new(0, 3, 0, 0),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            ZIndex = 3
+        })
         Create("UICorner", {Parent = Indicator, CornerRadius = UDim.new(1, 0)})
-        local Txt = Create("TextLabel", {Parent = TabBtn, Text = tabName, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 15, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+
+        -- 🆕 ScrollingFrame chứa text (kéo ngang được)
+        local TxtScroll = Create("ScrollingFrame", {
+            Parent = TabWrapper,
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -40, 1, 0),
+            Position = UDim2.new(0, 15, 0, 0),
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            ScrollBarThickness = 0,
+            ScrollingDirection = Enum.ScrollingDirection.X,
+            BorderSizePixel = 0,
+            ZIndex = 4,
+            Active = true
+        })
+        local Txt = Create("TextLabel", {
+            Parent = TxtScroll,
+            Text = tabName,
+            Font = Enum.Font.GothamBold,
+            TextSize = 13,
+            TextColor3 = SubTextColor,
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 0, 1, 0),
+            AutomaticSize = Enum.AutomaticSize.X,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 4
+        })
+
+        -- 🆕 Update CanvasSize theo text
+        Txt:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            TxtScroll.CanvasSize = UDim2.new(0, Txt.AbsoluteSize.X, 0, 0)
+        end)
+        TxtScroll.CanvasSize = UDim2.new(0, Txt.AbsoluteSize.X, 0, 0)
+
+        -- 🆕 Drag scroll cho TxtScroll
+        local dragging = false
+        local dragStart = nil
+        local startCanvas = nil
+        TxtScroll.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startCanvas = TxtScroll.CanvasPosition
+                -- Ngăn TabBtn nhận click khi đang kéo
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
+                end)
+            end
+        end)
+        TxtScroll.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                TxtScroll.CanvasPosition = Vector2.new(
+                    math.clamp(startCanvas.X - delta.X, 0, math.max(0, TxtScroll.AbsoluteCanvasSize.X - TxtScroll.AbsoluteSize.X)),
+                    startCanvas.Y
+                )
+            end
+        end)
 
         if isLocked then
-            Create("ImageLabel", {Parent = TabBtn, Image = "rbxassetid://6031082533", ImageColor3 = Color3.fromRGB(255, 215, 0), BackgroundTransparency = 1, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -22, 0.5, -7)})
+            Create("ImageLabel", {
+                Parent = TabBtn,
+                Image = "rbxassetid://6031082533",
+                ImageColor3 = Color3.fromRGB(255, 215, 0),
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0, 14, 0, 14),
+                Position = UDim2.new(1, -22, 0.5, -7),
+                ZIndex = 5
+            })
         end
 
         local TabContent = Create("Frame", {Parent = ContentArea, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Visible = false})
@@ -829,7 +914,7 @@ function Library:CreateWindow(options)
         local PageNavList = Create("UIListLayout", {Parent = PageNav, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Center})
         local PageContainer = Create("Frame", {Parent = TabContent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -35), Position = UDim2.new(0, 0, 0, 35)})
 
-        local TabConfig = {Button = TabBtn, Content = TabContent, Indicator = Indicator, Txt = Txt, Pages = {}, CurrentPage = nil}
+        local TabConfig = {Button = TabBtn, Wrapper = TabWrapper, Content = TabContent, Indicator = Indicator, Txt = Txt, Pages = {}, CurrentPage = nil}
         table.insert(Window.Tabs, TabConfig)
 
         TabBtn.MouseButton1Click:Connect(function()
@@ -1050,7 +1135,6 @@ function Library:CreateWindow(options)
                     return ParaHandle
                 end
 
-                -- 🆕 FIX: AddToggle nhận id
                 function Elements:AddToggle(name, default, callback, infoData, id)
                     local state = default or false
                     local TogFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24)})
@@ -1152,113 +1236,126 @@ function Library:CreateWindow(options)
                     local DList = Create("UIListLayout", {Parent = ListFrame, SortOrder = Enum.SortOrder.LayoutOrder})
 
                     local function ToDisplay(v)
-                        if v == nil then return "" end
-                        
-                        if type(v) == "table" then
-                            if next(v) == nil then return "" end
-                            for _, item in pairs(v) do
-                                if type(item) == "string" and item ~= "" then
-                                    return item
-                                end
-                            end
-                            local ok, str = pcall(tostring, v)
-                            return ok and str or ""
-                        end
-                        
-                        if type(v) == "string" then
-                            return v
-                        end
-                        
-                        local ok, str = pcall(tostring, v)
-                        return ok and str or ""
-                    end
+    if v == nil then return "" end
+    
+    -- 🆕 FIX: Xử lý table rỗng → trả về "" (không hiện "table: 0x...")
+    if type(v) == "table" then
+        -- Nếu là table rỗng
+        if next(v) == nil then return "" end
+        -- Nếu là table có phần tử string → lấy phần tử đầu
+        for _, item in pairs(v) do
+            if type(item) == "string" and item ~= "" then
+                return item
+            end
+        end
+        -- Fallback: convert an toàn
+        local ok, str = pcall(tostring, v)
+        return ok and str or ""
+    end
+    
+    if type(v) == "string" then
+        return v
+    end
+    
+    local ok, str = pcall(tostring, v)
+    return ok and str or ""
+end
 
                     local function ValuesEqual(a, b)
                         return a == b
                     end
 
                     local function UpdateText()
-                        if isMulti then
-                            if type(selected) ~= "table" then
-                                selected = {}
-                            end
-                            
-                            local txt = ""
-                            for _, v in pairs(selected) do
-                                local disp = ToDisplay(v)
-                                if disp ~= "" then
-                                    txt = txt .. disp .. ", "
-                                end
-                            end
-                            MainBtn.Text = (txt == "") and "Select Options..." or txt:sub(1, -3)
-                        else
-                            local displayText = ""
-                            
-                            if type(selected) == "table" then
-                                displayText = ToDisplay(selected)
-                                if displayText == "" then
-                                    displayText = "Select Options..."
-                                end
-                            elseif type(selected) == "string" then
-                                if selected == "" then
-                                    displayText = "Select Options..."
-                                else
-                                    displayText = selected
-                                end
-                            elseif selected == nil then
-                                displayText = "Select Options..."
-                            else
-                                displayText = ToDisplay(selected)
-                                if displayText == "" then
-                                    displayText = "Select Options..."
-                                end
-                            end
-                            
-                            MainBtn.Text = displayText
-                        end
-                    end
+    if isMulti then
+        -- 🆕 FIX: Nếu selected không phải table, ép thành table rỗng
+        if type(selected) ~= "table" then
+            selected = {}
+        end
+        
+        local txt = ""
+        for _, v in pairs(selected) do
+            local disp = ToDisplay(v)
+            if disp ~= "" then
+                txt = txt .. disp .. ", "
+            end
+        end
+        MainBtn.Text = (txt == "") and "Select Options..." or txt:sub(1, -3)
+    else
+        -- 🆕 FIX: Xử lý table rỗng/string rỗng cho single-select
+        local displayText = ""
+        
+        if type(selected) == "table" then
+            -- Table rỗng hoặc table không có string → placeholder
+            displayText = ToDisplay(selected)  -- ToDisplay đã xử lý table
+            if displayText == "" then
+                displayText = "Select Options..."
+            end
+        elseif type(selected) == "string" then
+            if selected == "" then
+                displayText = "Select Options..."
+            else
+                displayText = selected
+            end
+        elseif selected == nil then
+            displayText = "Select Options..."
+        else
+            displayText = ToDisplay(selected)
+            if displayText == "" then
+                displayText = "Select Options..."
+            end
+        end
+        
+        MainBtn.Text = displayText
+    end
+end
 
                     local function internalSet(v)
-                        if isMulti then
-                            if type(v) ~= "table" then
-                                v = {}
-                            end
-                        else
-                            if type(v) == "table" then
-                                if next(v) == nil then
-                                    v = nil
-                                else
-                                    local real = nil
-                                    for _, item in pairs(v) do
-                                        if type(item) == "string" and item ~= "" then
-                                            real = item
-                                            break
-                                        end
-                                    end
-                                    v = real
-                                end
-                            end
-                            if type(v) == "string" and v == "" then
-                                v = nil
-                            end
-                        end
-                        
-                        selected = v
-                        UpdateText()
-                        
-                        for _, btn in ipairs(optionButtons) do
-                            local optVal = optionValues[btn]
-                            local isSel = false
-                            if isMulti then
-                                isSel = type(selected) == "table" and table.find(selected, optVal) ~= nil
-                            else
-                                isSel = (selected ~= nil) and ValuesEqual(selected, optVal)
-                            end
-                            Tween(btn, {TextColor3 = isSel and TextColor or SubTextColor}, 0.2)
-                            Tween(btn:FindFirstChild("Frame"), {Size = isSel and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 1, 0)}, 0.2)
-                        end
-                        if callback then callback(selected) end
+    -- 🆕 FIX: Sanitize value trước khi set
+    if isMulti then
+        -- Multi: phải là table
+        if type(v) ~= "table" then
+            v = {}
+        end
+    else
+        -- Single: KHÔNG cho phép table
+        if type(v) == "table" then
+            -- Nếu là table rỗng → nil
+            if next(v) == nil then
+                v = nil
+            else
+                -- Nếu là table có phần tử string → lấy phần tử đầu
+                local real = nil
+                for _, item in pairs(v) do
+                    if type(item) == "string" and item ~= "" then
+                        real = item
+                        break
                     end
+                end
+                v = real  -- Có thể là nil nếu không tìm được string
+            end
+        end
+        -- Nếu là string rỗng → nil
+        if type(v) == "string" and v == "" then
+            v = nil
+        end
+    end
+    
+    selected = v
+    UpdateText()
+    
+    for _, btn in ipairs(optionButtons) do
+        local optVal = optionValues[btn]
+        local isSel = false
+        if isMulti then
+            isSel = type(selected) == "table" and table.find(selected, optVal) ~= nil
+        else
+            isSel = (selected ~= nil) and ValuesEqual(selected, optVal)
+        end
+        Tween(btn, {TextColor3 = isSel and TextColor or SubTextColor}, 0.2)
+        Tween(btn:FindFirstChild("Frame"), {Size = isSel and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 1, 0)}, 0.2)
+    end
+    if callback then callback(selected) end
+end
 
                     local function RenderOptions(newOptions)
                         options = newOptions or options
@@ -1702,7 +1799,6 @@ function Library:CreateWindow(options)
                                     RefreshMonitor()
                                 end)
 
-                                -- 🆕 FIX: Check ngôn ngữ khi Load
                                 LoadBtn.MouseButton1Click:Connect(function()
                                     if deleteMode or editMode then return end
                                     local s, data = pcall(function() return HttpService:JSONDecode(_readfile(filepath)) end)
@@ -1712,10 +1808,10 @@ function Library:CreateWindow(options)
                                         local currentLang = _G.Language or "en"
                                         if type(savedLang) == "string" and savedLang ~= currentLang then
                                             Library:Notify({
-                                                Title = "❌ Sai ngôn ngữ / Wrong Language",
+                                                Title = "❌ Sai ngôn ngữ",
                                                 Description = "Save này lưu bằng [" .. savedLang:upper() ..
-                                                              "]. Cần đổi sang [" .. savedLang:upper() .. "] trước khi Load.",
-                                                Duration = 6
+                                                              "]. Đổi sang [" .. savedLang:upper() .. "] trước khi Load.",
+                                                Duration = 5
                                             })
                                             return
                                         end
@@ -1754,9 +1850,6 @@ function Library:CreateWindow(options)
                         for k, el in pairs(Window.ConfigElements) do
                             if el.Get then payload[k] = el.Get() end
                         end
-                        -- 🆕 Đảm bảo SavedLanguage được lưu
-                        payload["SavedLanguage"] = _G.Language or "en"
-                        
                         local encoded = HttpService:JSONEncode(payload)
                         local uniqueKey = tostring(math.floor(tick()))
                         local finalPath = folderName .. "/" .. saveName .. "_" .. uniqueKey .. ".json"
