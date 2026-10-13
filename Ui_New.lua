@@ -9,12 +9,14 @@ local Library = {
     WhitelistedUsers = {} 
 }
 
+
 local _isfolder = isfolder or function() return true end
 local _makefolder = makefolder or function() end
 local _writefile = writefile or function(path, data) warn("File saving not supported on this executor.") end
 local _readfile = readfile or function() return "{}" end
 local _listfiles = listfiles or function() return {} end
 local _delfile = delfile or function() warn("File deletion not supported.") end
+
 
 local function SafeCopyToClipboard(text)
     if setclipboard then
@@ -25,6 +27,7 @@ local function SafeCopyToClipboard(text)
         warn("Clipboard copying is not supported on your current executor.")
     end
 end
+
 
 local function Create(className, properties)
     local instance = Instance.new(className)
@@ -50,6 +53,7 @@ local function Create(className, properties)
     return instance
 end
 
+
 local function IsAutoloadFile(filepath)
     if type(filepath) ~= "string" then return false end
     local lower = filepath:lower()
@@ -67,6 +71,7 @@ local function BuildSearchIndex(card)
     end
     return table.concat(parts, " ")
 end
+
 
 local function Tween(instance, properties, duration)
     duration = duration or 0.25
@@ -164,6 +169,7 @@ function Library:Notify(options)
     end)
 end
 
+
 Library.SaveManager = {
     Folder = "MarvenRizSave",
     BaseFolder = "MarvenRizSave",
@@ -233,21 +239,8 @@ function SaveManager:Load(name)
     local path = self.Folder .. "/" .. name .. ".json"
     local ok, data = pcall(function() return HttpService:JSONDecode(_readfile(path)) end)
     if ok and type(data) == "table" then
-        local savedLang = data["SavedLanguage"]
-        local currentLang = _G.Language or "en"
-        if type(savedLang) == "string" and savedLang ~= currentLang then
-            Library:Notify({
-                Title = "❌ Sai ngôn ngữ",
-                Description = "Save này lưu bằng [" .. savedLang:upper() ..
-                              "]. Vui lòng đổi sang [" .. savedLang:upper() .. "] trước khi Load.",
-                Duration = 5
-            })
-            return false
-        end
-
         for k, v in pairs(data) do
-            if k == "SavedLanguage" then
-            elseif self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
+            if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
                 local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
                 if not setOk then
                     warn("[SaveManager:Load] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
@@ -294,11 +287,13 @@ function SaveManager:IsAutoloadEnabled()
     return self:GetAutoloadData().Enabled == true
 end
 
+
 function SaveManager:SetAutoloadConfig(name)
     local data = self:GetAutoloadData()
     data.Path = (name and name ~= "") and (self.Folder .. "/" .. name .. ".json") or nil
     self:SetAutoloadData(data)
 end
+
 
 function SaveManager:SetAutoloadEnabled(enabled)
     local data = self:GetAutoloadData()
@@ -313,8 +308,7 @@ function SaveManager:LoadAutoloadConfig()
     local ok, fdata = pcall(function() return HttpService:JSONDecode(_readfile(data.Path)) end)
     if ok and type(fdata) == "table" then
         for k, v in pairs(fdata) do
-            if k == "SavedLanguage" then
-            elseif self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
+            if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
                 local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
                 if not setOk then
                     warn("[SaveManager:LoadAutoloadConfig] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
@@ -382,6 +376,7 @@ function Library:CreateWindow(options)
             sphTextToggle = options.SphereText
         end
         if options.SphereWords ~= nil then
+           
             local wordList = string.split(tostring(options.SphereWords), " ")
             if #wordList > 2 then
                 sphWords = wordList[1] .. " " .. wordList[2]
@@ -537,6 +532,7 @@ function Library:CreateWindow(options)
         Active = true
     })
 
+  
     local FloatingBottomBar = Create("Frame", {
         Parent = BottomDragHitbox,
         BackgroundColor3 = CardColor,
@@ -553,6 +549,7 @@ function Library:CreateWindow(options)
         Transparency = 0
     })
 
+   
     MakeDraggable(BottomDragHitbox, MainFrame)
 
     RunService.RenderStepped:Connect(function()
@@ -620,6 +617,7 @@ function Library:CreateWindow(options)
     Create("UICorner", {Parent = Sphere, CornerRadius = UDim.new(0, 20)})
     Create("UIStroke", {Parent = Sphere, Color = Color3.fromRGB(200,0,0), Thickness = 2})
     
+   
     local SphereImageLabel = Create("ImageLabel", {Parent = Sphere, BackgroundTransparency = 1, Size = UDim2.new(0, sphIconSize, 0, sphIconSize), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Image = sphImage or "", ImageTransparency = 1, Visible = (not sphTextToggle and sphImage ~= nil)})
     local SphereTextLabel = Create("TextLabel", {Parent = Sphere, Text = sphWords, Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), TextTransparency = 1, Visible = sphTextToggle})
     MakeDraggable(Sphere, Sphere)
@@ -650,6 +648,7 @@ function Library:CreateWindow(options)
         Sphere.Visible = true
         Tween(Sphere, {Size = UDim2.new(0, 50, 0, 50)}, 0.4)
         
+       
         if not sphTextToggle and sphImage then
             Tween(SphereImageLabel, {ImageTransparency = 0}, 0.4)
         elseif sphTextToggle then
@@ -738,9 +737,11 @@ function Library:CreateWindow(options)
     TabSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         local query = TabSearchBox.Text:lower()
         for _, tabInfo in ipairs(Window.Tabs) do
-            local visible = (query == "" or string.find(tabInfo.Txt.Text:lower(), query))
-            tabInfo.Wrapper.Visible = visible
-            tabInfo.Button.Visible = visible
+            if query == "" or string.find(tabInfo.Txt.Text:lower(), query) then
+                tabInfo.Button.Visible = true
+            else
+                tabInfo.Button.Visible = false
+            end
         end
     end)
 
@@ -791,82 +792,15 @@ function Library:CreateWindow(options)
             end
         end
 
-        -- Wrapper chứa TabBtn + TxtScroll
-        local TabWrapper = Create("Frame", {
-            Parent = TabContainer,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 35),
-            ClipsDescendants = true,
-            Active = true   -- 🆕 FIX: cho phép nhận input
-        })
-
-        local TabBtn = Create("TextButton", {
-            Parent = TabWrapper,
-            Text = "",
-            BackgroundColor3 = HoverColor,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
-            AutoButtonColor = false,
-            ZIndex = 2,
-            Active = false   -- 🆕 FIX: không nhận input trực tiếp, để TabWrapper nhận
-        })
+        local TabBtn = Create("TextButton", {Parent = TabContainer, Text = "", BackgroundColor3 = HoverColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35), AutoButtonColor = false})
         Create("UICorner", {Parent = TabBtn, CornerRadius = UDim.new(0, 6)})
         AddBounce(TabBtn, 0.98)
-
-        local Indicator = Create("Frame", {
-            Name = "Indicator",
-            Parent = TabBtn,
-            BackgroundColor3 = isLocked and Color3.fromRGB(255, 215, 0) or AccentColor,
-            Size = UDim2.new(0, 3, 0, 0),
-            Position = UDim2.new(0, 0, 0.5, 0),
-            AnchorPoint = Vector2.new(0, 0.5),
-            ZIndex = 3
-        })
+        local Indicator = Create("Frame", {Name = "Indicator", Parent = TabBtn, BackgroundColor3 = isLocked and Color3.fromRGB(255, 215, 0) or AccentColor, Size = UDim2.new(0, 3, 0, 0), Position = UDim2.new(0, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5)})
         Create("UICorner", {Parent = Indicator, CornerRadius = UDim.new(1, 0)})
-
-        -- 🆕 FIX: ScrollingFrame với Active = false để không nuốt touch
-        local TxtScroll = Create("ScrollingFrame", {
-            Parent = TabWrapper,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, -40, 1, 0),
-            Position = UDim2.new(0, 15, 0, 0),
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-            ScrollBarThickness = 0,
-            ScrollingDirection = Enum.ScrollingDirection.X,
-            BorderSizePixel = 0,
-            ZIndex = 4,
-            Active = false   -- 🆕 FIX: KHÔNG nuốt touch
-        })
-        local Txt = Create("TextLabel", {
-            Parent = TxtScroll,
-            Text = tabName,
-            Font = Enum.Font.GothamBold,
-            TextSize = 13,
-            TextColor3 = SubTextColor,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(0, 0, 1, 0),
-            AutomaticSize = Enum.AutomaticSize.X,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            ZIndex = 4,
-            Active = false   -- 🆕 FIX: KHÔNG nuốt touch
-        })
-
-        Txt:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-            TxtScroll.CanvasSize = UDim2.new(0, Txt.AbsoluteSize.X, 0, 0)
-        end)
-        TxtScroll.CanvasSize = UDim2.new(0, Txt.AbsoluteSize.X, 0, 0)
+        local Txt = Create("TextLabel", {Parent = TabBtn, Text = tabName, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 15, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
 
         if isLocked then
-            Create("ImageLabel", {
-                Parent = TabBtn,
-                Image = "rbxassetid://6031082533",
-                ImageColor3 = Color3.fromRGB(255, 215, 0),
-                BackgroundTransparency = 1,
-                Size = UDim2.new(0, 14, 0, 14),
-                Position = UDim2.new(1, -22, 0.5, -7),
-                ZIndex = 5,
-                Active = false
-            })
+            Create("ImageLabel", {Parent = TabBtn, Image = "rbxassetid://6031082533", ImageColor3 = Color3.fromRGB(255, 215, 0), BackgroundTransparency = 1, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -22, 0.5, -7)})
         end
 
         local TabContent = Create("Frame", {Parent = ContentArea, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Visible = false})
@@ -874,54 +808,50 @@ function Library:CreateWindow(options)
         local PageNavList = Create("UIListLayout", {Parent = PageNav, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Center})
         local PageContainer = Create("Frame", {Parent = TabContent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -35), Position = UDim2.new(0, 0, 0, 35)})
 
-        local TabConfig = {Button = TabBtn, Wrapper = TabWrapper, Content = TabContent, Indicator = Indicator, Txt = Txt, Pages = {}, CurrentPage = nil}
+        local TabConfig = {Button = TabBtn, Content = TabContent, Indicator = Indicator, Txt = Txt, Pages = {}, CurrentPage = nil}
         table.insert(Window.Tabs, TabConfig)
 
-        -- 🆕 FIX: Click handler trên TabWrapper (không bị TxtScroll che)
-        TabWrapper.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 
-               or input.UserInputType == Enum.UserInputType.Touch then
-                if isLocked and not isWhitelisted then
-                    SendPremiumNotification()
-                    return
-                end
+        TabBtn.MouseButton1Click:Connect(function()
+            if isLocked and not isWhitelisted then
+                SendPremiumNotification()
+                return
+            end
 
-                if Window.CurrentTab == TabConfig then return end
-                
-                if Window.CurrentTab then
-                    Tween(Window.CurrentTab.Button, {BackgroundTransparency = 1}, 0.2)
-                    Tween(Window.CurrentTab.Indicator, {Size = UDim2.new(0, 3, 0, 0)}, 0.2)
-                    Tween(Window.CurrentTab.Txt, {TextColor3 = SubTextColor}, 0.2)
-                    Window.CurrentTab.Content.Visible = false
-                end
-                
-                Window.CurrentTab = TabConfig
-                TabConfig.Content.Visible = true
-                
-                TabConfig.Content.Position = UDim2.new(0, 0, 0, 15)
-                Tween(TabConfig.Content, {Position = UDim2.new(0, 0, 0, 0)}, 0.35)
+            if Window.CurrentTab == TabConfig then return end
+            
+            if Window.CurrentTab then
+                Tween(Window.CurrentTab.Button, {BackgroundTransparency = 1}, 0.2)
+                Tween(Window.CurrentTab.Indicator, {Size = UDim2.new(0, 3, 0, 0)}, 0.2)
+                Tween(Window.CurrentTab.Txt, {TextColor3 = SubTextColor}, 0.2)
+                Window.CurrentTab.Content.Visible = false
+            end
+            
+            Window.CurrentTab = TabConfig
+            TabConfig.Content.Visible = true
+            
+            TabConfig.Content.Position = UDim2.new(0, 0, 0, 15)
+            Tween(TabConfig.Content, {Position = UDim2.new(0, 0, 0, 0)}, 0.35)
 
-                Tween(TabBtn, {BackgroundTransparency = 0}, 0.2)
-                Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
-                Tween(Txt, {TextColor3 = TextColor}, 0.2)
+            Tween(TabBtn, {BackgroundTransparency = 0}, 0.2)
+            Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
+            Tween(Txt, {TextColor3 = TextColor}, 0.2)
 
-                if #TabConfig.Pages > 0 then
-                    local firstPage = TabConfig.Pages[1]
-                    if TabConfig.CurrentPage ~= firstPage then
-                        if TabConfig.CurrentPage then
-                            Tween(TabConfig.CurrentPage.Btn, {TextColor3 = SubTextColor}, 0)
-                            Tween(TabConfig.CurrentPage.Highlight, {Size = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1}, 0)
-                            TabConfig.CurrentPage.Scroll.Visible = false
-                        end
-                        TabConfig.CurrentPage = firstPage
-                        firstPage.Scroll.Visible = true
-                        
-                        firstPage.Scroll.Position = UDim2.new(0, 5, 0, 15)
-                        Tween(firstPage.Scroll, {Position = UDim2.new(0, 5, 0, 5)}, 0.35)
-
-                        Tween(firstPage.Btn, {TextColor3 = TextColor}, 0)
-                        Tween(firstPage.Highlight, {Size = UDim2.new(1, 0, 0, 2), BackgroundTransparency = 0}, 0)
+            if #TabConfig.Pages > 0 then
+                local firstPage = TabConfig.Pages[1]
+                if TabConfig.CurrentPage ~= firstPage then
+                    if TabConfig.CurrentPage then
+                        Tween(TabConfig.CurrentPage.Btn, {TextColor3 = SubTextColor}, 0)
+                        Tween(TabConfig.CurrentPage.Highlight, {Size = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1}, 0)
+                        TabConfig.CurrentPage.Scroll.Visible = false
                     end
+                    TabConfig.CurrentPage = firstPage
+                    firstPage.Scroll.Visible = true
+                    
+                    firstPage.Scroll.Position = UDim2.new(0, 5, 0, 15)
+                    Tween(firstPage.Scroll, {Position = UDim2.new(0, 5, 0, 5)}, 0.35)
+
+                    Tween(firstPage.Btn, {TextColor3 = TextColor}, 0)
+                    Tween(firstPage.Highlight, {Size = UDim2.new(1, 0, 0, 2), BackgroundTransparency = 0}, 0)
                 end
             end
         end)
@@ -1099,7 +1029,7 @@ function Library:CreateWindow(options)
                     return ParaHandle
                 end
 
-                function Elements:AddToggle(name, default, callback, infoData, id)
+                function Elements:AddToggle(name, default, callback, infoData)
                     local state = default or false
                     local TogFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 24)})
                     
@@ -1124,10 +1054,10 @@ function Library:CreateWindow(options)
 
                     if callback then callback(state) end
 
-                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return state end }
+                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return state end }
                 end
 
-                function Elements:AddSlider(name, min, max, default, callback, infoData, id)
+                function Elements:AddSlider(name, min, max, default, callback, infoData)
                     local val = default or min
                     local SliFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 45)})
                     
@@ -1163,10 +1093,10 @@ function Library:CreateWindow(options)
 
                     if callback then callback(val) end
 
-                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return val end }
+                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return val end }
                 end
 
-                function Elements:AddDropdown(name, options, isMulti, default, callback, infoData, id)
+                function Elements:AddDropdown(name, options, isMulti, default, callback, infoData)
                     local selected
                     if isMulti then
                         selected = (type(default) == "table") and default or {}
@@ -1201,24 +1131,7 @@ function Library:CreateWindow(options)
 
                     local function ToDisplay(v)
                         if v == nil then return "" end
-                        
-                        if type(v) == "table" then
-                            if next(v) == nil then return "" end
-                            for _, item in pairs(v) do
-                                if type(item) == "string" and item ~= "" then
-                                    return item
-                                end
-                            end
-                            local ok, str = pcall(tostring, v)
-                            return ok and str or ""
-                        end
-                        
-                        if type(v) == "string" then
-                            return v
-                        end
-                        
-                        local ok, str = pcall(tostring, v)
-                        return ok and str or ""
+                        return tostring(v)
                     end
 
                     local function ValuesEqual(a, b)
@@ -1227,80 +1140,24 @@ function Library:CreateWindow(options)
 
                     local function UpdateText()
                         if isMulti then
-                            if type(selected) ~= "table" then
-                                selected = {}
-                            end
-                            
                             local txt = ""
-                            for _, v in pairs(selected) do
-                                local disp = ToDisplay(v)
-                                if disp ~= "" then
-                                    txt = txt .. disp .. ", "
-                                end
-                            end
-                            MainBtn.Text = (txt == "") and "Select Options..." or txt:sub(1, -3)
+                            for _, v in pairs(selected) do txt = txt .. ToDisplay(v) .. ", " end
+                            MainBtn.Text = txt == "" and "Select Options..." or txt:sub(1, -3)
                         else
-                            local displayText = ""
-                            
-                            if type(selected) == "table" then
-                                displayText = ToDisplay(selected)
-                                if displayText == "" then
-                                    displayText = "Select Options..."
-                                end
-                            elseif type(selected) == "string" then
-                                if selected == "" then
-                                    displayText = "Select Options..."
-                                else
-                                    displayText = selected
-                                end
-                            elseif selected == nil then
-                                displayText = "Select Options..."
-                            else
-                                displayText = ToDisplay(selected)
-                                if displayText == "" then
-                                    displayText = "Select Options..."
-                                end
-                            end
-                            
-                            MainBtn.Text = displayText
+                            MainBtn.Text = (selected ~= nil) and ToDisplay(selected) or "Select..."
                         end
                     end
 
                     local function internalSet(v)
-                        if isMulti then
-                            if type(v) ~= "table" then
-                                v = {}
-                            end
-                        else
-                            if type(v) == "table" then
-                                if next(v) == nil then
-                                    v = nil
-                                else
-                                    local real = nil
-                                    for _, item in pairs(v) do
-                                        if type(item) == "string" and item ~= "" then
-                                            real = item
-                                            break
-                                        end
-                                    end
-                                    v = real
-                                end
-                            end
-                            if type(v) == "string" and v == "" then
-                                v = nil
-                            end
-                        end
-                        
                         selected = v
                         UpdateText()
-                        
                         for _, btn in ipairs(optionButtons) do
                             local optVal = optionValues[btn]
                             local isSel = false
                             if isMulti then
                                 isSel = type(selected) == "table" and table.find(selected, optVal) ~= nil
                             else
-                                isSel = (selected ~= nil) and ValuesEqual(selected, optVal)
+                                isSel = ValuesEqual(selected, optVal)
                             end
                             Tween(btn, {TextColor3 = isSel and TextColor or SubTextColor}, 0.2)
                             Tween(btn:FindFirstChild("Frame"), {Size = isSel and UDim2.new(1, 0, 1, 0) or UDim2.new(0, 0, 1, 0)}, 0.2)
@@ -1422,7 +1279,7 @@ function Library:CreateWindow(options)
 
                     if callback then callback(selected) end
 
-                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return selected end }
+                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return selected end }
 
                     local DropdownHandle = {}
                     DropdownHandle.Refresh = function(_self, newOptions, preserveSelection)
@@ -1435,7 +1292,7 @@ function Library:CreateWindow(options)
                     return DropdownHandle
                 end
 
-                function Elements:AddTextbox(name, placeholder, default, callback, infoData, id)
+                function Elements:AddTextbox(name, placeholder, default, callback, infoData)
                     local TxtFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 50)})
                     Create("TextLabel", {Parent = TxtFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
                     local Input = Create("TextBox", {Parent = TxtFrame, PlaceholderText = placeholder or "Type here...", Text = default ~= nil and tostring(default) or "", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
@@ -1453,10 +1310,10 @@ function Library:CreateWindow(options)
 
                     if callback then callback(Input.Text) end
 
-                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return Input.Text end }
+                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return Input.Text end }
                 end
 
-                function Elements:AddColorPicker(name, defaultColor, callback, infoData, id)
+                function Elements:AddColorPicker(name, defaultColor, callback, infoData)
                     local color = Color3.fromRGB(255, 255, 255)
                     if typeof(defaultColor) == "Color3" then
                         color = defaultColor
@@ -1557,7 +1414,7 @@ function Library:CreateWindow(options)
 
                     if callback then callback(color) end
 
-                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return color:ToHex() end }
+                    Window.ConfigElements[name] = { Set = internalSet, Get = function() return color:ToHex() end }
                 end
 
                 function Elements:AddConfigManager(folderName)
@@ -1754,21 +1611,8 @@ function Library:CreateWindow(options)
                                     if deleteMode or editMode then return end
                                     local s, data = pcall(function() return HttpService:JSONDecode(_readfile(filepath)) end)
                                     if s and type(data) == "table" then
-                                        local savedLang = data["SavedLanguage"]
-                                        local currentLang = _G.Language or "en"
-                                        if type(savedLang) == "string" and savedLang ~= currentLang then
-                                            Library:Notify({
-                                                Title = "❌ Sai ngôn ngữ",
-                                                Description = "Save này lưu bằng [" .. savedLang:upper() ..
-                                                              "]. Đổi sang [" .. savedLang:upper() .. "] trước khi Load.",
-                                                Duration = 5
-                                            })
-                                            return
-                                        end
-
                                         for k, v in pairs(data) do
-                                            if k == "SavedLanguage" then
-                                            elseif Window.ConfigElements[k] and Window.ConfigElements[k].Set then
+                                            if Window.ConfigElements[k] and Window.ConfigElements[k].Set then
                                                 local setOk, setErr = pcall(function() Window.ConfigElements[k].Set(v) end)
                                                 if not setOk then
                                                     warn("[Saves Loader] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
@@ -1930,27 +1774,27 @@ function Library:CreateWindow(options)
 
                 function Elements:Toggle(config)
                     config = config or {}
-                    return self:AddToggle(config.Title, config.Value, config.Callback, BuildInfo(config), config.Id)
+                    return self:AddToggle(config.Title, config.Value, config.Callback, BuildInfo(config))
                 end
 
                 function Elements:Slider(config)
                     config = config or {}
-                    return self:AddSlider(config.Title, config.Min, config.Max, config.Value, config.Callback, BuildInfo(config), config.Id)
+                    return self:AddSlider(config.Title, config.Min, config.Max, config.Value, config.Callback, BuildInfo(config))
                 end
 
                 function Elements:Dropdown(config)
                     config = config or {}
-                    return self:AddDropdown(config.Title, config.Options, config.Multi, config.Value, config.Callback, BuildInfo(config), config.Id)
+                    return self:AddDropdown(config.Title, config.Options, config.Multi, config.Value, config.Callback, BuildInfo(config))
                 end
 
                 function Elements:Textbox(config)
                     config = config or {}
-                    return self:AddTextbox(config.Title, config.Placeholder, config.Value, config.Callback, BuildInfo(config), config.Id)
+                    return self:AddTextbox(config.Title, config.Placeholder, config.Value, config.Callback, BuildInfo(config))
                 end
 
                 function Elements:ColorPicker(config)
                     config = config or {}
-                    return self:AddColorPicker(config.Title, config.Value, config.Callback, BuildInfo(config), config.Id)
+                    return self:AddColorPicker(config.Title, config.Value, config.Callback, BuildInfo(config))
                 end
 
                 function Elements:ConfigManager(config)
