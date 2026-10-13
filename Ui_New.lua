@@ -239,8 +239,23 @@ function SaveManager:Load(name)
     local path = self.Folder .. "/" .. name .. ".json"
     local ok, data = pcall(function() return HttpService:JSONDecode(_readfile(path)) end)
     if ok and type(data) == "table" then
+        -- 🆕 CHECK NGÔN NGỮ
+        local savedLang = data["SavedLanguage"]
+        local currentLang = _G.Language or "en"
+        if type(savedLang) == "string" and savedLang ~= currentLang then
+            Library:Notify({
+                Title = "❌ Sai ngôn ngữ",
+                Description = "Save này lưu bằng [" .. savedLang:upper() ..
+                              "]. Vui lòng đổi sang [" .. savedLang:upper() .. "] trước khi Load.",
+                Duration = 5
+            })
+            return false
+        end
+
         for k, v in pairs(data) do
-            if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
+            if k == "SavedLanguage" then
+                -- bỏ qua
+            elseif self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
                 local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
                 if not setOk then
                     warn("[SaveManager:Load] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
@@ -308,7 +323,9 @@ function SaveManager:LoadAutoloadConfig()
     local ok, fdata = pcall(function() return HttpService:JSONDecode(_readfile(data.Path)) end)
     if ok and type(fdata) == "table" then
         for k, v in pairs(fdata) do
-            if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
+            if k == "SavedLanguage" then
+                -- bỏ qua, không set runtime
+            elseif self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
                 local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
                 if not setOk then
                     warn("[SaveManager:LoadAutoloadConfig] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
@@ -1697,8 +1714,23 @@ end
                                     if deleteMode or editMode then return end
                                     local s, data = pcall(function() return HttpService:JSONDecode(_readfile(filepath)) end)
                                     if s and type(data) == "table" then
+                                        -- 🆕 CHECK NGÔN NGỮ
+                                        local savedLang = data["SavedLanguage"]
+                                        local currentLang = _G.Language or "en"
+                                        if type(savedLang) == "string" and savedLang ~= currentLang then
+                                            Library:Notify({
+                                                Title = "❌ Sai ngôn ngữ",
+                                                Description = "Save này lưu bằng [" .. savedLang:upper() ..
+                                                              "]. Đổi sang [" .. savedLang:upper() .. "] trước khi Load.",
+                                                Duration = 5
+                                            })
+                                            return
+                                        end
+
                                         for k, v in pairs(data) do
-                                            if Window.ConfigElements[k] and Window.ConfigElements[k].Set then
+                                            if k == "SavedLanguage" then
+                                                -- bỏ qua
+                                            elseif Window.ConfigElements[k] and Window.ConfigElements[k].Set then
                                                 local setOk, setErr = pcall(function() Window.ConfigElements[k].Set(v) end)
                                                 if not setOk then
                                                     warn("[Saves Loader] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
