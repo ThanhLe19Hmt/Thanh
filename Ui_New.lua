@@ -1054,8 +1054,7 @@ function Library:CreateWindow(options)
 
                     if callback then callback(state) end
 
-                    local configKey = config and config.Id or name
-                    Window.ConfigElements[configKey] = { Set = internalSet, Get = function() return state end }
+                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return state end }
                 end
 
                 function Elements:AddSlider(name, min, max, default, callback, infoData, id)
@@ -1094,7 +1093,6 @@ function Library:CreateWindow(options)
 
                     if callback then callback(val) end
 
-                    local configKey = config and config.Id or name
                     Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return val end }
                 end
 
@@ -1367,8 +1365,7 @@ end
 
                     if callback then callback(selected) end
 
-                    local configKey = config and config.Id or name
-                    Window.ConfigElements[configKey] = { Set = internalSet, Get = function() return selected end }
+                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return selected end }
 
                     local DropdownHandle = {}
                     DropdownHandle.Refresh = function(_self, newOptions, preserveSelection)
@@ -1399,11 +1396,10 @@ end
 
                     if callback then callback(Input.Text) end
 
-                    local configKey = config and config.Id or name
                     Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return Input.Text end }
                 end
 
-                function Elements:AddColorPicker(name, defaultColor, callback, infoData)
+                function Elements:AddColorPicker(name, defaultColor, callback, infoData, id)
                     local color = Color3.fromRGB(255, 255, 255)
                     if typeof(defaultColor) == "Color3" then
                         color = defaultColor
@@ -1504,7 +1500,7 @@ end
 
                     if callback then callback(color) end
 
-                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return state end }
+                    Window.ConfigElements[id or name] = { Set = internalSet, Get = function() return color:ToHex() end }
                 end
 
                 function Elements:AddConfigManager(folderName)
@@ -1884,7 +1880,7 @@ end
 
                 function Elements:ColorPicker(config)
                     config = config or {}
-                    return self:AddColorPicker(config.Title, config.Value, config.Callback, BuildInfo(config))
+                    return self:AddColorPicker(config.Title, config.Value, config.Callback, BuildInfo(config), config.Id)
                 end
 
                 function Elements:ConfigManager(config)
