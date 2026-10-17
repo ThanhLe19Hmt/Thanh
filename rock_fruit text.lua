@@ -1827,7 +1827,6 @@ local RaidBossData = {
     Valid = true,
     OffsetY = 25,
     },
-	["??? (Raid 4)"] = {Name = "???", Reward = "SOON", PortalCost = 0, Valid = false}
 }
 
 local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
@@ -1966,13 +1965,45 @@ ShopRaidCard:Button({
 })
 
 -- ============================================================
--- 🎁 TIME MYSTERY BOX
+-- 🎁 MYSTERY BOX (Time / Thunder / Lava) — v3
+-- - Auto KHÔNG tự tắt khi hết hộp (vẫn giữ toggle ON)
+-- - Tự pause khi hết, tự resume khi có hộp lại
+-- - Tự đóng Frame_RandomItem sau 5s
 -- ============================================================
-local TimeMysteryInfo = TimeMysteryCard:Paragraph({
-    Title = "🎁 Time Mystery Box: ---",
-    Content = "Enter amount and press button to open"
+_G.MysteryBoxSelected    = "Time Mystery Box"
+_G.MysteryBoxAmount      = 1
+_G.MysteryBoxAuto        = false
+_G.MysteryBoxAutoDelay   = 0.5
+_G.MysteryBoxLastOpen    = 0
+_G.MysteryBoxLastInfo    = 0
+_G.MysteryBoxOutNotified = false
+_G.MysteryBoxFrameCloseAt = 0
+_G.MysteryBoxLastFrameSeen = 0
+
+local MysteryBoxList = {"Time Mystery Box", "Thunder Mystery Box", "Lava Mystery Box"}
+
+local MysteryBoxInfo = TimeMysteryCard:Paragraph({
+    Title = "🎁 Mystery Box: ---",
+    Content = "Select the box below"
 })
 
+-- 🆕 Dropdown chọn hộp
+TimeMysteryCard:Dropdown({
+    Title = "🎁 Select Mystery Box",
+    Options = MysteryBoxList,
+    Multi = false,
+    Value = "Time Mystery Box",
+    Callback = function(v)
+        local val = type(v) == "table" and (next(v) or "Time Mystery Box") or v
+        if type(val) ~= "string" then val = "Time Mystery Box" end
+        if not table.find(MysteryBoxList, val) then val = "Time Mystery Box" end
+        _G.MysteryBoxSelected = val
+        _G.MysteryBoxOutNotified = false
+        print("[MysteryBox] Selected:", val)
+    end
+})
+
+-- 🆕 Textbox số lượng
 TimeMysteryCard:Textbox({
     Title = "Open Amount (1-100)",
     Placeholder = "1",
@@ -1981,25 +2012,27 @@ TimeMysteryCard:Textbox({
         local n = tonumber(v) or 1
         if n < 1 then n = 1 end
         if n > 100 then n = 100 end
-        _G.TimeMysteryAmount = n
-        print("[TimeBox] Open Amount:", n)
+        _G.MysteryBoxAmount = n
+        print("[MysteryBox] Open Amount:", n)
     end
 })
 
+-- 🆕 Nút mở 1 lần
 TimeMysteryCard:Button({
-    Title = "🎁 OPEN TIME MYSTERY BOX (once)",
+    Title = "🎁 OPEN (once)",
     Callback = function()
-        local amount = tonumber(_G.TimeMysteryAmount) or 1
+        local boxName = _G.MysteryBoxSelected or "Time Mystery Box"
+        local amount  = tonumber(_G.MysteryBoxAmount) or 1
 
         if amount < 1 then amount = 1 end
         if amount > 100 then amount = 100 end
-        _G.TimeMysteryAmount = amount
+        _G.MysteryBoxAmount = amount
 
         local Inv = GetInventory()
-        local have = (Inv["Time Mystery Box"] and Inv["Time Mystery Box"].amount) or 0
+        local have = (Inv[boxName] and Inv[boxName].amount) or 0
 
         if have <= 0 then
-            _G.SeaNotify("❌ No Box", "Time Mystery Box (0)", 3)
+            _G.SeaNotify("❌ No Box", boxName .. " (0)", 3)
             return
         end
 
@@ -2013,20 +2046,40 @@ TimeMysteryCard:Button({
             :FindFirstChild("NetworkEvent")
 
         if not NetworkEvent then
-            _G.SeaNotify("❌ Remote not found", "NetworkEvent doesn't exist", 3)
+            _G.SeaNotify("❌ Remote not found", "NetworkEvent", 3)
             return
         end
 
         local ok = pcall(function()
-            NetworkEvent:FireServer("fire", nil, "Time Mystery Box", useCount)
+            NetworkEvent:FireServer("fire", nil, boxName, useCount)
         end)
 
         if ok then
-            _G.SeaNotify("🎁 Opening Box",
-                "Open " .. useCount .. " box (have " .. have .. ")", 4)
-            print("[TimeBox] 🎁 Open", useCount, "box | Remaining:", have - useCount)
+            _G.SeaNotify("🎁 Opening",
+                boxName .. " x" .. useCount .. " (have " .. have .. ")", 3)
+            print("[MysteryBox] Open " .. boxName .. " x" .. useCount)
+
+            -- 🆕 Bắt đầu đếm 5s để đóng Frame_RandomItem
+            _G.MysteryBoxFrameCloseAt = tick() + 5
+            _G.MysteryBoxLastFrameSeen = tick()
         else
             _G.SeaNotify("❌ Fire error", "Cannot open box", 3)
+        end
+    end
+})
+
+-- 🆕 Toggle Auto (KHÔNG tự tắt khi hết)
+TimeMysteryCard:Toggle({
+    Title = "🤖 Auto Open Box",
+    Value = false,
+    Callback = function(v)
+        _G.MysteryBoxAuto = v
+        _G.MysteryBoxLastOpen = 0
+        _G.MysteryBoxOutNotified = false
+        if v then
+            print("[MysteryBox] Auto ON: " .. (_G.MysteryBoxSelected or "?"))
+        else
+            print("[MysteryBox] Auto OFF")
         end
     end
 })
@@ -2380,26 +2433,160 @@ task.spawn(function()
     end
 end)
 
-task.spawn(function()
-    while task.wait(1) do
+-- ============================================================
+-- 🆕 MYSTERY BOX — Helpers
+-- ============================================================
+local function MysteryBox_GetFrame()
+    local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+    local main = hud and hud:FindFirstChild("Main")
+    if not main then return nil end
+    return main:FindFirstChild("Frame_RandomItem")
+end
+
+local function MysteryBox_CloseFrame(frame)
+    if not frame then return false end
+
+    -- 🆕 Click Close_ trước
+    local closeBtn = frame:FindFirstChild("Close_")
+        or frame:FindFirstChild("Close")
+        or frame:FindFirstChild("CloseButton")
+        or frame:FindFirstChild("Exit")
+        or frame:FindFirstChildWhichIsA("ImageButton", true)
+        or frame:FindFirstChildWhichIsA("TextButton", true)
+
+    if closeBtn then
         pcall(function()
+            if firesignal then
+                firesignal(closeBtn.MouseButton1Click)
+            elseif fireclickdetector then
+                fireclickdetector(closeBtn)
+            else
+                closeBtn:Activate()
+            end
+        end)
+    end
+
+    -- 🆕 Force ẩn nếu vẫn visible
+    task.wait(0.1)
+    if frame.Visible then
+        pcall(function() frame.Visible = false end)
+    end
+
+    return true
+end
+
+-- ============================================================
+-- 🆕 AUTO OPEN MYSTERY BOX + UPDATE INFO + CLOSE GUI
+-- ============================================================
+task.spawn(function()
+    while task.wait(0.2) do
+        pcall(function()
+            -- =====================================================
+            -- UPDATE INFO (mỗi 0.5s)
+            -- =====================================================
+            local now = tick()
+            if now - _G.MysteryBoxLastInfo >= 0.5 then
+                _G.MysteryBoxLastInfo = now
+                local boxName = _G.MysteryBoxSelected or "Time Mystery Box"
+                local Inv = GetInventory()
+                local have = (Inv[boxName] and Inv[boxName].amount) or 0
+
+                local function Fmt(n)
+                    n = tonumber(n) or 0
+                    if n < 1000 then return tostring(math.floor(n)) end
+                    if n < 1000000 then return string.format("%.1fK", n / 1000) end
+                    return string.format("%.1fM", n / 1000000)
+                end
+
+                if MysteryBoxInfo then
+                    local status = "OFF"
+                    if _G.MysteryBoxAuto then
+                        if have <= 0 then
+                            status = "ON (⏸️ paused — out of stock)"
+                        else
+                            status = "ON (▶️ running)"
+                        end
+                    end
+                    MysteryBoxInfo:SetTitle("🎁 " .. boxName .. ": " .. Fmt(have))
+                    MysteryBoxInfo:SetContent(
+                        "Selected: " .. boxName
+                        .. "\nAmount: " .. tostring(_G.MysteryBoxAmount or 1)
+                        .. " | Auto: " .. status
+                    )
+                end
+            end
+
+            -- =====================================================
+            -- 🆕 ĐÓNG Frame_RandomItem SAU 5s
+            -- =====================================================
+            local frame = MysteryBox_GetFrame()
+
+            if frame then
+                if frame.Visible then
+                    -- Frame mới hiện → bắt đầu đếm 5s (nếu chưa có lịch)
+                    if _G.MysteryBoxFrameCloseAt == 0 then
+                        _G.MysteryBoxFrameCloseAt = tick() + 5
+                        _G.MysteryBoxLastFrameSeen = tick()
+                    end
+                end
+            end
+
+            if _G.MysteryBoxFrameCloseAt > 0 and now >= _G.MysteryBoxFrameCloseAt then
+                if frame and frame.Visible then
+                    MysteryBox_CloseFrame(frame)
+                end
+                _G.MysteryBoxFrameCloseAt = 0
+                _G.MysteryBoxLastFrameSeen = 0
+            end
+
+            -- =====================================================
+            -- AUTO OPEN (không tự tắt khi hết)
+            -- =====================================================
+            if not _G.MysteryBoxAuto then return end
+
+            local boxName = _G.MysteryBoxSelected or "Time Mystery Box"
+            local amount  = tonumber(_G.MysteryBoxAmount) or 1
+            if amount < 1 then amount = 1 end
+            if amount > 100 then amount = 100 end
+
+            local delay = tonumber(_G.MysteryBoxAutoDelay) or 0.5
+            if delay < 0.1 then delay = 0.1 end
+
+            if tick() - (_G.MysteryBoxLastOpen or 0) < delay then return end
+
             local Inv = GetInventory()
-            local have = (Inv["Time Mystery Box"] and Inv["Time Mystery Box"].amount) or 0
+            local have = (Inv[boxName] and Inv[boxName].amount) or 0
 
-            local function Fmt(n)
-                n = tonumber(n) or 0
-                if n < 1000 then return tostring(math.floor(n)) end
-                if n < 1000000 then return string.format("%.1fK", n / 1000) end
-                return string.format("%.1fM", n / 1000000)
+            -- 🆕 Hết hộp → PAUSE (không tắt)
+            if have <= 0 then
+                if not _G.MysteryBoxOutNotified then
+                    _G.MysteryBoxOutNotified = true
+                    _G.SeaNotify("⏸️ Auto paused",
+                        boxName .. " Out of stock — waiting for more boxes to arrive", 4)
+                end
+                return
             end
 
-            if TimeMysteryInfo then
-                TimeMysteryInfo:SetTitle("🎁 Time Mystery Box: " .. Fmt(have))
-                TimeMysteryInfo:SetContent(
-                    "Open Amount: " .. tostring(_G.TimeMysteryAmount or 1) ..
-                    " | Can open: " .. Fmt(have)
-                )
+            -- 🆕 Có hộp lại → resume
+            if _G.MysteryBoxOutNotified then
+                _G.MysteryBoxOutNotified = false
             end
+
+            local useCount = math.min(amount, have)
+
+            local NetworkEvent = ReplicatedStorage
+                :FindFirstChild("Modules")
+                and ReplicatedStorage.Modules
+                :FindFirstChild("NetworkFramework")
+                and ReplicatedStorage.Modules.NetworkFramework
+                :FindFirstChild("NetworkEvent")
+
+            if not NetworkEvent then return end
+
+            _G.MysteryBoxLastOpen = tick()
+            pcall(function()
+                NetworkEvent:FireServer("fire", nil, boxName, useCount)
+            end)
         end)
     end
 end)
@@ -5131,9 +5318,14 @@ task.spawn(function()
     end)
 end)
 
-if not IS_MOON_MAP then
 -- ============================================================
--- 🆕 AUTO RAID BOSS DRAGON — v11 FINAL (integrated)
+-- 🆕 AUTO RAID BOSS DRAGON — v11 FINAL (GLOBAL FIX)
+-- - Buff SSJ... TRƯỚC KHI MỞ CỔNG (spam F đến cooldown)
+-- - Chỉ đợi 0.3s sau buff (không lãng phí 1s)
+-- - HP < 50% → spam F Thanos (tự equip)
+-- - Đóng GUI NPC Open Raid: retry loop 3s
+-- - Đóng GUI nhận thưởng: chỉ 1 lần (không spam)
+-- - Tất cả hàm là GLOBAL (prefix Dragon_) — tránh lỗi 200 locals
 -- ============================================================
 _G.AutoRaidDragon             = false
 _G.DragonLastFireTime         = 0
@@ -5159,28 +5351,24 @@ _G.DragonBuffSpamActive       = false
 _G.DragonBuffSpamStartTime    = 0
 _G.DragonBuffSpamFinishTime   = 0
 
-local DRAGON_AIM_HEIGHT        = 25
-local DRAGON_MIN_FIRE_GAP      = 3
-local DRAGON_PORTAL_TIMEOUT    = 15
-local DRAGON_PORTAL_FIRE_LOCK  = 5
-local DRAGON_SAFE_HEIGHT_FLY   = 500
-local DRAGON_THANOS_COOLDOWN   = 0.3
-local DRAGON_BUFF_COOLDOWN     = 0.3
-local DRAGON_BUFF_LIST         = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG"}
+_G.DRAGON_AIM_HEIGHT        = 25
+_G.DRAGON_MIN_FIRE_GAP      = 3
+_G.DRAGON_PORTAL_TIMEOUT    = 15
+_G.DRAGON_PORTAL_FIRE_LOCK  = 5
+_G.DRAGON_SAFE_HEIGHT_FLY   = 500
+_G.DRAGON_THANOS_COOLDOWN   = 0.3
+_G.DRAGON_BUFF_COOLDOWN     = 0.3
+_G.DRAGON_BUFF_LIST         = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
 
--- 🆕 Lấy Action global cho scope Dragon
-local DragonAction = ReplicatedStorage:FindFirstChild("Remotes")
-DragonAction = DragonAction and DragonAction:FindFirstChild("Action")
-
-local function GetDragonMethodFarm(height)
-    height = height or DRAGON_AIM_HEIGHT
+function Dragon_GetMethodFarm(height)
+    height = height or _G.DRAGON_AIM_HEIGHT
     return CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 end
 
 -- =====================================================
 -- Tìm tool Thanos
 -- =====================================================
-local function FindThanosTool()
+function Dragon_FindThanosTool()
     local char = LocalPlayer.Character
     if not char then return nil, "character" end
     for _, tool in ipairs(char:GetChildren()) do
@@ -5208,11 +5396,11 @@ end
 -- =====================================================
 -- Tìm tool buff
 -- =====================================================
-local function FindBuffTool()
+function Dragon_FindBuffTool()
     local char = LocalPlayer.Character
     if not char then return nil, nil end
 
-    for _, buffName in ipairs(DRAGON_BUFF_LIST) do
+    for _, buffName in ipairs(_G.DRAGON_BUFF_LIST) do
         for _, tool in ipairs(char:GetChildren()) do
             if tool:IsA("Tool") and tool.Name:lower() == buffName:lower() then
                 return tool, buffName
@@ -5222,7 +5410,7 @@ local function FindBuffTool()
 
     local bp = LocalPlayer:FindFirstChild("Backpack")
     if bp then
-        for _, buffName in ipairs(DRAGON_BUFF_LIST) do
+        for _, buffName in ipairs(_G.DRAGON_BUFF_LIST) do
             for _, tool in ipairs(bp:GetChildren()) do
                 if tool:IsA("Tool") and tool.Name:lower() == buffName:lower() then
                     return tool, buffName
@@ -5233,10 +5421,10 @@ local function FindBuffTool()
     return nil, nil
 end
 
-local function EnsureThanosEquipped()
+function Dragon_EnsureThanosEquipped()
     local char = LocalPlayer.Character
     if not char then return false end
-    local tool, location = FindThanosTool()
+    local tool, location = Dragon_FindThanosTool()
     if not tool then return false end
     if location == "character" then
         _G.DragonHasThanosEquipped = true
@@ -5253,7 +5441,7 @@ local function EnsureThanosEquipped()
     return false
 end
 
-local function TryUseThanosF(hrp)
+function Dragon_TryUseThanosF(hrp)
     if not hrp then return "no_tool" end
     local char = LocalPlayer.Character
     if not char then return "no_tool" end
@@ -5289,19 +5477,18 @@ local function TryUseThanosF(hrp)
         end
     end
 
-    task.wait(0.2)
-    if DragonAction then
+    task.wait(0.3)
+    if Action then
         pcall(function()
-            DragonAction:FireServer(thanosTool.Name, "f")
+            Action:FireServer(thanosTool.Name, "f")
         end)
-        task.wait(0.6)  -- 🆕 tăng lên 0.6s để hitbox F register xong
+        task.wait(0.3)
         return "success"
     end
     return "no_tool"
 end
 
--- Hook alert
-local function OnDragonAlert(text)
+function Dragon_OnAlert(text)
     if not text then return end
     local lower = text:lower()
     if lower:find("gathering power", 1, true) then
@@ -5316,28 +5503,18 @@ local function OnDragonAlert(text)
     end
 end
 
-local function HookDragonText(container)
+function Dragon_HookText(container)
     for _, obj in ipairs(container:GetDescendants()) do
         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            OnDragonAlert(obj.Text)
+            Dragon_OnAlert(obj.Text)
             obj:GetPropertyChangedSignal("Text"):Connect(function()
-                OnDragonAlert(obj.Text)
+                Dragon_OnAlert(obj.Text)
             end)
         end
     end
 end
-HookDragonText(LocalPlayer.PlayerGui)
-LocalPlayer.PlayerGui.DescendantAdded:Connect(function(obj)
-    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-        task.wait(0.1)
-        OnDragonAlert(obj.Text)
-        obj:GetPropertyChangedSignal("Text"):Connect(function()
-            OnDragonAlert(obj.Text)
-        end)
-    end
-end)
 
-local function GetDragonBoss()
+function Dragon_GetBoss()
     local bf = workspace:FindFirstChild("Boss Fight")
     if not bf then return nil, nil, nil end
     local dragonFolder = bf:FindFirstChild("Dragon")
@@ -5352,13 +5529,13 @@ local function GetDragonBoss()
     return nil, nil, nil
 end
 
-local function IsSafeZoneColor(c)
+function Dragon_IsSafeZoneColor(c)
     return math.abs(c.R - 0.27) < 0.05
        and math.abs(c.G - 1.00) < 0.05
        and math.abs(c.B - 0.55) < 0.05
 end
 
-local function FindDragonSafeZone()
+function Dragon_FindSafeZone()
     if _G.DragonSafeZonePart and _G.DragonSafeZonePart.Parent then
         return _G.DragonSafeZonePart
     end
@@ -5367,7 +5544,7 @@ local function FindDragonSafeZone()
     local bestPart, bestY = nil, math.huge
     for _, obj in ipairs(vfx:GetChildren()) do
         if obj:IsA("BasePart") and obj.Name == "Part" then
-            if IsSafeZoneColor(obj.Color) then
+            if Dragon_IsSafeZoneColor(obj.Color) then
                 if obj.Position.Y < bestY then
                     bestY = obj.Position.Y
                     bestPart = obj
@@ -5383,7 +5560,7 @@ local function FindDragonSafeZone()
     return nil
 end
 
-local function CloseFrame(frame)
+function Dragon_CloseFrame(frame)
     if not frame then return false end
     local closeBtn = frame:FindFirstChild("Close_")
     if not closeBtn then
@@ -5414,9 +5591,9 @@ local function CloseFrame(frame)
 end
 
 -- =====================================================
--- DragonOpenPortal
+-- DragonOpenPortal — Buff TRƯỚC khi mở cổng
 -- =====================================================
-local function DragonOpenPortal()
+function Dragon_OpenPortal()
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
@@ -5433,7 +5610,7 @@ local function DragonOpenPortal()
     if not _G.DragonBuffUsed then
         _G.DragonBuffUsed = true
 
-        local tool, buffName = FindBuffTool()
+        local tool, buffName = Dragon_FindBuffTool()
         if tool then
             print("[Dragon] ⚡ Có buff " .. buffName .. ", bắt đầu spam F trước cổng")
             _G.DragonBuffSpamActive = true
@@ -5446,7 +5623,7 @@ local function DragonOpenPortal()
 
                 while _G.DragonBuffSpamActive and tick() - startTime < 15 do
                     local now = tick()
-                    if now - lastFTime >= DRAGON_BUFF_COOLDOWN then
+                    if now - lastFTime >= _G.DRAGON_BUFF_COOLDOWN then
                         lastFTime = now
 
                         local c = LocalPlayer.Character
@@ -5501,9 +5678,9 @@ local function DragonOpenPortal()
                             break
                         end
 
-                        if DragonAction then
+                        if Action then
                             pcall(function()
-                                DragonAction:FireServer(currentTool.Name, "f")
+                                Action:FireServer(currentTool.Name, "f")
                             end)
                             print("[Dragon] ⚡ Buff F: " .. buffName)
                         end
@@ -5512,8 +5689,8 @@ local function DragonOpenPortal()
                 end
 
                 _G.DragonBuffSpamActive = false
-                print("[Dragon] ✅ Buff spam xong, đợi 1s rồi mở cổng")
-                task.wait(1)
+                -- 🆕 Chỉ đợi 0.3s (thay vì 1s)
+                task.wait(0.3)
                 _G.DragonBuffFinishTime = tick()
                 print("[Dragon] ✅ Buff xong, bắt đầu mở cổng")
             end)
@@ -5528,7 +5705,8 @@ local function DragonOpenPortal()
     if _G.DragonBuffFinishTime == 0 then
         return false
     end
-    if tick() - _G.DragonBuffFinishTime < 1 then
+    -- 🆕 Chỉ đợi 0.3s (thay vì 1s)
+    if tick() - _G.DragonBuffFinishTime < 0.3 then
         return false
     end
 
@@ -5542,7 +5720,7 @@ local function DragonOpenPortal()
             print("[Dragon] 🌀 TP vào portal")
             _G.DragonEnterTime = tick()
             _G.DragonPortalPhase = "ENTERED"
-            _G.DragonPortalFireLock = tick() + DRAGON_PORTAL_FIRE_LOCK
+            _G.DragonPortalFireLock = tick() + _G.DRAGON_PORTAL_FIRE_LOCK
         end
         return true
     end
@@ -5563,7 +5741,7 @@ local function DragonOpenPortal()
                 task.wait(0.3)
             end
 
-            if tick() - _G.DragonLastFireTime >= DRAGON_MIN_FIRE_GAP then
+            if tick() - _G.DragonLastFireTime >= _G.DRAGON_MIN_FIRE_GAP then
                 local prompt = openRaidNPC:FindFirstChildWhichIsA("ProximityPrompt", true)
                 if prompt then
                     _G.DragonLastFireTime = tick()
@@ -5631,17 +5809,39 @@ local function DragonOpenPortal()
                     _G.DragonPortalPhase = "WAITING"
                     _G.DragonPortalStartTime = tick()
 
+                    -- 🆕 Retry loop đóng GUI — chắc chắn đóng được
                     task.spawn(function()
-                        task.wait(0.3)
-                        pcall(function()
-                            local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-                            local main2 = hud2 and hud2:FindFirstChild("Main")
-                            local raidBossFrame2 = main2 and main2:FindFirstChild("Frame_RaidBoss")
-                            if raidBossFrame2 then
-                                CloseFrame(raidBossFrame2)
-                                print("[Dragon] 🚪 Đóng GUI mở cổng")
-                            end
-                        end)
+                        local startTime = tick()
+                        local closed = false
+                        while tick() - startTime < 3 do
+                            task.wait(0.15)
+                            if closed then break end
+                            pcall(function()
+                                local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+                                local main2 = hud2 and hud2:FindFirstChild("Main")
+                                local raidBossFrame2 = main2 and main2:FindFirstChild("Frame_RaidBoss")
+                                if raidBossFrame2 and raidBossFrame2.Visible then
+                                    local closeBtn = raidBossFrame2:FindFirstChild("Close_")
+                                        or raidBossFrame2:FindFirstChild("Close")
+                                        or raidBossFrame2:FindFirstChild("CloseButton")
+                                    if closeBtn then
+                                        pcall(function()
+                                            if firesignal then
+                                                firesignal(closeBtn.MouseButton1Click)
+                                            else
+                                                closeBtn:Activate()
+                                            end
+                                        end)
+                                    end
+                                    task.wait(0.1)
+                                    if raidBossFrame2.Visible then
+                                        pcall(function() raidBossFrame2.Visible = false end)
+                                    end
+                                    closed = true
+                                    print("[Dragon] 🚪 Đã đóng GUI mở cổng")
+                                end
+                            end)
+                        end
                     end)
                     return true
                 end
@@ -5666,16 +5866,16 @@ local function DragonOpenPortal()
             print("[Dragon] 🌀 TP vào portal (sau click)")
             _G.DragonEnterTime = tick()
             _G.DragonPortalPhase = "ENTERED"
-            _G.DragonPortalFireLock = tick() + DRAGON_PORTAL_FIRE_LOCK
+            _G.DragonPortalFireLock = tick() + _G.DRAGON_PORTAL_FIRE_LOCK
             return true
         end
         if bf and bf:FindFirstChild("Dragon") then
             _G.DragonPortalPhase = "ENTERED"
             _G.DragonEnterTime = tick()
-            _G.DragonPortalFireLock = tick() + DRAGON_PORTAL_FIRE_LOCK
+            _G.DragonPortalFireLock = tick() + _G.DRAGON_PORTAL_FIRE_LOCK
             return true
         end
-        if elapsed > DRAGON_PORTAL_TIMEOUT then
+        if elapsed > _G.DRAGON_PORTAL_TIMEOUT then
             print("[Dragon] ⚠️ Portal timeout → retry")
             _G.DragonPortalPhase = "IDLE"
             _G.DragonLastFireTime = 0
@@ -5687,8 +5887,19 @@ local function DragonOpenPortal()
 end
 
 -- =====================================================
--- Listener respawn
+-- Hook + Listener respawn
 -- =====================================================
+Dragon_HookText(LocalPlayer.PlayerGui)
+LocalPlayer.PlayerGui.DescendantAdded:Connect(function(obj)
+    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+        task.wait(0.1)
+        Dragon_OnAlert(obj.Text)
+        obj:GetPropertyChangedSignal("Text"):Connect(function()
+            Dragon_OnAlert(obj.Text)
+        end)
+    end
+end)
+
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     task.wait(1)
     if not _G.AutoRaidDragon then return end
@@ -5733,10 +5944,10 @@ task.spawn(function()
             local hrp  = char and char:FindFirstChild("HumanoidRootPart")
             if not hum or not hrp or hum.Health <= 0 then return end
 
-            local bossModel, bossHrp, bossHum = GetDragonBoss()
+            local bossModel, bossHrp, bossHum = Dragon_GetBoss()
             if not bossModel or not bossHrp or not bossHum then
                 if _G.DragonPortalPhase ~= "ENTERED" then
-                    DragonOpenPortal()
+                    Dragon_OpenPortal()
                 end
                 return
             end
@@ -5746,7 +5957,7 @@ task.spawn(function()
                 if not _G.DragonBossDeadHandled then
                     _G.DragonBossDeadHandled = true
                     _G.DragonPortalPhase = "IDLE"
-                    _G.DragonPortalFireLock = tick() + DRAGON_PORTAL_FIRE_LOCK
+                    _G.DragonPortalFireLock = tick() + _G.DRAGON_PORTAL_FIRE_LOCK
                     _G.DragonAlertTriggered = false
                     _G.DragonSafeZoneActive = false
                     _G.DragonSafeZonePart = nil
@@ -5756,53 +5967,50 @@ task.spawn(function()
                     _G.DragonBuffUsed = false
                     _G.DragonBuffFinishTime = 0
 
+                    -- 🆕 Đóng GUI nhận thưởng — CHỈ 1 LẦN (không spam)
                     task.spawn(function()
                         local startTime = tick()
                         local clicked = false
 
                         while tick() - startTime < 5 do
-                            task.wait(0.3)
+                            task.wait(0.2)
+                            if clicked then break end
                             pcall(function()
                                 local hud3 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                                 local main3 = hud3 and hud3:FindFirstChild("Main")
                                 if not main3 then return end
 
                                 local rewardFrame = main3:FindFirstChild("Frame_RaidbossItem")
+                                    or main3:FindFirstChild("Frame_RaidBossItem")
+                                    or main3:FindFirstChild("Frame_RaidBoss")
+                                    or main3:FindFirstChild("Frame_Raidboss")
                                 if not rewardFrame then return end
                                 if not rewardFrame.Visible then return end
 
                                 local titleLabel = rewardFrame:FindFirstChild("TitleLabel")
                                 local isVictory = titleLabel and titleLabel.Text == "Victory"
 
-                                if isVictory and not clicked then
-                                    clicked = true
-                                    local closeBtn = rewardFrame:FindFirstChild("Close_")
-                                    if closeBtn then
-                                        for i = 1, 3 do
-                                            pcall(function()
-                                                if firesignal then
-                                                    firesignal(closeBtn.MouseButton1Click)
-                                                end
-                                            end)
-                                            task.wait(0.1)
+                                local closeBtn = rewardFrame:FindFirstChild("Close_")
+                                    or rewardFrame:FindFirstChild("Close")
+                                    or rewardFrame:FindFirstChild("CloseButton")
+                                if closeBtn then
+                                    pcall(function()
+                                        if firesignal then
+                                            firesignal(closeBtn.MouseButton1Click)
+                                        else
+                                            closeBtn:Activate()
                                         end
-                                        pcall(function()
-                                            local VIM = game:GetService("VirtualInputManager")
-                                            local pos = closeBtn.AbsolutePosition + closeBtn.AbsoluteSize / 2
-                                            VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
-                                            task.wait(0.05)
-                                            VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
-                                        end)
-                                        print("[Dragon] 🎁 Đã click Close_")
-                                    else
-                                        pcall(function() rewardFrame.Visible = false end)
-                                    end
-                                    task.wait(0.5)
-                                    if rewardFrame.Visible then
-                                        pcall(function() rewardFrame.Visible = false end)
-                                        print("[Dragon] ⚠️ Vẫn visible → ẩn trực tiếp")
-                                    end
+                                    end)
                                 end
+
+                                task.wait(0.2)
+                                if rewardFrame.Visible then
+                                    pcall(function() rewardFrame.Visible = false end)
+                                end
+
+                                clicked = true
+                                print("[Dragon] 🎁 Đã đóng GUI nhận thưởng (Victory="
+                                    .. tostring(isVictory) .. ")")
                             end)
                         end
                     end)
@@ -5822,13 +6030,13 @@ task.spawn(function()
             local now = tick()
 
             -- SAFE ZONE
-            local safePart = FindDragonSafeZone()
+            local safePart = Dragon_FindSafeZone()
             if safePart then
                 if not _G.DragonSafeZoneActive then
                     _G.DragonSafeZoneActive = true
                     print("[Dragon] 🛡️ VÀO VÙNG AN TOÀN")
                 end
-                local safePos = safePart.Position + Vector3.new(0, DRAGON_SAFE_HEIGHT_FLY, 0)
+                local safePos = safePart.Position + Vector3.new(0, _G.DRAGON_SAFE_HEIGHT_FLY, 0)
                 hrp.CFrame = CFrame.new(safePos, bossHrp.Position)
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
@@ -5848,10 +6056,10 @@ task.spawn(function()
             local isThanosPriority = hpPercent <= 50
 
             if isThanosPriority then
-                local thanosEquipped = EnsureThanosEquipped()
+                local thanosEquipped = Dragon_EnsureThanosEquipped()
 
                 if not thanosEquipped then
-                    local methodFarm = GetDragonMethodFarm(DRAGON_AIM_HEIGHT)
+                    local methodFarm = Dragon_GetMethodFarm(_G.DRAGON_AIM_HEIGHT)
                     hrp.CFrame = bossHrp.CFrame * methodFarm
                     hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
                     hrp.AssemblyAngularVelocity = Vector3.zero
@@ -5889,11 +6097,12 @@ task.spawn(function()
                     end
                 end
 
+                -- F cooldown → bay lên 500
                 if fOnCooldown then
                     if not _G.DragonThanosFlyPos then
                         _G.DragonThanosFlyPos = Vector3.new(
                             hrp.Position.X,
-                            hrp.Position.Y + DRAGON_SAFE_HEIGHT_FLY,
+                            hrp.Position.Y + _G.DRAGON_SAFE_HEIGHT_FLY,
                             hrp.Position.Z
                         )
                     end
@@ -5903,46 +6112,49 @@ task.spawn(function()
                     return
                 end
 
-                if now - _G.DragonLastThanosTime >= DRAGON_THANOS_COOLDOWN then
-    _G.DragonLastThanosTime = now
+                -- F sẵn sàng → bám boss + spam F
+                if now - _G.DragonLastThanosTime >= _G.DRAGON_THANOS_COOLDOWN then
+                    local bossPos = bossHrp.Position
+                    local targetPos = bossPos + Vector3.new(0, _G.DRAGON_AIM_HEIGHT, 0)
+                    hrp.CFrame = CFrame.new(targetPos, bossPos)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
 
-    -- 🆕 Ở GẦN BOSS trước khi fire F (đảm bảo hitbox chạm)
-    local closePos = bossHrp.Position + Vector3.new(0, DRAGON_AIM_HEIGHT, 0)
-    hrp.CFrame = CFrame.new(closePos, bossHrp.Position)
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.AssemblyAngularVelocity = Vector3.zero
+                    _G.DragonLastThanosTime = now
+                    local result = Dragon_TryUseThanosF(hrp)
+                    if result == "success" then
+                        _G.DragonThanosFSuccessCount = _G.DragonThanosFSuccessCount + 1
+                        _G.DragonThanosFlyPos = nil
 
-    task.wait(0.05)  -- 🆕 Đợi 1 frame để CFrame register
+                        local boostPos = Vector3.new(
+                            hrp.Position.X,
+                            hrp.Position.Y + 100,
+                            hrp.Position.Z
+                        )
+                        hrp.CFrame = CFrame.new(boostPos, bossHrp.Position)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
 
-    local result = TryUseThanosF(hrp)
+                        if _G.DragonThanosFSuccessCount <= 5 or _G.DragonThanosFSuccessCount % 5 == 0 then
+                            print(string.format("[Dragon] ⚡ F Thanos #%d (HP: %.1f%%) — bay lên 100",
+                                _G.DragonThanosFSuccessCount, hpPercent))
+                        end
+                        return
+                    elseif result == "cooldown" then
+                        if not _G.DragonThanosFlyPos then
+                            _G.DragonThanosFlyPos = Vector3.new(
+                                hrp.Position.X,
+                                hrp.Position.Y + _G.DRAGON_SAFE_HEIGHT_FLY,
+                                hrp.Position.Z
+                            )
+                        end
+                        hrp.CFrame = CFrame.new(_G.DragonThanosFlyPos, bossHrp.Position)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
+                    end
+                end
 
-    if result == "success" then
-        _G.DragonThanosFSuccessCount = _G.DragonThanosFSuccessCount + 1
-        _G.DragonThanosFlyPos = nil
-
-        -- 🆕 KHÔNG bay lên sau khi fire — ở gần boss để F trúng
-        -- Chỉ log tiến độ
-        if _G.DragonThanosFSuccessCount <= 5 or _G.DragonThanosFSuccessCount % 5 == 0 then
-            print(string.format("[Dragon] ⚡ F Thanos #%d (HP: %.1f%%)",
-                _G.DragonThanosFSuccessCount, hpPercent))
-        end
-        return
-    elseif result == "cooldown" then
-        -- 🆕 CHỈ bay lên 500 khi F đang cooldown (chờ hồi)
-        if not _G.DragonThanosFlyPos then
-            _G.DragonThanosFlyPos = Vector3.new(
-                hrp.Position.X,
-                hrp.Position.Y + DRAGON_SAFE_HEIGHT_FLY,
-                hrp.Position.Z
-            )
-        end
-        hrp.CFrame = CFrame.new(_G.DragonThanosFlyPos, bossHrp.Position)
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-    end
-end
-
-                local methodFarm = GetDragonMethodFarm(DRAGON_AIM_HEIGHT)
+                local methodFarm = Dragon_GetMethodFarm(_G.DRAGON_AIM_HEIGHT)
                 hrp.CFrame = bossHrp.CFrame * methodFarm
                 hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
                 hrp.AssemblyAngularVelocity = Vector3.zero
@@ -5959,7 +6171,7 @@ end
             end
 
             -- BÁM BOSS BÌNH THƯỜNG
-            local methodFarm = GetDragonMethodFarm(DRAGON_AIM_HEIGHT)
+            local methodFarm = Dragon_GetMethodFarm(_G.DRAGON_AIM_HEIGHT)
             hrp.CFrame = bossHrp.CFrame * methodFarm
             hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
             hrp.AssemblyAngularVelocity = Vector3.zero
@@ -5977,10 +6189,15 @@ end
             end
         end)
     end
-end) end
+end)
 
 -- ============================================================
--- 🆕 AUTO RAID BOSS LAVA TITAN — v10 FINAL (integrated)
+-- 🆕 AUTO RAID BOSS LAVA TITAN — v10 FINAL (GLOBAL FIX)
+-- - HP < X% → Thanos priority CAO NHẤT
+-- - Buff SSJG TRƯỚC KHI MỞ CỔNG, chỉ đợi 0.3s (không lãng phí 2s)
+-- - Đóng GUI NPC Open Raid: retry loop 3s
+-- - Đóng GUI nhận thưởng: chỉ 1 lần (không spam)
+-- - Tất cả hàm là GLOBAL (prefix Lava_) — tránh lỗi 200 locals
 -- ============================================================
 _G.AutoRaidLava           = false
 _G.LavaLastFireTime       = 0
@@ -5991,41 +6208,40 @@ _G.LavaPortalPhase        = "IDLE"
 _G.LavaPortalStartTime    = 0
 _G.LavaBossOriginPos      = nil
 _G.LavaLastThanosTime     = 0
-_G.LavaLastDebug          = 0
 _G.LavaWaitingSurface     = false
 _G.LavaBossSurfacedTime   = 0
 _G.LavaPortalFireLock     = 0
 _G.LavaPhase2Active       = false
 _G.LavaThanosUsed         = false
-_G.LavaThanosUsedTime     = 0
 _G.LavaThanosLockUntil    = 0
 _G.LavaThanosFlyPos       = nil
-_G.LavaSafePos            = nil
 _G.LavaBossDeadHandled    = false
 _G.LavaThanosFSuccessCount = 0
-_G.LavaThanosLastSuccessTime = 0
 _G.LavaThanosSpamStartTime = 0
 _G.LavaBuffUsed             = false
 _G.LavaBuffFinishTime       = 0
 _G.LavaBuffSpamStartTime    = 0
 _G.LavaThanosHPPercent      = 50
 
-local LAVA_AIM_HEIGHT        = 25
-local LAVA_UNDER_LAVA_Y      = -100
-local LAVA_MIN_FIRE_GAP      = 3
-local LAVA_PORTAL_TIMEOUT    = 15
-local LAVA_THANOS_COOLDOWN   = 0.3
-local LAVA_SURFACE_DELAY     = 1.5
-local LAVA_PORTAL_FIRE_LOCK  = 5
-local LAVA_SAFE_HEIGHT       = 500
-local LAVA_THANOS_LOCK_TIME  = 1.5
+_G.LAVA_AIM_HEIGHT        = 25
+_G.LAVA_UNDER_LAVA_Y      = -100
+_G.LAVA_MIN_FIRE_GAP      = 3
+_G.LAVA_PORTAL_TIMEOUT    = 15
+_G.LAVA_THANOS_COOLDOWN   = 0.3
+_G.LAVA_SURFACE_DELAY     = 1.5
+_G.LAVA_PORTAL_FIRE_LOCK  = 5
+_G.LAVA_SAFE_HEIGHT       = 500
+_G.LAVA_BUFF_LIST         = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
 
-local function GetLavaMethodFarm(height)
-    height = height or LAVA_AIM_HEIGHT
+function Lava_GetMethodFarm(height)
+    height = height or _G.LAVA_AIM_HEIGHT
     return CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 end
 
-local function FindLavaThanosTool()
+-- =====================================================
+-- Tìm tool Thanos
+-- =====================================================
+function Lava_FindThanosTool()
     local char = LocalPlayer.Character
     if not char then return nil, "character" end
     for _, tool in ipairs(char:GetChildren()) do
@@ -6050,10 +6266,10 @@ local function FindLavaThanosTool()
     return nil, "none"
 end
 
-local function EnsureLavaThanosEquipped()
+function Lava_EnsureThanosEquipped()
     local char = LocalPlayer.Character
     if not char then return false end
-    local tool, location = FindLavaThanosTool()
+    local tool, location = Lava_FindThanosTool()
     if not tool then return false end
     if location == "character" then return true end
     local hum = char:FindFirstChild("Humanoid")
@@ -6066,12 +6282,13 @@ local function EnsureLavaThanosEquipped()
     return false
 end
 
-local LAVA_BUFF_LIST = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG"}
-
-local function FindLavaBuffTool()
+-- =====================================================
+-- Tìm tool buff
+-- =====================================================
+function Lava_FindBuffTool()
     local char = LocalPlayer.Character
     if not char then return nil, nil end
-    for _, buffName in ipairs(LAVA_BUFF_LIST) do
+    for _, buffName in ipairs(_G.LAVA_BUFF_LIST) do
         for _, tool in ipairs(char:GetChildren()) do
             if tool:IsA("Tool") and tool.Name:lower() == buffName:lower() then
                 return tool, buffName
@@ -6080,7 +6297,7 @@ local function FindLavaBuffTool()
     end
     local bp = LocalPlayer:FindFirstChild("Backpack")
     if bp then
-        for _, buffName in ipairs(LAVA_BUFF_LIST) do
+        for _, buffName in ipairs(_G.LAVA_BUFF_LIST) do
             for _, tool in ipairs(bp:GetChildren()) do
                 if tool:IsA("Tool") and tool.Name:lower() == buffName:lower() then
                     return tool, buffName
@@ -6091,8 +6308,11 @@ local function FindLavaBuffTool()
     return nil, nil
 end
 
-local function LavaBuffSpamLoop()
-    local tool, buffName = FindLavaBuffTool()
+-- =====================================================
+-- Spam F buff đến khi cooldown
+-- =====================================================
+function Lava_BuffSpamLoop()
+    local tool, buffName = Lava_FindBuffTool()
     if not tool then
         print("[LavaTitan] ⚠️ Không có buff tool, bỏ qua")
         return false
@@ -6166,16 +6386,19 @@ local function LavaBuffSpamLoop()
         task.wait(0.1)
     end
 
-    print("[LavaTitan] ✅ Buff spam xong, đợi 2s rồi mở cổng")
+    print("[LavaTitan] ✅ Buff spam xong")
     return true
 end
 
-local function TryUseLavaThanosF(hrp)
+-- =====================================================
+-- TryUseLavaThanosF — Check cooldown qua GUI
+-- =====================================================
+function Lava_TryUseThanosF(hrp)
     if not hrp then return "no_tool" end
     local char = LocalPlayer.Character
     if not char then return "no_tool" end
 
-    if not EnsureLavaThanosEquipped() then
+    if not Lava_EnsureThanosEquipped() then
         return "no_tool"
     end
 
@@ -6224,7 +6447,10 @@ local function TryUseLavaThanosF(hrp)
     return "no_tool"
 end
 
-local function OnLavaAlert(text)
+-- =====================================================
+-- Hook alert Phase 2
+-- =====================================================
+function Lava_OnAlert(text)
     if not text then return end
     local lower = text:lower()
     if lower:find("lava is rising", 1, true)
@@ -6236,50 +6462,23 @@ local function OnLavaAlert(text)
     end
 end
 
-local function HookLavaText(container)
+function Lava_HookText(container)
     for _, obj in ipairs(container:GetDescendants()) do
         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            OnLavaAlert(obj.Text)
+            Lava_OnAlert(obj.Text)
             obj:GetPropertyChangedSignal("Text"):Connect(function()
-                OnLavaAlert(obj.Text)
+                Lava_OnAlert(obj.Text)
             end)
         end
     end
 end
 
-LocalPlayer.CharacterAdded:Connect(function(newChar)
-    task.wait(1)
-    if not _G.AutoRaidLava then return end
-    _G.LavaBuffUsed = false
-    _G.LavaBuffFinishTime = 0
-    _G.LavaPortalPhase = "IDLE"
-    _G.LavaPortalFireLock = 0
-    _G.LavaEnterTime = 0
-    _G.LavaBossDeadHandled = false
-    _G.LavaPhase2Active = false
-    _G.LavaThanosFlyPos = nil
-    _G.LavaThanosSpamStartTime = 0
-    _G.LavaThanosFSuccessCount = 0
-    print("[LavaTitan] 💀 Respawn → reset, buff lại + mở cổng")
-end)
-
-HookLavaText(LocalPlayer.PlayerGui)
-LocalPlayer.PlayerGui.DescendantAdded:Connect(function(obj)
-    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-        task.wait(0.1)
-        OnLavaAlert(obj.Text)
-        obj:GetPropertyChangedSignal("Text"):Connect(function()
-            OnLavaAlert(obj.Text)
-        end)
-    end
-end)
-
-local function IsBossUnderLava(bossHrp)
+function Lava_IsBossUnderLava(bossHrp)
     if not bossHrp then return false end
-    return bossHrp.Position.Y < LAVA_UNDER_LAVA_Y
+    return bossHrp.Position.Y < _G.LAVA_UNDER_LAVA_Y
 end
 
-local function GetLavaBoss()
+function Lava_GetBoss()
     local bf = workspace:FindFirstChild("Boss Fight")
     if not bf then return nil, nil, nil end
     local lavaFolder = bf:FindFirstChild("LavaTitan")
@@ -6296,7 +6495,7 @@ local function GetLavaBoss()
     return nil, nil, nil
 end
 
-local function CloseLavaFrame(frame)
+function Lava_CloseFrame(frame)
     if not frame then return false end
     local closeBtn = frame:FindFirstChild("Close_")
         or frame:FindFirstChild("Close")
@@ -6320,7 +6519,10 @@ local function CloseLavaFrame(frame)
     return true
 end
 
-local function LavaOpenPortal()
+-- =====================================================
+-- LavaOpenPortal — Buff SSJ trước khi mở cổng
+-- =====================================================
+function Lava_OpenPortal()
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
@@ -6333,19 +6535,20 @@ local function LavaOpenPortal()
         return true
     end
 
+    -- BƯỚC 0: BUFF SSJ TRƯỚC KHI MỞ CỔNG (chỉ 1 lần)
     if not _G.LavaBuffUsed then
         _G.LavaBuffUsed = true
 
-        local tool, buffName = FindLavaBuffTool()
+        local tool, buffName = Lava_FindBuffTool()
         if tool then
             print("[LavaTitan] ⚡ Có buff " .. buffName .. ", bắt đầu spam F trước cổng")
             _G.LavaBuffSpamStartTime = tick()
             _G.LavaBuffFinishTime = 0
 
             task.spawn(function()
-                LavaBuffSpamLoop()
-                print("[LavaTitan] ✅ Buff spam xong, đợi 2s...")
-                task.wait(2)
+                Lava_BuffSpamLoop()
+                -- 🆕 Chỉ đợi 0.3s (thay vì 2s)
+                task.wait(0.3)
                 _G.LavaBuffFinishTime = tick()
                 print("[LavaTitan] ✅ Buff xong, bắt đầu mở cổng")
                 _G.LavaPortalPhase = "IDLE"
@@ -6361,10 +6564,12 @@ local function LavaOpenPortal()
     if _G.LavaBuffFinishTime == 0 then
         return false
     end
-    if tick() - _G.LavaBuffFinishTime < 2 then
+    -- 🆕 Chỉ đợi 0.3s (thay vì 2s)
+    if tick() - _G.LavaBuffFinishTime < 0.3 then
         return false
     end
 
+    -- BƯỚC 1: Portal đã có → TP vào
     local tz = workspace:FindFirstChild("TeleportBossFightZone")
     if tz and tz:FindFirstChild("Hitbox") then
         if _G.LavaPortalPhase ~= "ENTERED" then
@@ -6374,11 +6579,12 @@ local function LavaOpenPortal()
             print("[LavaTitan] 🌀 TP vào portal")
             _G.LavaEnterTime = tick()
             _G.LavaPortalPhase = "ENTERED"
-            _G.LavaPortalFireLock = tick() + LAVA_PORTAL_FIRE_LOCK
+            _G.LavaPortalFireLock = tick() + _G.LAVA_PORTAL_FIRE_LOCK
         end
         return true
     end
 
+    -- BƯỚC 2: TP tới NPC + Fire prompt
     local npcPrompt = workspace:FindFirstChild("NpcPrompt")
     local openRaidNPC = npcPrompt and npcPrompt:FindFirstChild("Open Raid")
 
@@ -6394,7 +6600,7 @@ local function LavaOpenPortal()
                 task.wait(0.3)
             end
 
-            if tick() - _G.LavaLastFireTime >= LAVA_MIN_FIRE_GAP then
+            if tick() - _G.LavaLastFireTime >= _G.LAVA_MIN_FIRE_GAP then
                 local prompt = openRaidNPC:FindFirstChildWhichIsA("ProximityPrompt", true)
                 if prompt then
                     _G.LavaLastFireTime = tick()
@@ -6408,6 +6614,7 @@ local function LavaOpenPortal()
         end
     end
 
+    -- BƯỚC 3: Click button Lava Titan
     if _G.LavaPortalPhase == "GUI_OPENING" then
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
         local main = hud and hud:FindFirstChild("Main")
@@ -6461,17 +6668,39 @@ local function LavaOpenPortal()
                     _G.LavaPortalPhase = "WAITING"
                     _G.LavaPortalStartTime = tick()
 
+                    -- 🆕 Retry loop đóng GUI — chắc chắn đóng được
                     task.spawn(function()
-                        task.wait(0.3)
-                        pcall(function()
-                            local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-                            local main2 = hud2 and hud2:FindFirstChild("Main")
-                            local raidBossFrame2 = main2 and main2:FindFirstChild("Frame_RaidBoss")
-                            if raidBossFrame2 then
-                                CloseLavaFrame(raidBossFrame2)
-                                print("[LavaTitan] 🚪 Đóng GUI mở cổng")
-                            end
-                        end)
+                        local startTime = tick()
+                        local closed = false
+                        while tick() - startTime < 3 do
+                            task.wait(0.15)
+                            if closed then break end
+                            pcall(function()
+                                local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+                                local main2 = hud2 and hud2:FindFirstChild("Main")
+                                local raidBossFrame2 = main2 and main2:FindFirstChild("Frame_RaidBoss")
+                                if raidBossFrame2 and raidBossFrame2.Visible then
+                                    local closeBtn = raidBossFrame2:FindFirstChild("Close_")
+                                        or raidBossFrame2:FindFirstChild("Close")
+                                        or raidBossFrame2:FindFirstChild("CloseButton")
+                                    if closeBtn then
+                                        pcall(function()
+                                            if firesignal then
+                                                firesignal(closeBtn.MouseButton1Click)
+                                            else
+                                                closeBtn:Activate()
+                                            end
+                                        end)
+                                    end
+                                    task.wait(0.1)
+                                    if raidBossFrame2.Visible then
+                                        pcall(function() raidBossFrame2.Visible = false end)
+                                    end
+                                    closed = true
+                                    print("[LavaTitan] 🚪 Đã đóng GUI mở cổng")
+                                end
+                            end)
+                        end
                     end)
                     return true
                 end
@@ -6485,6 +6714,7 @@ local function LavaOpenPortal()
         return true
     end
 
+    -- BƯỚC 4: Đợi portal
     if _G.LavaPortalPhase == "WAITING" then
         local elapsed = tick() - _G.LavaPortalStartTime
         local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
@@ -6495,16 +6725,16 @@ local function LavaOpenPortal()
             print("[LavaTitan] 🌀 TP vào portal (sau click)")
             _G.LavaEnterTime = tick()
             _G.LavaPortalPhase = "ENTERED"
-            _G.LavaPortalFireLock = tick() + LAVA_PORTAL_FIRE_LOCK
+            _G.LavaPortalFireLock = tick() + _G.LAVA_PORTAL_FIRE_LOCK
             return true
         end
         if bf and bf:FindFirstChild("LavaTitan") then
             _G.LavaPortalPhase = "ENTERED"
             _G.LavaEnterTime = tick()
-            _G.LavaPortalFireLock = tick() + LAVA_PORTAL_FIRE_LOCK
+            _G.LavaPortalFireLock = tick() + _G.LAVA_PORTAL_FIRE_LOCK
             return true
         end
-        if elapsed > LAVA_PORTAL_TIMEOUT then
+        if elapsed > _G.LAVA_PORTAL_TIMEOUT then
             print("[LavaTitan] ⚠️ Portal timeout → retry")
             _G.LavaPortalPhase = "IDLE"
             _G.LavaLastFireTime = 0
@@ -6515,6 +6745,39 @@ local function LavaOpenPortal()
     return false
 end
 
+-- =====================================================
+-- Hook + Listener respawn
+-- =====================================================
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    task.wait(1)
+    if not _G.AutoRaidLava then return end
+    _G.LavaBuffUsed = false
+    _G.LavaBuffFinishTime = 0
+    _G.LavaPortalPhase = "IDLE"
+    _G.LavaPortalFireLock = 0
+    _G.LavaEnterTime = 0
+    _G.LavaBossDeadHandled = false
+    _G.LavaPhase2Active = false
+    _G.LavaThanosFlyPos = nil
+    _G.LavaThanosSpamStartTime = 0
+    _G.LavaThanosFSuccessCount = 0
+    print("[LavaTitan] 💀 Respawn → reset, buff lại + mở cổng")
+end)
+
+Lava_HookText(LocalPlayer.PlayerGui)
+LocalPlayer.PlayerGui.DescendantAdded:Connect(function(obj)
+    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+        task.wait(0.1)
+        Lava_OnAlert(obj.Text)
+        obj:GetPropertyChangedSignal("Text"):Connect(function()
+            Lava_OnAlert(obj.Text)
+        end)
+    end
+end)
+
+-- =====================================================
+-- MAIN LOOP
+-- =====================================================
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -6527,7 +6790,6 @@ task.spawn(function()
                 _G.LavaThanosUsed = false
                 _G.LavaThanosLockUntil = 0
                 _G.LavaThanosFlyPos = nil
-                _G.LavaSafePos = nil
                 _G.LavaBossDeadHandled = false
                 _G.LavaThanosSpamStartTime = 0
                 _G.LavaThanosFSuccessCount = 0
@@ -6541,34 +6803,36 @@ task.spawn(function()
             local hrp  = char and char:FindFirstChild("HumanoidRootPart")
             if not hum or not hrp or hum.Health <= 0 then return end
 
-            local bossModel, bossHrp, bossHum = GetLavaBoss()
+            local bossModel, bossHrp, bossHum = Lava_GetBoss()
             if not bossModel or not bossHrp or not bossHum then
                 if _G.LavaPortalPhase ~= "ENTERED" then
-                    LavaOpenPortal()
+                    Lava_OpenPortal()
                 end
                 return
             end
 
+            -- BOSS CHẾT → ĐÓNG GUI + RESET
             if bossHum.Health <= 0 then
                 if not _G.LavaBossDeadHandled then
                     _G.LavaBossDeadHandled = true
                     _G.LavaPortalPhase = "IDLE"
-                    _G.LavaPortalFireLock = tick() + LAVA_PORTAL_FIRE_LOCK
+                    _G.LavaPortalFireLock = tick() + _G.LAVA_PORTAL_FIRE_LOCK
                     _G.LavaThanosUsed = false
                     _G.LavaThanosLockUntil = 0
                     _G.LavaThanosFlyPos = nil
-                    _G.LavaSafePos = nil
                     _G.LavaPhase2Active = false
                     _G.LavaThanosSpamStartTime = 0
                     _G.LavaThanosFSuccessCount = 0
-                    _G.LavaThanosLastSuccessTime = 0
                     _G.LavaBuffUsed = false
                     _G.LavaBuffFinishTime = 0
 
+                    -- 🆕 Đóng GUI nhận thưởng — CHỈ 1 LẦN (không spam)
                     task.spawn(function()
                         local startTime = tick()
+                        local clicked = false
                         while tick() - startTime < 5 do
                             task.wait(0.2)
+                            if clicked then break end
                             pcall(function()
                                 local hud3 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                                 local main3 = hud3 and hud3:FindFirstChild("Main")
@@ -6577,18 +6841,33 @@ task.spawn(function()
                                     or main3:FindFirstChild("Frame_RaidBossItem")
                                     or main3:FindFirstChild("Frame_RaidBoss")
                                     or main3:FindFirstChild("Frame_Raidboss")
-                                if rewardFrame then
-                                    local titleLabel = rewardFrame:FindFirstChild("TitleLabel")
-                                    local isVictory = titleLabel and titleLabel.Text == "Victory"
-                                    local closeBtn = rewardFrame:FindFirstChild("Close_")
-                                    local closeVisible = closeBtn and closeBtn.Visible
-                                    if isVictory or closeVisible then
-                                        CloseLavaFrame(rewardFrame)
-                                        print("[LavaTitan] 🎁 Đóng GUI nhận thưởng (Victory="
-                                            .. tostring(isVictory) .. ")")
-                                        task.wait(1)
-                                    end
+                                if not rewardFrame then return end
+                                if not rewardFrame.Visible then return end
+
+                                local titleLabel = rewardFrame:FindFirstChild("TitleLabel")
+                                local isVictory = titleLabel and titleLabel.Text == "Victory"
+
+                                local closeBtn = rewardFrame:FindFirstChild("Close_")
+                                    or rewardFrame:FindFirstChild("Close")
+                                    or rewardFrame:FindFirstChild("CloseButton")
+                                if closeBtn then
+                                    pcall(function()
+                                        if firesignal then
+                                            firesignal(closeBtn.MouseButton1Click)
+                                        else
+                                            closeBtn:Activate()
+                                        end
+                                    end)
                                 end
+
+                                task.wait(0.2)
+                                if rewardFrame.Visible then
+                                    pcall(function() rewardFrame.Visible = false end)
+                                end
+
+                                clicked = true
+                                print("[LavaTitan] 🎁 Đã đóng GUI nhận thưởng (Victory="
+                                    .. tostring(isVictory) .. ")")
                             end)
                         end
                     end)
@@ -6611,15 +6890,16 @@ task.spawn(function()
                 _G.LavaBossOriginPos = bossHrp.Position
             end
 
+            -- HP < X% → THANOS PRIORITY
             local hpPercent = (bossHum.Health / bossHum.MaxHealth) * 100
             local threshold = _G.LavaThanosHPPercent or 50
             local isThanosPriority = hpPercent <= threshold
 
             if isThanosPriority then
-                local thanosEquipped = EnsureLavaThanosEquipped()
+                local thanosEquipped = Lava_EnsureThanosEquipped()
 
                 if not thanosEquipped then
-                    local methodFarm = GetLavaMethodFarm(LAVA_AIM_HEIGHT)
+                    local methodFarm = Lava_GetMethodFarm(_G.LAVA_AIM_HEIGHT)
                     hrp.CFrame = bossHrp.CFrame * methodFarm
                     hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
                     hrp.AssemblyAngularVelocity = Vector3.zero
@@ -6655,11 +6935,12 @@ task.spawn(function()
                     end
                 end
 
+                -- F cooldown → bay lên cao chờ
                 if fOnCooldown then
                     if not _G.LavaThanosFlyPos then
                         _G.LavaThanosFlyPos = Vector3.new(
                             hrp.Position.X,
-                            hrp.Position.Y + LAVA_SAFE_HEIGHT,
+                            hrp.Position.Y + _G.LAVA_SAFE_HEIGHT,
                             hrp.Position.Z
                         )
                     end
@@ -6669,22 +6950,22 @@ task.spawn(function()
                     return
                 end
 
-                if now - _G.LavaLastThanosTime >= LAVA_THANOS_COOLDOWN then
+                -- F sẵn sàng → bám boss + spam F
+                if now - _G.LavaLastThanosTime >= _G.LAVA_THANOS_COOLDOWN then
                     local bossPos = bossHrp.Position
-                    local targetPos = bossPos + Vector3.new(0, LAVA_AIM_HEIGHT, 0)
+                    local targetPos = bossPos + Vector3.new(0, _G.LAVA_AIM_HEIGHT, 0)
                     hrp.CFrame = CFrame.new(targetPos, bossPos)
                     hrp.AssemblyLinearVelocity = Vector3.zero
                     hrp.AssemblyAngularVelocity = Vector3.zero
 
                     _G.LavaLastThanosTime = now
-                    local result = TryUseLavaThanosF(hrp)
+                    local result = Lava_TryUseThanosF(hrp)
                     if result == "success" then
                         _G.LavaThanosFSuccessCount = _G.LavaThanosFSuccessCount + 1
-                        _G.LavaThanosLastSuccessTime = now
                         _G.LavaThanosUsed = true
                         _G.LavaThanosFlyPos = Vector3.new(
                             hrp.Position.X,
-                            hrp.Position.Y + LAVA_SAFE_HEIGHT,
+                            hrp.Position.Y + _G.LAVA_SAFE_HEIGHT,
                             hrp.Position.Z
                         )
                         hrp.CFrame = CFrame.new(_G.LavaThanosFlyPos, bossHrp.Position)
@@ -6701,12 +6982,12 @@ task.spawn(function()
                 if _G.LavaThanosUsed then _G.LavaThanosUsed = false end
                 if _G.LavaThanosLockUntil > 0 then _G.LavaThanosLockUntil = 0 end
                 _G.LavaThanosFlyPos = nil
-                _G.LavaSafePos = nil
                 _G.LavaThanosSpamStartTime = 0
                 _G.LavaThanosFSuccessCount = 0
             end
 
-            local bossUnderLava = IsBossUnderLava(bossHrp)
+            -- BOSS LẶN → BAY LÊN KHÔNG
+            local bossUnderLava = Lava_IsBossUnderLava(bossHrp)
 
             if bossUnderLava then
                 if not _G.LavaWaitingSurface then
@@ -6715,7 +6996,7 @@ task.spawn(function()
                     print("[LavaTitan] 🌊 Boss lặn → bay lên không chờ")
                 end
                 local originPos = _G.LavaBossOriginPos or bossHrp.Position
-                local safePos = originPos + Vector3.new(0, LAVA_AIM_HEIGHT, 0)
+                local safePos = originPos + Vector3.new(0, _G.LAVA_AIM_HEIGHT, 0)
                 hrp.CFrame = CFrame.new(safePos, originPos)
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
@@ -6724,11 +7005,11 @@ task.spawn(function()
                 if _G.LavaWaitingSurface then
                     if _G.LavaBossSurfacedTime == 0 then
                         _G.LavaBossSurfacedTime = now
-                        print("[LavaTitan] ⬆️ Boss trồi → đợi " .. LAVA_SURFACE_DELAY .. "s")
+                        print("[LavaTitan] ⬆️ Boss trồi → đợi " .. _G.LAVA_SURFACE_DELAY .. "s")
                     end
-                    if now - _G.LavaBossSurfacedTime < LAVA_SURFACE_DELAY then
+                    if now - _G.LavaBossSurfacedTime < _G.LAVA_SURFACE_DELAY then
                         local originPos = _G.LavaBossOriginPos or bossHrp.Position
-                        local safePos = originPos + Vector3.new(0, LAVA_AIM_HEIGHT, 0)
+                        local safePos = originPos + Vector3.new(0, _G.LAVA_AIM_HEIGHT, 0)
                         hrp.CFrame = CFrame.new(safePos, originPos)
                         hrp.AssemblyLinearVelocity = Vector3.zero
                         hrp.AssemblyAngularVelocity = Vector3.zero
@@ -6740,7 +7021,8 @@ task.spawn(function()
                 end
             end
 
-            local methodFarm = GetLavaMethodFarm(LAVA_AIM_HEIGHT)
+            -- BÁM BOSS BÌNH THƯỜNG (HP >= ngưỡng)
+            local methodFarm = Lava_GetMethodFarm(_G.LAVA_AIM_HEIGHT)
             hrp.CFrame = bossHrp.CFrame * methodFarm
             hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
             hrp.AssemblyAngularVelocity = Vector3.zero
