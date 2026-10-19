@@ -3328,6 +3328,82 @@ task.spawn(function()
 end)
 
 -- ============================================================
+-- 🆕 AUTO QTE BLADE OF CHAOS — chạy nền như Auto Skill
+-- Khi PlayerGui.Battle mở → tự bấm phím hiển thị
+-- Nếu phím không đổi > STUCK_TIMEOUT → bấm lại
+-- ============================================================
+local QTE_KEY_MAP = {
+    A=Enum.KeyCode.A, B=Enum.KeyCode.B, C=Enum.KeyCode.C, D=Enum.KeyCode.D,
+    E=Enum.KeyCode.E, F=Enum.KeyCode.F, G=Enum.KeyCode.G, H=Enum.KeyCode.H,
+    I=Enum.KeyCode.I, J=Enum.KeyCode.J, K=Enum.KeyCode.K, L=Enum.KeyCode.L,
+    M=Enum.KeyCode.M, N=Enum.KeyCode.N, O=Enum.KeyCode.O, P=Enum.KeyCode.P,
+    Q=Enum.KeyCode.Q, R=Enum.KeyCode.R, S=Enum.KeyCode.S, T=Enum.KeyCode.T,
+    U=Enum.KeyCode.U, V=Enum.KeyCode.V, W=Enum.KeyCode.W, X=Enum.KeyCode.X,
+    Y=Enum.KeyCode.Y, Z=Enum.KeyCode.Z,
+    ["1"]=Enum.KeyCode.One, ["2"]=Enum.KeyCode.Two, ["3"]=Enum.KeyCode.Three,
+    ["4"]=Enum.KeyCode.Four, ["5"]=Enum.KeyCode.Five,
+    Space=Enum.KeyCode.Space,
+}
+
+local QTE_STUCK_TIMEOUT = 0.55
+
+local QTE_LastKey     = nil
+local QTE_LastKeyTime = 0
+local QTE_WasOpen     = false
+
+local function QTE_PressKey(keyCode)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.02)
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+    end)
+end
+
+task.spawn(function()
+    while task.wait(0.02) do
+        pcall(function()
+            local battle = LocalPlayer.PlayerGui:FindFirstChild("Battle")
+            local isOpen = battle and battle:IsA("ScreenGui") and battle.Enabled
+
+            if isOpen then
+                if not QTE_WasOpen then
+                    QTE_WasOpen = true
+                    QTE_LastKey = nil
+                end
+
+                local btn = battle:FindFirstChild("Button")
+                local tl  = btn and btn:FindFirstChild("TextLabel")
+                local txt = tl and tl.Text
+
+                if txt and txt ~= "" then
+                    local keyCode = QTE_KEY_MAP[txt] or QTE_KEY_MAP[txt:upper()]
+                    if keyCode then
+                        local now = os.clock()
+                        if txt ~= QTE_LastKey then
+                            QTE_PressKey(keyCode)
+                            QTE_LastKey     = txt
+                            QTE_LastKeyTime = now
+                        elseif now - QTE_LastKeyTime >= QTE_STUCK_TIMEOUT then
+                            QTE_PressKey(keyCode)
+                            QTE_LastKeyTime = now
+                        end
+                    else
+                        QTE_LastKey = txt
+                    end
+                else
+                    QTE_LastKey = nil
+                end
+            else
+                if QTE_WasOpen then
+                    QTE_WasOpen = false
+                end
+                QTE_LastKey = nil
+            end
+        end)
+    end
+end)
+
+-- ============================================================
 -- 🆕 AUTO POTION SMART + UPDATE INFO (v4)
 -- Auto: dùng khi time = 0 | Info: hiện số lượng + time
 -- ============================================================
