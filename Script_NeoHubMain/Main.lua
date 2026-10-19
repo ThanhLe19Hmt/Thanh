@@ -1,85 +1,108 @@
 -- Main.lua
--- Entry point - Load tất cả modules theo thứ tự
-
-local Core = script.Parent.Core
-local UI = script.Parent.UI
-local Combat = script.Parent.Combat
-local Systems = script.Parent.Systems
-local Farm = script.Parent.Farm
-local Bosses = script.Parent.Bosses
-local Raid = script.Parent.Raid
-local Dungeon = script.Parent.Dungeon
-local RaidMoon = script.Parent.RaidMoon
-local Shop = script.Parent.Shop
-local Items = script.Parent.Items
-local Teleport = script.Parent.Teleport
+-- Entry point — load tất cả modules theo thứ tự
 
 print("[Sea 1] ▶️ Loading...")
 
--- 1. Load Core TRƯỚC (services, helpers, globals)
-local Services  = require(Core.Services)
-local Helpers   = require(Core.Helpers)
-local Globals   = require(Core.Globals)
-local Config    = require(Core.Config)
-local DataBuilder = require(Core.DataBuilder)
+-- ============================================================
+-- CORE (load trước tiên)
+-- ============================================================
+local Services   = require(script.Core.Services)
+local Helpers    = require(script.Core.Helpers)
+local Globals    = require(script.Core.Globals)
+local Config     = require(script.Core.Config)
+local DataBuilder = require(script.Core.DataBuilder)
 
--- 2. Load UI
-local MainWindow = require(UI.MainWindow)
+-- ============================================================
+-- BUILD DATA
+-- ============================================================
+local Data = DataBuilder.Build()
+_G.Data = Data  -- expose cho các module khác dùng
 
--- 3. Load Map Detection
+-- ============================================================
+-- MAP DETECTION
+-- ============================================================
 local IS_MOON_MAP = (game.PlaceId == Config.MOON_PLACE_ID)
 local IS_SEA2_MAP = (game.PlaceId == Config.SEA2_PLACE_ID)
 
+print("[Map] " .. (IS_MOON_MAP and "🌙 Moon" or IS_SEA2_MAP and "🌊 Sea 2" or "🌊 Sea 1") .. " detected")
+
+-- ============================================================
+-- UI MAIN WINDOW (load trước UI khác)
+-- ============================================================
+local MainWindow = require(script.UI.MainWindow)
+_G.Library   = MainWindow.Library
+_G.Window    = MainWindow.Window
+_G.SaveManager = MainWindow.SaveManager
+
+-- ============================================================
+-- MOON MAP
+-- ============================================================
 if IS_MOON_MAP then
-    require(UI.MoonUI)
-    require(RaidMoon.MoonFarm)
-    require(RaidMoon.MoonRocket)
-    require(RaidMoon.MoonTarget)
-    require(RaidMoon.MoonTravel)
+    require(script.RaidMoon.MoonRocket)
+    require(script.RaidMoon.MoonTarget)
+    require(script.UI.MoonUI)
+    require(script.RaidMoon.MoonTravel)
+
+-- ============================================================
+-- SEA 1 MAP
+-- ============================================================
 elseif not IS_SEA2_MAP then
-    -- Sea 1: Load tất cả
-    require(Combat.AutoSkill)
-    require(Combat.Attack)
-    require(Combat.AntiDash)
     
-    require(Systems.NoVFX)
-    require(Systems.AutoPotion)
-    require(Systems.AutoAccessory)
-    require(Systems.AutoRebirth)
-    require(Systems.AutoHaki)
-    require(Systems.AntiIdle)
+    -- Combat
+    _G.AutoSkill = require(script.Combat.AutoSkill)
+    _G.EquipWeapon = require(script.Combat.Attack).EquipWeapon
+    _G.Attack = require(script.Combat.Attack).Attack
+    require(script.Combat.AntiDash)
     
-    require(Farm.FarmLevel)
-    require(Farm.FarmMaterial)
-    require(Farm.FarmSet)
-    require(Farm.FarmCraft)
+    -- Systems
+    require(script.Systems.NoVFX)
+    require(script.Systems.AutoPotion)
+    require(script.Systems.AutoAccessory)
+    require(script.Systems.AutoRebirth)
+    require(script.Systems.AutoHaki)
+    require(script.Systems.AntiIdle)
     
-    require(Bosses.FarmBossFull)
-    require(Bosses.FarmBossAll)
-    require(Bosses.FarmPiccolo)
-    require(Bosses.FarmDuck)
-    require(Bosses.FarmDevilBoat)
-    require(Bosses.FarmKraken)
-    require(Bosses.FarmThief)
+    -- Farm
+    require(script.Farm.FarmLevel)
+    require(script.Farm.FarmMaterial)
+    require(script.Farm.FarmSet)
+    require(script.Farm.FarmCraft)
     
-    require(Raid.RaidBacon)
-    require(Raid.RaidDragon)
-    require(Raid.RaidLava)
+    -- Bosses
+    require(script.Bosses.FarmBossFull)
+    require(script.Bosses.FarmBossAll)
+    require(script.Bosses.FarmPiccolo)
+    require(script.Bosses.FarmDuck)
+    require(script.Bosses.FarmDevilBoat)
+    require(script.Bosses.FarmKraken)
+    require(script.Bosses.FarmThief)
     
-    require(Dungeon.AutoDungeon)
+    -- Raid
+    require(script.Raid.RaidBacon)
+    require(script.Raid.RaidDragon)
+    require(script.Raid.RaidLava)
     
-    require(Shop.ShopRaid)
-    require(Shop.ShopDungeon)
-    require(Shop.GuaranteeDiamond)
-    require(Shop.GuaranteeMoon)
-    require(Shop.MysteryBox)
+    -- Dungeon
+    require(script.Dungeon.AutoDungeon)
     
-    require(Items.RandomChest)
-    require(Items.CraftTable)
-    require(Items.GokuNPC)
+    -- Shop
+    require(script.Shop.ShopRaid)
+    require(script.Shop.ShopDungeon)
+    require(script.Shop.GuaranteeDiamond)
+    require(script.Shop.GuaranteeMoon)
+    require(script.Shop.MysteryBox)
     
-    require(Teleport.IslandTeleport)
-    require(Teleport.SeaTravel)
+    -- Items
+    require(script.Items.RandomChest)
+    require(script.Items.CraftTable)
+    require(script.Items.GokuNPC)
+    
+    -- Teleport
+    require(script.Teleport.IslandTeleport)
+    require(script.Teleport.SeaTravel)
+    
+    -- UI Sea 1 (load sau cùng vì dùng tất cả refs)
+    require(script.UI.Sea1UI)
 end
 
 print("[Sea 1] ✅ Load successful!")
