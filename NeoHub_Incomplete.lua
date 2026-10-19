@@ -165,6 +165,7 @@ _G.RaidAutoAttack                = false
 _G.RaidAutoSkill                 = false
 _G.Auto_Kraken                   = false
 _G.TimeMysteryAmount             = 1
+_G.AutoBossAll = false
 
 -- ============================================================
 -- BUILD LISTS
@@ -1583,96 +1584,63 @@ Accessory:Toggle({
     Callback = function(v) _G.Auto_Rebirth = v end
 })
 
+-- ============================================================
+-- 🆕 X2 POTION UI — v3 (Multi + Auto + Info)
+-- ============================================================
+
+-- 🆕 Toggle Auto
+
+-- 🆕 Dropdown MULTI
 Potion:Dropdown({
-    Title = "Select X2 Potion",
+    Title = "🧪 Select X2 Potion",
     Options = X2List,
-    Multi = false,
+    Multi = true,
     Callback = function(v)
-        local val = v
-        if type(val) == "table" then
-            local real = nil
-            for _, item in pairs(val) do
-                if type(item) == "string" and item ~= "" then
-                    real = item
-                    break
+        -- 🆕 Normalize: xử lý cả array và dictionary
+        local list = {}
+        local seen = {}
+
+        local function addItem(item)
+            if type(item) == "string" and item ~= "" and not seen[item] then
+                seen[item] = true
+                table.insert(list, item)
+            end
+        end
+
+        if type(v) == "table" then
+            -- Dạng 1: array {"A", "B"}
+            for _, item in ipairs(v) do
+                addItem(item)
+            end
+            -- Dạng 2: dictionary {["A"]=true, ["B"]=true}
+            for key, val in pairs(v) do
+                if val == true then
+                    addItem(key)
                 end
             end
-            val = real
+        elseif type(v) == "string" and v ~= "" then
+            addItem(v)
         end
-        if type(val) ~= "string" or val == "" then
-            _G.Select_Potion = nil
-            return
-        end
-        _G.Select_Potion = val
+
+        _G.Select_Potion = list
+        print("[Potion] Đã chọn " .. #list .. " potion:")
+        for _, p in ipairs(list) do print("  - " .. p) end
     end
 })
 
-Potion:Textbox({
-    Title = "Amount (1-100)",
-    Placeholder = "1",
-    Value = "1",
+Potion:Toggle({
+    Title = "🤖 Auto Use Potion",
+    Value = false,
     Callback = function(v)
-        local n = tonumber(v) or 1
-        if n < 1 then n = 1 end
-        if n > 100 then n = 100 end
-        _G.PotionAmount = n
+        _G.Auto_Use_Potion = v
+        print("[Potion] Auto:", v and "ON" or "OFF")
     end
 })
 
-Potion:Button({
-    Title = "🧪 USE X2 POTION (once)",
-    Callback = function()
-        local potionName = _G.Select_Potion
-        local amount = tonumber(_G.PotionAmount) or 1
-
-        if amount < 1 then amount = 1 end
-        if amount > 100 then amount = 100 end
-        _G.PotionAmount = amount
-
-        if type(potionName) == "table" then
-            local real = nil
-            for _, v in pairs(potionName) do
-                if type(v) == "string" and v ~= "" then
-                    real = v
-                    break
-                end
-            end
-            potionName = real
-        end
-
-        if type(potionName) ~= "string" or potionName == "" then
-            _G.SeaNotify("❌ No Potion selected", "Choose an X2 Potion first!", 3)
-            return
-        end
-
-        local Inv = GetInventory()
-        local have = (Inv[potionName] and Inv[potionName].amount) or 0
-
-        if have <= 0 then
-            _G.SeaNotify("❌ No Potion", potionName .. " (0)", 3)
-            return
-        end
-
-        local useCount = math.min(amount, have)
-        local remote = ReplicatedStorage:FindFirstChild("Remotes")
-        remote = remote and remote:FindFirstChild("Inventory")
-        if not remote then
-            _G.SeaNotify("❌ Remote not found", "Remotes.Inventory", 3)
-            return
-        end
-
-        task.spawn(function()
-            for i = 1, useCount do
-                pcall(function()
-                    remote:FireServer(potionName)
-                end)
-                task.wait(0.15)
-            end
-        end)
-
-        _G.SeaNotify("🧪 Using Potion",
-            potionName .. " x" .. useCount .. " (have " .. have .. ")", 4)
-    end
+-- 🆕 Info Paragraph (tự update — không cần bấm Check)
+local PotionInfoPara = Potion:Paragraph({
+    Title = "🍦 X2 Potions: ---",
+    Content = "Chọn Potion để xem"
 })
 
 -- ============================================================
@@ -1692,6 +1660,8 @@ local Piccolo         = AllBoss:CreateSection("🐉 Piccolo", "Left")
 local SpawnedT        = AllBoss:CreateSection("🔍 Spawned Check", "Right")
 local Duck            = AllBoss:CreateSection("🦆 Duck", "Right")
 local DevilBoat       = AllBoss:CreateSection("⛵ Devil Boat", "Right")
+local Kraken         = AllBoss:CreateSection("🐙 Kraken","Left")
+local ALLBOSS         = AllBoss:CreateSection("🔴 All Boss","Right")
 local DungeonCard     = RaidDun:CreateSection("🏰 Auto Dungeon", "Left")
 local ShopDunCard     = RaidDun:CreateSection("🏪 Shop Dungeon", "Left")
 local WeaponCraft     = RaidDun:CreateSection("🔨 Weapon", "Left")
@@ -1746,7 +1716,18 @@ Piccolo:Toggle({Title = "Auto Farm Piccolo", Value = false, Callback = function(
 Duck:Toggle({Title = "Auto Farm Duck (Full)", Value = false, Callback = function(v) _G.Auto_DuckAutomatically = v if v then ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel") end end
 })
 DevilBoat:Toggle({Title = "Auto Farm Devil Boat", Value = false, Callback = function(v) _G.Auto_DevilBoat = v end})
-DevilBoat:Toggle({Title = "Auto Farm Kraken", Value = false, Callback = function(v) _G.Auto_Kraken = v end
+Kraken:Toggle({Title = "Auto Farm Kraken", Value = false, Callback = function(v) _G.Auto_Kraken = v end
+})
+ALLBOSS:Toggle({
+    Title = "👹 Auto Boss All",
+    Desc = "Auto: Piccolo, Devil Boat, Thief, Kraken",
+    Value = false,
+    Callback = function(v)
+        _G.AutoBossAll = v
+        if v then
+            ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+        end
+    end
 })
 
 local Spawn_Status = SpawnedT:Paragraph({Title = "Spawn Status", Content = "N/A"})
@@ -3346,21 +3327,95 @@ task.spawn(function()
     end
 end)
 
--- AUTO POTION
+-- ============================================================
+-- 🆕 AUTO POTION SMART + UPDATE INFO (v4)
+-- Auto: dùng khi time = 0 | Info: hiện số lượng + time
+-- ============================================================
 task.spawn(function()
+    local lastUseTime = {}
+    local lastInfoUpdate = 0
+
+    local POTION_TIME_MAP = {
+        ["X2 EXP 15min."]     = "x2ExpTime",
+        ["X2 Diamond 15min."] = "x2DiamondTime",
+        ["X2 Lucky 15min."]   = "x2LuckTime",
+        ["X2 Rebirth 15min."] = "x2RebirthTime",
+        ["X2 Item 15min."]    = "x2ItemTime",
+    }
+
     while task.wait(0.3) do
-        if _G.Auto_Use_Potion then
-            pcall(function()
-                local Inv    = ReplicatedStorage.Remotes.Inventory
-                local Select = _G.Select_Potion
-                if not Select then return end
-                if Select["X2 EXP 15min."]     and tonumber(LocalPlayer:GetAttribute("x2ExpTime")) == 0     then Inv:FireServer("X2 EXP 15min.") end
-                if Select["X2 Diamond 15min."] and tonumber(LocalPlayer:GetAttribute("x2DiamondTime")) == 0 then Inv:FireServer("X2 Diamond 15min.") end
-                if Select["X2 Lucky 15min."]   and tonumber(LocalPlayer:GetAttribute("x2LuckTime")) == 0    then Inv:FireServer("X2 Lucky 15min.") end
-                if Select["X2 Rebirth 15min."] and tonumber(LocalPlayer:GetAttribute("x2RebirthTime")) == 0 then Inv:FireServer("X2 Rebirth 15min.") end
-                if Select["X2 Item 15min."]    and tonumber(LocalPlayer:GetAttribute("x2ItemTime")) == 0    then Inv:FireServer("X2 Item 15min.") end
-            end)
-        end
+        pcall(function()
+            local now = tick()
+
+            -- 🆕 UPDATE INFO mỗi 0.5s
+            if now - lastInfoUpdate >= 0.5 then
+                lastInfoUpdate = now
+
+                local Inv = GetInventory()
+                local lines = {}
+
+                for _, potionName in ipairs(X2List) do
+                    local have = (Inv[potionName] and Inv[potionName].amount) or 0
+                    local attrName = POTION_TIME_MAP[potionName]
+                    local timeLeft = 0
+                    if attrName then
+                        timeLeft = tonumber(LocalPlayer:GetAttribute(attrName)) or 0
+                    end
+
+                    local statusText = ""
+                    if timeLeft > 0 then
+                        local m = math.floor(timeLeft / 60)
+                        local s = timeLeft % 60
+                        statusText = string.format(" [%02d:%02d]", m, s)
+                    else
+                        statusText = " [Hết]"
+                    end
+
+                    local icon = have > 0 and "✅" or "❌"
+                    local selectedMark = ""
+                    if _G.Select_Potion and table.find(_G.Select_Potion, potionName) then
+                        selectedMark = " ⭐"
+                    end
+
+                    table.insert(lines, string.format("%s %s: %d%s%s",
+                        icon, potionName, have, statusText, selectedMark))
+                end
+
+                if PotionInfoPara then
+                    PotionInfoPara:SetTitle("🍦 X2 Potions (⭐ = đã chọn)")
+                    PotionInfoPara:SetContent(table.concat(lines, "\n"))
+                end
+            end
+
+            -- 🆕 AUTO USE (chỉ khi time = 0)
+            if not _G.Auto_Use_Potion then return end
+            if type(_G.Select_Potion) ~= "table" or #_G.Select_Potion == 0 then return end
+
+            local remote = ReplicatedStorage:FindFirstChild("Remotes")
+            remote = remote and remote:FindFirstChild("Inventory")
+            if not remote then return end
+
+            local Inv = GetInventory()
+
+            for _, potionName in ipairs(_G.Select_Potion) do
+                local attrName = POTION_TIME_MAP[potionName]
+                if attrName then
+                    local timeLeft = tonumber(LocalPlayer:GetAttribute(attrName)) or 0
+                    if timeLeft <= 0 then
+                        -- Cooldown 2s tránh spam
+                        local last = lastUseTime[potionName] or 0
+                        if tick() - last >= 2 then
+                            local have = (Inv[potionName] and Inv[potionName].amount) or 0
+                            if have > 0 then
+                                lastUseTime[potionName] = tick()
+                                pcall(function() remote:FireServer(potionName) end)
+                                print("[Potion] 🤖 Auto used: " .. potionName)
+                            end
+                        end
+                    end
+                end
+            end
+        end)
     end
 end)
 
@@ -3771,6 +3826,141 @@ task.spawn(function()
             _G.Auto_FarmBoss = false
             _G.SeaNotify("❌ Out of Orb Boss", "Auto Farm Boss (Full) disabled!", 5)
         end, function(err) warn("[AutoFarmBoss] Error:", err) end)
+    end
+end)
+
+-- ============================================================
+-- 🆕 AUTO BOSS ALL — Piccolo + Kraken + Devil Boat + Thief
+-- Ưu tiên: Piccolo → Kraken → Devil Boat → Thief
+-- ============================================================
+task.spawn(function()
+    local lastTargetKey = nil
+    local lastSummonTime = 0
+    local SUMMON_COOLDOWN = 2
+
+    while task.wait() do
+        xpcall(function()
+            if not _G.AutoBossAll then
+                _G.CanAutoSkill = false
+                lastTargetKey = nil
+                return
+            end
+
+            local char = LocalPlayer.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            local hum  = char and char:FindFirstChild("Humanoid")
+            if not hrp or not hum or hum.Health <= 0 then
+                _G.CanAutoSkill = false
+                return
+            end
+
+            local mobFolder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
+            if not mobFolder then return end
+
+            -- 🆕 Tìm boss theo thứ tự ưu tiên
+            local BossNames = {"Piccolo", "Kraken", "Devil Boat", "DevilBoat", "Bacon Thief"}
+            local Target = nil
+            local TargetName = nil
+
+            for _, bossName in ipairs(BossNames) do
+                for _, mob in ipairs(mobFolder:GetChildren()) do
+                    if mob:IsA("Model")
+                       and mob.Name == bossName
+                       and mob:FindFirstChild("Humanoid")
+                       and mob:FindFirstChild("HumanoidRootPart")
+                       and mob.Humanoid.Health > 0 then
+                        Target = mob
+                        TargetName = bossName
+                        break
+                    end
+                end
+                if Target then break end
+            end
+
+            -- Chỉ đứng chờ boss xuất hiện
+            if not Target then
+                _G.CanAutoSkill = false
+                lastTargetKey = nil
+                return
+            end
+
+            local tHrp = Target:FindFirstChild("HumanoidRootPart")
+            if not tHrp then return end
+
+            local targetKey = TargetName .. "|" .. tostring(Target)
+            if targetKey ~= lastTargetKey then
+                lastTargetKey = targetKey
+                print("[BossAll] ⚔️ Target: " .. TargetName)
+            end
+
+            Target.Humanoid.WalkSpeed = 0
+            Target.Humanoid.JumpPower = 0
+
+            _G.CanAutoSkill = true
+
+            EquipWeapon()
+            AutoSkill()
+            Attack()
+
+            -- 🆕 Bám boss (dùng Teleport cho mượt)
+            Teleport(tHrp.CFrame * MethodFarm)
+
+            -- 🆕 XỬ LÝ RIÊNG CHO THIEF: Mở chest sau khi Thief chết
+            if TargetName == "Bacon Thief" then
+                -- Đợi Thief chết + rương rơi
+                task.spawn(function()
+                    local startTime = tick()
+                    -- Đợi tối đa 10s cho Thief chết + chest spawn
+                    while tick() - startTime < 10 do
+                        task.wait(0.5)
+                        -- Nếu Thief chết → tìm chest gần nhất
+                        if not Target.Parent or not Target:FindFirstChild("Humanoid") 
+                           or Target.Humanoid.Health <= 0 then
+                            break
+                        end
+                    end
+                    
+                    -- 🆕 Tìm chest gần nhất trong MobSpawnGroup
+                    task.wait(1)  -- Đợi chest spawn
+                    local mobSpawnGroup = workspace:FindFirstChild("MobSpawnGroup")
+                    if mobSpawnGroup then
+                        local char = LocalPlayer.Character
+                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            local nearestChest = nil
+                            local minDist = math.huge
+                            
+                            for _, spawn in ipairs(mobSpawnGroup:GetChildren()) do
+                                local chestRef = spawn:FindFirstChild("ChestRef", true)
+                                if chestRef then
+                                    local dist = (hrp.Position - chestRef.Position).Magnitude
+                                    if dist < minDist then
+                                        minDist = dist
+                                        nearestChest = chestRef
+                                    end
+                                end
+                            end
+                            
+                            -- 🆕 Mở chest nếu tìm thấy
+                            if nearestChest then
+                                local prompt = nearestChest:FindFirstChildWhichIsA("ProximityPrompt", true)
+                                if prompt and prompt.ActionText == "Open" then
+                                    print("[BossAll] 🎁 Mở chest Thief")
+                                    hrp.CFrame = CFrame.new(nearestChest.Position + Vector3.new(0, 3, 0))
+                                    hrp.AssemblyLinearVelocity = Vector3.zero
+                                    hrp.AssemblyAngularVelocity = Vector3.zero
+                                    task.wait(0.3)
+                                    pcall(function() fireproximityprompt(prompt) end)
+                                    task.wait(0.5)
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end, function(err)
+            warn("[BossAll] Error:", err)
+        end)
     end
 end)
 
@@ -7324,5 +7514,585 @@ task.spawn(function()
 end)
 
 end   -- End if not IS_MOON_MAP
+
+-- ============================================================
+-- 🌊 SEA 2 MAP → GOKU BLUE v4 FINAL (Summon Whis → Beerus Planet)
+-- - Check Whis liên tục (không đợi cố định)
+-- - Mua items qua NPC Guarantee → Frame_RandomItem
+-- - Phân biệt GUI Bulma vs Whis bằng Subtitle
+-- ============================================================
+-- ============================================================
+-- 🌊 SEA 2 MAP → GOKU BLUE v5 FINAL (Summon Whis → Beerus Planet)
+-- ============================================================
+if IS_SEA2_MAP then
+    local Sea2Tab = Window:CreateTab("Other", false, false)
+    local GokuBluePage = Sea2Tab:CreatePage("Goku Blue")
+    local GokuBlueCard = GokuBluePage:CreateSection("🔵 Goku Blue", "Left")
+    local GokuBlueInfo = GokuBluePage:CreateSection("📊 Status", "Right")
+
+    _G.AutoGokuBlue = false
+    _G.GokuBluePhase = "IDLE"
+    _G.GokuBlueMissing = {}
+    _G.GokuBlueSummonTime = 0
+    _G.GokuBlueWhisWaitStart = 0
+    _G.GokuBlueLastLetsGo = 0
+    _G.GokuBlueTeleportStart = 0
+
+    local GokuBlueStatusPara = GokuBlueInfo:Paragraph({
+        Title = "Status: OFF",
+        Content = "Bật toggle để bắt đầu"
+    })
+
+    local GokuBlueInfoPara = GokuBlueInfo:Paragraph({
+        Title = "🍦 Ice cream: ---",
+        Content = "📊 PointItem: ---"
+    })
+
+    -- =====================================================
+    -- HELPERS
+    -- =====================================================
+    local function GetInventory()
+        local ok, inv = pcall(function()
+            return HttpService:JSONDecode(LocalPlayer:GetAttribute("Inventory") or "{}")
+        end)
+        return ok and inv or {}
+    end
+
+    local function GetIceCreamAmount()
+        local inv = GetInventory()
+        return (inv["Ice cream"] and inv["Ice cream"].amount) or 0
+    end
+
+    local function GetPointItem()
+        return tonumber(LocalPlayer:GetAttribute("PointItem")) or 0
+    end
+
+    local function FindBulma()
+        local b = workspace:FindFirstChild("Bulma")
+        if b then return b, b:FindFirstChild("HumanoidRootPart") end
+        return nil, nil
+    end
+
+    local function FindWhis()
+        local spawnWhis = workspace:FindFirstChild("SpawnWhis")
+        if spawnWhis then
+            local whis = spawnWhis:FindFirstChild("Whis")
+            if whis then
+                local hrp = whis:FindFirstChild("HumanoidRootPart")
+                if hrp then return whis, hrp end
+            end
+        end
+        return nil, nil
+    end
+
+    local function FindGuaranteeNPC()
+        local npcPrompt = workspace:FindFirstChild("NpcPrompt")
+        local npc = npcPrompt and npcPrompt:FindFirstChild("Guarantee")
+        if npc then
+            local hrp = npc:FindFirstChild("HumanoidRootPart")
+                or npc:FindFirstChildWhichIsA("BasePart")
+            if hrp then return npc, hrp end
+        end
+        return nil, nil
+    end
+
+    local function FindDialog()
+        local gui = LocalPlayer.PlayerGui:FindFirstChild("BeerusTraining")
+        if not gui then return nil end
+        local dialog = gui:FindFirstChild("Dialog")
+        if dialog and dialog.Visible then return dialog end
+        return nil
+    end
+
+    local function GetDialogType(dialog)
+        if not dialog then return nil end
+        local header = dialog:FindFirstChild("Header")
+        local subtitle = header and header:FindFirstChild("Subtitle")
+        if not subtitle or not subtitle.Text then return nil end
+        local lower = subtitle.Text:lower()
+        if lower:find("trip to beerus") then return "Whis" end
+        if lower:find("summon whis") then return "Bulma" end
+        return nil
+    end
+
+    local function FindRandomFrame()
+        local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+        local main = hud and hud:FindFirstChild("Main")
+        if not main then return nil end
+        return main:FindFirstChild("Frame_RandomItem")
+    end
+
+    local function ClickButton(btn)
+        if not btn or not btn:IsA("TextButton") then return false end
+        local x = btn.AbsolutePosition.X + btn.AbsoluteSize.X / 2
+        local y = btn.AbsolutePosition.Y + btn.AbsoluteSize.Y / 2
+
+        -- 🆕 CÁCH 1: firesignal đầy đủ (từ log hook: InputBegan → MouseButton1Down → Click → Up → Activated)
+        pcall(function()
+            if firesignal then
+                firesignal(btn.MouseButton1Down, x, y)
+                task.wait(0.03)
+                firesignal(btn.MouseButton1Click)
+                task.wait(0.03)
+                firesignal(btn.MouseButton1Up, x, y)
+                if btn.Activated then
+                    firesignal(btn.Activated, nil, 0)
+                end
+            end
+        end)
+        task.wait(0.1)
+
+        -- 🆕 CÁCH 2: VIM (nếu firesignal fail)
+        pcall(function()
+            local VIM = game:GetService("VirtualInputManager")
+            VIM:SendMouseMoveEvent(x, y, game)
+            task.wait(0.05)
+            VIM:SendMouseButtonEvent(x, y, 0, true, game, 1)
+            task.wait(0.08)
+            VIM:SendMouseButtonEvent(x, y, 0, false, game, 1)
+        end)
+        return true
+    end
+
+    local function FireNPC(model)
+        if not model then return false end
+        local prompt = model:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if not prompt then return false end
+        pcall(function() fireproximityprompt(prompt) end)
+        return true
+    end
+
+    local function TPAndFire(model, hrp)
+        local char = LocalPlayer.Character
+        local myHrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not myHrp or not hrp then return false end
+        myHrp.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 3, 0))
+        myHrp.AssemblyLinearVelocity = Vector3.zero
+        myHrp.AssemblyAngularVelocity = Vector3.zero
+        task.wait(0.3)
+        return FireNPC(model)
+    end
+
+    local function CheckWhisItems(dialog)
+        local missing = {}
+        local required = {}
+        local allItemNames = {}
+        local allCounts = {}
+        
+        for _, obj in ipairs(dialog:GetDescendants()) do
+            if obj:IsA("TextLabel") then
+                if obj.Name == "ItemName" and obj.Text ~= "" then
+                    table.insert(allItemNames, obj)
+                elseif obj.Name == "Count" and obj.Text ~= "" then
+                    table.insert(allCounts, obj)
+                end
+            end
+        end
+        
+        for i, nameLbl in ipairs(allItemNames) do
+            local countLbl = allCounts[i]
+            if countLbl and countLbl.Text then
+                local have, need = countLbl.Text:match("^(%d+)/(%d+)$")
+                have = tonumber(have) or 0
+                need = tonumber(need) or 1
+                table.insert(required, {Name = nameLbl.Text, Have = have, Need = need})
+                if have < need then
+                    table.insert(missing, {Name = nameLbl.Text, Have = have, Need = need})
+                end
+            end
+        end
+        
+        return #missing == 0, missing, required
+    end
+
+    local function BuyItemFromRandomShop(itemName, needCount)
+        local randomFrame = FindRandomFrame()
+        if not randomFrame or not randomFrame.Visible then
+            return false
+        end
+        
+        for _, obj in ipairs(randomFrame:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Text == itemName then
+                local parentFrame = obj.Parent
+                while parentFrame and parentFrame ~= randomFrame do
+                    if parentFrame:IsA("Frame") then
+                        local buyBtn = parentFrame:FindFirstChildWhichIsA("TextButton", true)
+                        if buyBtn then
+                            print("[GokuBlue] 🛒 Mua " .. itemName .. " (cần " .. needCount .. ")")
+                            ClickButton(buyBtn)
+                            task.wait(0.6)
+                            return true
+                        end
+                    end
+                    parentFrame = parentFrame.Parent
+                end
+            end
+        end
+        
+        print("[GokuBlue] ❌ Không tìm thấy " .. itemName .. " trong shop")
+        return false
+    end
+
+    -- =====================================================
+    -- MAIN LOOP
+    -- =====================================================
+    task.spawn(function()
+        while task.wait(0.3) do
+            pcall(function()
+                if GokuBlueInfoPara then
+                    GokuBlueInfoPara:SetTitle("🍦 Ice cream: " .. GetIceCreamAmount())
+                    GokuBlueInfoPara:SetContent("📊 PointItem: " .. string.format("%.1fK", GetPointItem() / 1000))
+                end
+
+                if not _G.AutoGokuBlue then
+                    if GokuBlueStatusPara then
+                        GokuBlueStatusPara:SetTitle("Status: OFF")
+                        GokuBlueStatusPara:SetContent("Bật toggle để bắt đầu")
+                    end
+                    return
+                end
+
+                local char = LocalPlayer.Character
+                local hum  = char and char:FindFirstChild("Humanoid")
+                local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+                if not hum or not hrp or hum.Health <= 0 then return end
+
+                -- PHASE IDLE
+                if _G.GokuBluePhase == "IDLE" then
+                    local recentLetsGo = tick() - (_G.GokuBlueLastLetsGo or 0) < 15
+                    
+                    if recentLetsGo then
+                        local remaining = 15 - (tick() - (_G.GokuBlueLastLetsGo or 0))
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("🌀 Chờ teleport")
+                            GokuBlueStatusPara:SetContent(string.format("Còn %.1fs...", remaining))
+                        end
+                        task.wait(1)
+                        return
+                    end
+                    
+                    local whis, whisHrp = FindWhis()
+                    if whis and whisHrp then
+                        print("[GokuBlue] 🎯 Whis → TP + Fire")
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("🎯 Whis xuất hiện")
+                            GokuBlueStatusPara:SetContent("TP + Fire prompt...")
+                        end
+                        TPAndFire(whis, whisHrp)
+                        task.wait(1)
+                        _G.GokuBlueWhisWaitStart = tick()
+                        _G.GokuBluePhase = "CHECK_WHIS_DIALOG"
+                        return
+                    end
+                    
+                    print("[GokuBlue] 🚀 Không có Whis → TP Bulma")
+                    local bulma, bulmaHrp = FindBulma()
+                    if not bulmaHrp then
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("❌ Không có Bulma")
+                            GokuBlueStatusPara:SetContent("workspace.Bulma không tồn tại")
+                        end
+                        return
+                    end
+                    
+                    hrp.CFrame = CFrame.new(bulmaHrp.Position + Vector3.new(0, 3, 0))
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    
+                    if GokuBlueStatusPara then
+                        GokuBlueStatusPara:SetTitle("🚀 TP tới Bulma")
+                        GokuBlueStatusPara:SetContent("Fire prompt...")
+                    end
+                    
+                    task.wait(0.5)
+                    _G.GokuBluePhase = "FIRE_BULMA"
+                    return
+                end
+
+                -- PHASE FIRE_BULMA
+                if _G.GokuBluePhase == "FIRE_BULMA" then
+                    local bulma = FindBulma()
+                    if bulma then FireNPC(bulma) end
+                    task.wait(1)
+                    _G.GokuBluePhase = "CHECK_BULMA_DIALOG"
+                    return
+                end
+
+                -- PHASE CHECK_BULMA_DIALOG
+                if _G.GokuBluePhase == "CHECK_BULMA_DIALOG" then
+                    local dialog = FindDialog()
+                    if not dialog then
+                        task.wait(0.5)
+                        return
+                    end
+                    
+                    local dialogType = GetDialogType(dialog)
+                    if dialogType ~= "Bulma" then
+                        task.wait(0.5)
+                        return
+                    end
+                    
+                    if GetIceCreamAmount() >= 1 then
+                        print("[GokuBlue] ✅ Có Ice cream → Summon")
+                        _G.GokuBluePhase = "SUMMON"
+                    else
+                        print("[GokuBlue] ❌ Không có Ice cream → dừng")
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("❌ Không có Ice cream")
+                            GokuBlueStatusPara:SetContent("Cần Ice cream có sẵn")
+                        end
+                        _G.SeaNotify("❌ Không có Ice cream", "Cần Ice cream có sẵn", 5)
+                        _G.AutoGokuBlue = false
+                        _G.GokuBluePhase = "IDLE"
+                    end
+                    return
+                end
+
+                -- PHASE SUMMON
+                if _G.GokuBluePhase == "SUMMON" then
+                    local dialog = FindDialog()
+                    if not dialog then
+                        _G.GokuBluePhase = "IDLE"
+                        return
+                    end
+                    
+                    local confirmBtn = dialog:FindFirstChild("Confirm")
+                    if confirmBtn then
+                        ClickButton(confirmBtn)
+                        print("[GokuBlue] 👆 Summon → check Whis liên tục")
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("✅ Đã Summon")
+                            GokuBlueStatusPara:SetContent("Check Whis mỗi 0.3s...")
+                        end
+                    end
+                    
+                    _G.GokuBlueSummonTime = tick()
+                    _G.GokuBluePhase = "WAIT_WHIS"
+                    return
+                end
+
+                -- PHASE WAIT_WHIS
+                if _G.GokuBluePhase == "WAIT_WHIS" then
+                    local whis, whisHrp = FindWhis()
+                    if whis and whisHrp then
+                        local elapsed = tick() - (_G.GokuBlueSummonTime or tick())
+                        print(string.format("[GokuBlue] 🎯 Whis xuất hiện sau %.1fs → TP + Fire", elapsed))
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("🎯 Whis xuất hiện!")
+                            GokuBlueStatusPara:SetContent(string.format("Sau %.1fs — TP + Fire...", elapsed))
+                        end
+                        
+                        TPAndFire(whis, whisHrp)
+                        task.wait(1)
+                        _G.GokuBlueWhisWaitStart = tick()
+                        _G.GokuBluePhase = "CHECK_WHIS_DIALOG"
+                        return
+                    end
+                    
+                    if tick() - (_G.GokuBlueSummonTime or tick()) > 60 then
+                        print("[GokuBlue] ⏱️ Timeout 60s")
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("⏱️ Timeout")
+                            GokuBlueStatusPara:SetContent("Không thấy Whis sau 60s")
+                        end
+                        _G.GokuBluePhase = "IDLE"
+                        return
+                    end
+                    
+                    if GokuBlueStatusPara then
+                        local elapsed = tick() - (_G.GokuBlueSummonTime or tick())
+                        GokuBlueStatusPara:SetTitle("⏳ Đợi Whis (" .. string.format("%.1f", elapsed) .. "s)")
+                        GokuBlueStatusPara:SetContent("Check mỗi 0.3s...")
+                    end
+                    return
+                end
+
+                -- PHASE CHECK_WHIS_DIALOG
+                if _G.GokuBluePhase == "CHECK_WHIS_DIALOG" then
+                    local dialog = FindDialog()
+                    if not dialog then
+                        if tick() - (_G.GokuBlueWhisWaitStart or tick()) > 5 then
+                            _G.GokuBluePhase = "IDLE"
+                        end
+                        task.wait(0.5)
+                        return
+                    end
+                    
+                    local dialogType = GetDialogType(dialog)
+                    if dialogType ~= "Whis" then
+                        task.wait(0.5)
+                        return
+                    end
+                    
+                    print("[GokuBlue] ✅ GUI Whis hiện → check items")
+                    if GokuBlueStatusPara then
+                        GokuBlueStatusPara:SetTitle("✅ GUI Whis hiện")
+                        GokuBlueStatusPara:SetContent("Check items...")
+                    end
+                    
+                    local ok, missing, required = CheckWhisItems(dialog)
+                    
+                    if ok then
+                        print("[GokuBlue] ✅ Đủ items → Let's Go")
+                        _G.GokuBluePhase = "LETS_GO"
+                    else
+                        print("[GokuBlue] ❌ Thiếu " .. #missing .. " items:")
+                        for _, m in ipairs(missing) do
+                            print("  - " .. m.Name .. ": " .. m.Have .. "/" .. m.Need)
+                        end
+                        _G.GokuBlueMissing = missing
+                        _G.GokuBluePhase = "BUY_ITEMS"
+                    end
+                    return
+                end
+
+                -- PHASE BUY_ITEMS
+                if _G.GokuBluePhase == "BUY_ITEMS" then
+                    if GokuBlueStatusPara then
+                        GokuBlueStatusPara:SetTitle("🛒 Thiếu " .. #(_G.GokuBlueMissing or {}) .. " items")
+                        GokuBlueStatusPara:SetContent("Mở shop qua NPC Guarantee...")
+                    end
+                    
+                    local dialog = FindDialog()
+                    if dialog then
+                        local cancelBtn = dialog:FindFirstChild("Cancel")
+                        if cancelBtn then ClickButton(cancelBtn) end
+                        task.wait(0.5)
+                    end
+                    
+                    local randomFrame = FindRandomFrame()
+                    if not randomFrame or not randomFrame.Visible then
+                        local guaranteeNPC, guaranteeHrp = FindGuaranteeNPC()
+                        if guaranteeNPC and guaranteeHrp then
+                            print("[GokuBlue] 🚀 Mở shop qua NPC Guarantee")
+                            TPAndFire(guaranteeNPC, guaranteeHrp)
+                            task.wait(1.5)
+                            randomFrame = FindRandomFrame()
+                        else
+                            print("[GokuBlue] ❌ Không tìm thấy NPC Guarantee")
+                        end
+                    end
+                    
+                    if not randomFrame or not randomFrame.Visible then
+                        print("[GokuBlue] ❌ Không mở được Frame_RandomItem")
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("❌ Không mở được shop")
+                            GokuBlueStatusPara:SetContent("NPC Guarantee không mở shop")
+                        end
+                        _G.AutoGokuBlue = false
+                        _G.GokuBluePhase = "IDLE"
+                        return
+                    end
+                    
+                    print("[GokuBlue] ✅ Đã mở Frame_RandomItem → mua items")
+                    
+                    local allBought = true
+                    for _, m in ipairs(_G.GokuBlueMissing or {}) do
+                        local bought = BuyItemFromRandomShop(m.Name, m.Need - m.Have)
+                        if not bought then
+                            allBought = false
+                        end
+                    end
+                    
+                    if allBought then
+                        print("[GokuBlue] ✅ Đã mua items → quay lại Whis")
+                        task.wait(1)
+                        _G.GokuBluePhase = "IDLE"
+                    else
+                        print("[GokuBlue] ❌ Không mua được items")
+                        if GokuBlueStatusPara then
+                            GokuBlueStatusPara:SetTitle("❌ Không mua được")
+                            GokuBlueStatusPara:SetContent("Shop không có items cần")
+                        end
+                        _G.SeaNotify("❌ Không mua được items",
+                            "Shop không có items yêu cầu — dừng Auto", 5)
+                        _G.AutoGokuBlue = false
+                        _G.GokuBluePhase = "IDLE"
+                    end
+                    return
+                end
+
+                -- PHASE LETS_GO
+                if _G.GokuBluePhase == "LETS_GO" then
+                    local dialog = FindDialog()
+                    if not dialog then
+                        _G.GokuBluePhase = "IDLE"
+                        return
+                    end
+                    
+                    local confirmBtn = dialog:FindFirstChild("Confirm")
+                    if confirmBtn then
+                        local label = confirmBtn:FindFirstChild("Label")
+                        local labelText = label and label.Text or ""
+                        if labelText:lower():find("let's go") then
+                            local whis, whisHrp = FindWhis()
+                            if whis and whisHrp then
+                                local char = LocalPlayer.Character
+                                local myHrp = char and char:FindFirstChild("HumanoidRootPart")
+                                if myHrp then
+                                    myHrp.CFrame = CFrame.new(whisHrp.Position + Vector3.new(0, 3, 0))
+                                    myHrp.AssemblyLinearVelocity = Vector3.zero
+                                    myHrp.AssemblyAngularVelocity = Vector3.zero
+                                    task.wait(0.2)
+                                end
+                            end
+                            
+                            ClickButton(confirmBtn)
+                            print("[GokuBlue] ✅ Let's Go → Beerus Planet")
+                            
+                            _G.GokuBlueLastLetsGo = tick()
+                            _G.GokuBlueTeleportStart = tick()
+                            
+                            if GokuBlueStatusPara then
+                                GokuBlueStatusPara:SetTitle("✅ Đã Let's Go")
+                                GokuBlueStatusPara:SetContent("Đợi teleport Beerus Planet...")
+                            end
+                            
+                            _G.GokuBluePhase = "WAIT_TELEPORT"
+                        end
+                    end
+                    return
+                end
+
+                -- PHASE WAIT_TELEPORT
+                if _G.GokuBluePhase == "WAIT_TELEPORT" then
+                    local elapsed = tick() - (_G.GokuBlueTeleportStart or tick())
+                    
+                    if GokuBlueStatusPara then
+                        GokuBlueStatusPara:SetTitle("🌀 Đang teleport...")
+                        GokuBlueStatusPara:SetContent(string.format("Đợi %.1fs / 15s", elapsed))
+                    end
+                    
+                    if elapsed < 15 then
+                        task.wait(0.5)
+                        return
+                    end
+                    
+                    print("[GokuBlue] ⏱️ Đợi teleport xong 15s → IDLE")
+                    _G.GokuBluePhase = "IDLE"
+                    return
+                end
+            end)
+        end
+    end)
+
+    -- UI
+    GokuBlueCard:Toggle({
+        Title = "🔵 Auto Goku Blue (Whis → Beerus Planet)",
+        Value = false,
+        Callback = function(v)
+            _G.AutoGokuBlue = v
+            _G.GokuBluePhase = "IDLE"
+            print("[GokuBlue]", v and "▶️ ON" or "⏹️ OFF")
+        end
+    })
+
+    GokuBlueCard:Paragraph({
+        Title = "📖 Logic",
+        Content = "1. Check Whis → CÓ: TP + mở GUI\n   KHÔNG: TP Bulma → Summon → check Whis liên tục\n2. GUI Whis → check items\n   • Đủ → Let's Go\n   • Thiếu → NPC Guarantee → shop → mua → Let's Go"
+    })
+
+    print("[Sea 2] ✅ Goku Blue v5 loaded")
+end
 
 print("[Sea 1] ✅ Load successful!")
