@@ -247,4 +247,124 @@ task.spawn(function()
 
             local bossModel, bossHrp, bossHum = GetBoss()
             if not bossHrp then
-                if _G.DragonPortalPhase ~= "ENTERED
+                if _G.DragonPortalPhase ~= "ENTERED" then OpenPortal() end
+                return
+            end
+
+            if bossHum.Health <= 0 then
+                if not _G.DragonBossDeadHandled then
+                    _G.DragonBossDeadHandled = true
+                    _G.DragonPortalPhase = "IDLE"
+                    _G.DragonPortalFireLock = tick() + CFG.PORTAL_FIRE_LOCK
+                    _G.DragonAlertTriggered = false
+                    _G.DragonSafeZoneActive = false
+                    _G.DragonSafeZonePart = nil
+                    _G.DragonBuffUsed = false
+                    _G.DragonBuffFinishTime = 0
+                    PortalHelper.CloseRewardFrameOnce("Dragon")
+                end
+                return
+            end
+
+            _G.DragonBossDeadHandled = false
+            if _G.DragonEnterTime == 0 then _G.DragonEnterTime = tick() end
+            bossHum.WalkSpeed = 0
+            bossHum.JumpPower = 0
+
+            local now = tick()
+
+            -- Safe zone
+            local safe = FindSafeZone()
+            if safe then
+                _G.DragonSafeZoneActive = true
+                local pos = safe.Position + Vector3.new(0, CFG.SAFE_HEIGHT_FLY, 0)
+                hrp.CFrame = CFrame.new(pos, bossHrp.Position)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+                return
+            end
+
+            local hpPct = (bossHum.Health / bossHum.MaxHealth) * 100
+            if hpPct <= 50 then
+                if not ThanosHelper.EnsureThanosEquipped() then
+                    local mf = GetMethodFarm(CFG.AIM_HEIGHT)
+                    hrp.CFrame = bossHrp.CFrame * mf
+                    hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    if now - _G.DragonLastAttack >= 0.15 then
+                        _G.DragonLastAttack = now
+                        _G.Attack()
+                    end
+                    return
+                end
+
+                if _G.DragonThanosSpamStartTime == 0 then
+                    _G.DragonThanosSpamStartTime = now
+                    _G.DragonThanosFSuccessCount = 0
+                end
+
+                local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+                local main = hud and hud:FindFirstChild("Main")
+                local sk = main and main:FindFirstChild("Frame_SkillList_Thanos")
+                local cd = false
+                if sk then
+                    local b = sk:FindFirstChild("Border")
+                    local mf = b and b:FindFirstChild("Main")
+                    local f = mf and mf:FindFirstChild("F")
+                    if f then
+                        local r = f:FindFirstChild("Ready")
+                        local c = f:FindFirstChild("CooldownFrame")
+                        if (r and r.Text == "UnReady") or (c and c.Visible) then cd = true end
+                    end
+                end
+
+                if cd then
+                    if not _G.DragonThanosFlyPos then
+                        _G.DragonThanosFlyPos = Vector3.new(
+                            hrp.Position.X,
+                            hrp.Position.Y + CFG.SAFE_HEIGHT_FLY,
+                            hrp.Position.Z)
+                    end
+                    hrp.CFrame = CFrame.new(_G.DragonThanosFlyPos, bossHrp.Position)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    return
+                end
+
+                if now - _G.DragonLastThanosTime >= CFG.THANOS_COOLDOWN then
+                    local bp = bossHrp.Position
+                    hrp.CFrame = CFrame.new(bp + Vector3.new(0, CFG.AIM_HEIGHT, 0), bp)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    _G.DragonLastThanosTime = now
+                    local r = ThanosHelper.TryUseThanosF(hrp)
+                    if r == "success" then
+                        _G.DragonThanosFSuccessCount = _G.DragonThanosFSuccessCount + 1
+                        _G.DragonThanosFlyPos = nil
+                        hrp.CFrame = CFrame.new(
+                            hrp.Position + Vector3.new(0, 100, 0), bossHrp.Position)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
+                    end
+                end
+                return
+            end
+
+            local mf = GetMethodFarm(CFG.AIM_HEIGHT)
+            hrp.CFrame = bossHrp.CFrame * mf
+            hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+            hrp.AssemblyAngularVelocity = Vector3.zero
+
+            if now - _G.DragonLastEquip >= 0.5 then
+                _G.DragonLastEquip = now
+                _G.EquipWeapon()
+            end
+            if now - _G.DragonLastAttack >= 0.15 then
+                _G.DragonLastAttack = now
+                local hasSkill = _G.AutoSkillZ or _G.AutoSkillX
+                              or _G.AutoSkillC or _G.AutoSkillV or _G.AutoSkillF
+                if hasSkill then _G.AutoSkill() else _G.Attack() end
+            end
+        end)
+    end
+end)
