@@ -510,86 +510,24 @@ function Library:CreateWindow(options)
         SaveManager:SetMap(mapOption)
     end
 
-    -- ============================================================
-    --  TOOL MODE
-    -- ============================================================
-    local function CreateMenuTool()
-        if CurrentTool and CurrentTool.Parent then return end
-        if MainFrame.Visible then return end
-        if MenuIconMode ~= "tool" then return end
-        local player = Players.LocalPlayer
-        if not player then return end
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        if not backpack then
-            task.spawn(function()
-                local bp = player:WaitForChild("Backpack", 5)
-                if bp and MenuIconMode == "tool" and not MainFrame.Visible then
-                    CurrentTool = nil
-                    CreateMenuTool()
-                end
-            end)
-            return
-        end
-        local ok, menuTool = pcall(function()
-            local t = Instance.new("Tool")
-            t.Name = "MarvenRiz Menu"
-            t.ToolTip = "Bấm để mở menu MarvenRiz"
-            t.RequiresHandle = false
-            t.CanBeDropped = false
-            t.TextureId = SPHERE_ICON
-            return t
-        end)
-        if not ok or not menuTool then
-            warn("[MarvenRiz] Cannot create tool: " .. tostring(menuTool))
-            return
-        end
-        menuTool.Activated:Connect(function()
-            MainFrame.Visible = true
-            BottomDragHitbox.Visible = true
-            Tween(MainScale, {Scale = 1}, 0.4)
-            Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
-            Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
-            Tween(BottomBarStroke, {Transparency = 0}, 0.4)
-            if CurrentTool then pcall(function() CurrentTool:Destroy() end) CurrentTool = nil end
-        end)
-        menuTool.Parent = backpack
-        CurrentTool = menuTool
-        menuTool.AncestryChanged:Connect(function(_, parent)
-            if parent == nil then
-                CurrentTool = nil
-                if not MainFrame.Visible and MenuIconMode == "tool" then
-                    task.delay(0.15, function()
-                        if not MainFrame.Visible and MenuIconMode == "tool" and (not CurrentTool or not CurrentTool.Parent) then
-                            CreateMenuTool()
-                        end
-                    end)
-                end
-            end
-        end)
-    end
-
-    local playerRef = Players.LocalPlayer
-    if playerRef and not MenuToolRespawnConn then
-        MenuToolRespawnConn = playerRef.CharacterAdded:Connect(function()
-            task.wait(1)
-            CurrentTool = nil
-            if not MainFrame.Visible and MenuIconMode == "tool" then CreateMenuTool() end
-        end)
-    end
-
     function Library:SetMenuIconMode(mode)
-        MenuIconMode = (mode == "tool") and "tool" or "free"
-        if MenuIconMode == "free" and CurrentTool then
+        -- ✅ FIX: chỉ có 2 mode: "phone" | "pc"
+        MenuIconMode = (mode == "pc") and "pc" or "phone"
+
+        -- Dọn dẹp Tool cũ (nếu có từ version trước)
+        if CurrentTool then
             pcall(function() CurrentTool:Destroy() end)
             CurrentTool = nil
         end
+
+        -- Cập nhật UI hiện tại nếu menu đang đóng
         if not MainFrame.Visible then
-            if MenuIconMode == "free" then
+            if MenuIconMode == "phone" then
                 Sphere.Visible = true
                 Sphere.ImageTransparency = 0
             else
+                -- PC: ẩn hoàn toàn, chỉ mở bằng keybind
                 Sphere.Visible = false
-                CreateMenuTool()
             end
         end
     end
@@ -605,15 +543,15 @@ function Library:CreateWindow(options)
         task.wait(0.3)
         MainFrame.Visible = false
         BottomDragHitbox.Visible = false
-        if MenuIconMode == "tool" then
-            Sphere.Visible = false
-            CreateMenuTool()
-        else
+        if MenuIconMode == "phone" then
             Sphere.Visible = true
             Sphere.Size = UDim2.new(0, 0, 0, 0)
             Sphere.ImageTransparency = 1
             Tween(Sphere, {Size = UDim2.new(0, SPHERE_SIZE, 0, SPHERE_SIZE)}, 0.4)
             Tween(Sphere, {ImageTransparency = 0}, 0.4)
+        else
+            -- PC: ẩn hoàn toàn
+            Sphere.Visible = false
         end
     end)
 
@@ -1636,14 +1574,12 @@ function Library:CreateWindow(options)
     -- ============================================================
     Window.SetMenuIconMode = function(self, mode) return Library:SetMenuIconMode(mode) end
     Window.GetMenuIconMode = function() return MenuIconMode end
-    Window.CreateMenuTool = CreateMenuTool
 	
 	    -- ============================================================
     --  KEYBIND SYSTEM (fixed — không dùng typeof)
     -- ============================================================
-    local function OpenMenu()
+        local function OpenMenu()
         if MainFrame.Visible then return end
-        if CurrentTool then pcall(function() CurrentTool:Destroy() end) CurrentTool = nil end
         Sphere.Visible = false
         MainFrame.Visible = true
         BottomDragHitbox.Visible = true
@@ -1655,7 +1591,7 @@ function Library:CreateWindow(options)
     Window.OpenMenu = OpenMenu
 
     -- ✅ Ẩn menu (giống MinBtn) — dùng cho toggle keybind
-    local function CloseMenu()
+        local function CloseMenu()
         if not MainFrame.Visible then return end
         Tween(MainScale, {Scale = 0}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
@@ -1664,15 +1600,15 @@ function Library:CreateWindow(options)
         task.wait(0.3)
         MainFrame.Visible = false
         BottomDragHitbox.Visible = false
-        if MenuIconMode == "tool" then
-            Sphere.Visible = false
-            CreateMenuTool()
-        else
+        if MenuIconMode == "phone" then
             Sphere.Visible = true
             Sphere.Size = UDim2.new(0, 0, 0, 0)
             Sphere.ImageTransparency = 1
             Tween(Sphere, {Size = UDim2.new(0, SPHERE_SIZE, 0, SPHERE_SIZE)}, 0.4)
             Tween(Sphere, {ImageTransparency = 0}, 0.4)
+        else
+            -- PC: ẩn hoàn toàn, chỉ mở bằng keybind
+            Sphere.Visible = false
         end
     end
     Window.CloseMenu = CloseMenu
@@ -1757,8 +1693,14 @@ function Library:CreateWindow(options)
                 local okF, cfgRaw = pcall(function() return _readfile(data.Path) end)
                 if okF and cfgRaw and cfgRaw ~= "" then
                     local okC, cfg = pcall(function() return HttpService:JSONDecode(cfgRaw) end)
-                    if okC and type(cfg) == "table" and cfg["Menu Icon Mode"] then
-                        Library:SetMenuIconMode(cfg["Menu Icon Mode"] == "Tool" and "tool" or "free")
+                    if okC and type(cfg) == "table" then
+                        local savedMode = cfg["Menu Icon Mode"]
+                        -- ✅ FIX: "PC" hoặc "Điện thoại" (fallback: "Điện thoại")
+                        if savedMode == "PC" then
+                            Library:SetMenuIconMode("pc")
+                        else
+                            Library:SetMenuIconMode("phone")
+                        end
                     end
                 end
             end
