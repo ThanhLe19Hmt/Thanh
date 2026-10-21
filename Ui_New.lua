@@ -1144,21 +1144,16 @@ function Library:CreateWindow(options)
                     end
 
                     local function ApplyKey(newKey)
-                        -- ✅ FIX: guard nil + fallback
-                        if type(newKey) == "string" then
-                            local ok, k = pcall(function() return Enum.KeyCode[newKey] end)
-                            if ok and k then newKey = k else newKey = Enum.KeyCode.T end
-                        end
-                        if typeof(newKey) ~= "EnumItem" or not newKey.Name then
-                            newKey = Enum.KeyCode.T
-                        end
-                        currentKey = newKey
-                        Btn.Text = currentKey.Name
-                        -- ✅ FIX: không gán global nữa, chỉ update nếu callback chính là menu keybind
+                        -- ✅ FIX: dùng NormalizeKey
+                        local key = (Window and Window.NormalizeKey and Window.NormalizeKey(newKey))
+                            or (type(newKey) == "string" and (pcall(function() return Enum.KeyCode[newKey] end) and Enum.KeyCode[newKey]))
+                            or Enum.KeyCode.T
+                        currentKey = key
+                        Btn.Text = (key and key.Name) or "T"
                         if name == "Menu Keybind" then
                             KeybindCaptureBtn = Btn
                         end
-                        if callback then callback(newKey) end
+                        if callback then callback(key) end
                     end
 
                     Btn.MouseButton1Click:Connect(function()
@@ -1169,13 +1164,18 @@ function Library:CreateWindow(options)
                     listenConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
                         if not isListening then return end
                         if input.UserInputType == Enum.UserInputType.Keyboard then
-                            if input.KeyCode == Enum.KeyCode.Escape then StopListen() return end
-                            if input.KeyCode == Enum.KeyCode.Backspace then
+                            -- ✅ FIX: dùng NormalizeKey cho input.KeyCode
+                            local pressedKey = Window.NormalizeKey and Window.NormalizeKey(input.KeyCode) or input.KeyCode
+                            if pressedKey == Enum.KeyCode.Escape then
+                                StopListen()
+                                return
+                            end
+                            if pressedKey == Enum.KeyCode.Backspace then
                                 ApplyKey(Enum.KeyCode.T)
                                 StopListen()
                                 return
                             end
-                            ApplyKey(input.KeyCode)
+                            ApplyKey(pressedKey)
                             StopListen()
                         end
                     end)
@@ -1190,15 +1190,9 @@ function Library:CreateWindow(options)
 
                     Window.ConfigElements[name] = {
                         Set = function(v)
-                            -- ✅ FIX: guard toàn diện
-                            local key = Enum.KeyCode.T
-                            if typeof(v) == "EnumItem" then
-                                key = v
-                            elseif type(v) == "string" then
-                                local ok, k = pcall(function() return Enum.KeyCode[v] end)
-                                if ok and k then key = k end
-                            end
-                            if key then ApplyKey(key) end
+                            -- ✅ FIX: dùng NormalizeKey
+                            local key = (Window and Window.NormalizeKey and Window.NormalizeKey(v)) or Enum.KeyCode.T
+                            ApplyKey(key)
                         end,
                         Get = function()
                             return currentKey and currentKey.Name or "T"
@@ -1662,30 +1656,41 @@ function Library:CreateWindow(options)
     end
     Window.OpenMenu = OpenMenu
 
-    local function RebindMenuKey(newKey)
-        -- ✅ FIX: guard nil + fallback về T
-        if not newKey then
-            warn("[MarvenRiz] RebindMenuKey: newKey is nil — fallback to T")
-            newKey = Enum.KeyCode.T
+        -- ✅ Hàm chuẩn hóa bất kỳ input nào thành Enum.KeyCode
+    local function NormalizeKey(input)
+        if input == nil then return Enum.KeyCode.T end
+        -- Nếu là string → parse
+        if type(input) == "string" then
+            local ok, k = pcall(function() return Enum.KeyCode[input] end)
+            if ok and k then return k end
+            return Enum.KeyCode.T
         end
-        -- Nếu newKey là string → parse
-        if type(newKey) == "string" then
-            local ok, k = pcall(function() return Enum.KeyCode[newKey] end)
-            if ok and k then newKey = k else newKey = Enum.KeyCode.T end
+        -- Nếu là EnumItem (userdata hoặc wrap table) → dùng .Name
+        local okName, name = pcall(function() return input.Name end)
+        if okName and type(name) == "string" and name ~= "" then
+            local ok, k = pcall(function() return Enum.KeyCode[name] end)
+            if ok and k then return k end
         end
-        if typeof(newKey) ~= "EnumItem" then
-            warn("[MarvenRiz] RebindMenuKey: invalid key type " .. typeof(newKey) .. " — fallback to T")
-            newKey = Enum.KeyCode.T
+        -- Nếu là table có field Name
+        if type(input) == "table" and type(input.Name) == "string" then
+            local ok, k = pcall(function() return Enum.KeyCode[input.Name] end)
+            if ok and k then return k end
         end
+        -- Fallback
+        return Enum.KeyCode.T
+    end
+    Window.NormalizeKey = NormalizeKey
 
-        MenuKeybind = newKey
+    local function RebindMenuKey(newKey)
+        -- ✅ FIX: dùng NormalizeKey thay vì typeof
+        local key = NormalizeKey(newKey)
+        MenuKeybind = key
         if MenuKeybindConn then MenuKeybindConn:Disconnect() MenuKeybindConn = nil end
         MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if gameProcessed then return end
             if KeybindListening then return end
             if input.KeyCode == MenuKeybind then OpenMenu() end
         end)
-        -- ✅ FIX: chỉ update nút nếu nút còn tồn tại + Name là string
         if KeybindCaptureBtn and KeybindCaptureBtn.Parent then
             local nm = MenuKeybind and MenuKeybind.Name
             if type(nm) == "string" then
@@ -1693,6 +1698,7 @@ function Library:CreateWindow(options)
             end
         end
     end
+	
     Window.SetMenuKeybind = RebindMenuKey
     Window.GetMenuKeybind = function() return MenuKeybind end
 
