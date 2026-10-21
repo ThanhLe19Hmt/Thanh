@@ -1,30 +1,32 @@
 -- ============================================================
---  MarvenRiz UI Library (Full patched)
---  Bao gồm: Sphere icon, Loading bar, Fix Star/AutoLoad
+--  MarvenRiz UI Library — Full Clean Build
+--  Bao gồm: Sphere icon, Loading bar, Auto Load qua Star,
+--  Menu Icon Mode (free/tool), Scroll fix, Màu menu
 -- ============================================================
 
-local TweenService = game:GetService("TweenService")
+local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
-local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
-local TextService = game:GetService("TextService")
+local CoreGui          = game:GetService("CoreGui")
+local RunService       = game:GetService("RunService")
+local HttpService      = game:GetService("HttpService")
+local Players          = game:GetService("Players")
 
-local Library = {
-    WhitelistedUsers = {}
-}
+local Library = { WhitelistedUsers = {} }
 
-local _isfolder = isfolder or function() return true end
+local _isfolder   = isfolder   or function() return true end
 local _makefolder = makefolder or function() end
-local _writefile = writefile or function(path, data) warn("File saving not supported on this executor.") end
-local _readfile = readfile or function() return "{}" end
-local _listfiles = listfiles or function() return {} end
-local _delfile = delfile or function() warn("File deletion not supported.") end
+local _writefile  = writefile  or function() warn("writefile not supported.") end
+local _readfile   = readfile   or function() return "{}" end
+local _listfiles  = listfiles  or function() return {} end
+local _delfile    = delfile    or function() warn("delfile not supported.") end
 
+-- ============================================================
+--  HELPERS
+-- ============================================================
 local function SafeCopyToClipboard(text)
     if setclipboard then setclipboard(text)
     elseif toclipboard then toclipboard(text)
-    else warn("Clipboard copying is not supported on your current executor.") end
+    else warn("Clipboard not supported.") end
 end
 
 local function Create(className, properties)
@@ -34,10 +36,10 @@ local function Create(className, properties)
     if (className == "TextLabel" or className == "TextButton" or className == "TextBox") then
         if properties.TextSize and properties.RichText ~= true then
             instance.TextScaled = true
-            local constraint = Instance.new("UITextSizeConstraint")
-            constraint.MaxTextSize = properties.TextSize
-            constraint.MinTextSize = 6
-            constraint.Parent = instance
+            local c = Instance.new("UITextSizeConstraint")
+            c.MaxTextSize = properties.TextSize
+            c.MinTextSize = 6
+            c.Parent = instance
         end
     end
     return instance
@@ -60,10 +62,10 @@ end
 
 local function Tween(instance, properties, duration)
     duration = duration or 0.25
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(instance, tweenInfo, properties)
-    tween:Play()
-    return tween
+    local ti = TweenInfo.new(duration, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    local t = TweenService:Create(instance, ti, properties)
+    t:Play()
+    return t
 end
 
 local function AddBounce(button, scaleFactor)
@@ -109,27 +111,26 @@ local function MakeDraggable(topbar, object)
     end)
 end
 
-local AccentColor = Color3.fromRGB(40, 40, 40)
+local AccentColor     = Color3.fromRGB(40, 40, 40)
 local BackgroundColor = Color3.fromRGB(18, 18, 20)
-local CardColor = Color3.fromRGB(24, 24, 27)
-local HoverColor = Color3.fromRGB(35, 35, 40)
-local TextColor = Color3.fromRGB(240, 240, 240)
-local SubTextColor = Color3.fromRGB(150, 150, 150)
+local CardColor       = Color3.fromRGB(24, 24, 27)
+local HoverColor      = Color3.fromRGB(35, 35, 40)
+local TextColor       = Color3.fromRGB(240, 240, 240)
+local SubTextColor    = Color3.fromRGB(150, 150, 150)
 
 local GlobalNotifContainer
 
 function Library:Notify(options)
     if not GlobalNotifContainer then return end
-    local title = options.Title or "Notification"
-    local desc = options.Description or "Information updated."
+    local title    = options.Title or "Notification"
+    local desc     = options.Description or "Information updated."
     local duration = options.Duration or 3
 
     local Notif = Create("Frame", {Parent = GlobalNotifContainer, BackgroundColor3 = Color3.fromRGB(20, 20, 22), Size = UDim2.new(1, 0, 0, 65), BackgroundTransparency = 1, ZIndex = 201, ClipsDescendants = true})
     Create("UICorner", {Parent = Notif, CornerRadius = UDim.new(0, 8)})
     local Stroke = Create("UIStroke", {Parent = Notif, Color = Color3.fromRGB(40, 40, 40), Thickness = 1.5, Transparency = 1})
-
     local TitleText = Create("TextLabel", {Parent = Notif, Text = title, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 15, 0, 15), Size = UDim2.new(1, -30, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
-    local DescText = Create("TextLabel", {Parent = Notif, Text = desc, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 15, 0, 32), Size = UDim2.new(1, -30, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
+    local DescText  = Create("TextLabel", {Parent = Notif, Text = desc, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 15, 0, 32), Size = UDim2.new(1, -30, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
 
     Tween(Notif, {BackgroundTransparency = 0}, 0.3)
     Tween(Stroke, {Transparency = 0}, 0.3)
@@ -146,11 +147,10 @@ function Library:Notify(options)
     end)
 end
 
-Library.SaveManager = {
-    Folder = "MarvenRizSave",
-    BaseFolder = "MarvenRizSave",
-    Window = nil
-}
+-- ============================================================
+--  SAVE MANAGER
+-- ============================================================
+Library.SaveManager = { Folder = "MarvenRizSave", BaseFolder = "MarvenRizSave", Window = nil }
 local SaveManager = Library.SaveManager
 
 local function ResolveMapKey(mapOption)
@@ -184,43 +184,12 @@ end
 function SaveManager:GetConfigs()
     if not _isfolder(self.Folder) then _makefolder(self.Folder) end
     local list = {}
-    for _, filepath in ipairs(_listfiles(self.Folder)) do
-        local rawName = filepath:match("([^/\\]+)%.json$")
-        if rawName and not IsAutoloadFile(filepath) then table.insert(list, rawName) end
+    for _, fp in ipairs(_listfiles(self.Folder)) do
+        local rawName = fp:match("([^/\\]+)%.json$")
+        if rawName and not IsAutoloadFile(fp) then table.insert(list, rawName) end
     end
     table.sort(list)
     return list
-end
-
-function SaveManager:Save(name)
-    if not self.Window or name == nil or name == "" then return false end
-    if not _isfolder(self.Folder) then _makefolder(self.Folder) end
-    local payload = {}
-    for k, el in pairs(self.Window.ConfigElements) do
-        if el.Get then payload[k] = el.Get() end
-    end
-    local ok, encoded = pcall(function() return HttpService:JSONEncode(payload) end)
-    if not ok then return false end
-    _writefile(self.Folder .. "/" .. name .. ".json", encoded)
-    Library:Notify({Title = "Config Saved", Description = "Saved [" .. name .. "] successfully.", Duration = 3})
-    return true
-end
-
-function SaveManager:Load(name)
-    if not self.Window or name == nil or name == "" then return false end
-    local path = self.Folder .. "/" .. name .. ".json"
-    local ok, data = pcall(function() return HttpService:JSONDecode(_readfile(path)) end)
-    if ok and type(data) == "table" then
-        for k, v in pairs(data) do
-            if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
-                local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
-                if not setOk then warn("[SaveManager:Load] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr)) end
-            end
-        end
-        Library:Notify({Title = "Config Loaded", Description = "Loaded [" .. name .. "] successfully.", Duration = 3})
-        return true
-    end
-    return false
 end
 
 function SaveManager:GetAutoloadData()
@@ -238,33 +207,6 @@ function SaveManager:SetAutoloadData(data)
     if ok then _writefile(self.Folder .. "/autoload.json", encoded) end
 end
 
-function SaveManager:Delete(name)
-    if name == nil or name == "" then return end
-    pcall(function() _delfile(self.Folder .. "/" .. name .. ".json") end)
-    local data = self:GetAutoloadData()
-    if data.Path == (self.Folder .. "/" .. name .. ".json") then
-        data.Path = nil
-        data.Enabled = false
-        self:SetAutoloadData(data)
-    end
-end
-
-function SaveManager:GetAutoloadPath() return self:GetAutoloadData().Path end
-function SaveManager:IsAutoloadEnabled() return self:GetAutoloadData().Enabled == true end
-
-function SaveManager:SetAutoloadConfig(name)
-    local data = self:GetAutoloadData()
-    data.Path = (name and name ~= "") and (self.Folder .. "/" .. name .. ".json") or nil
-    self:SetAutoloadData(data)
-end
-
-function SaveManager:SetAutoloadEnabled(enabled)
-    local data = self:GetAutoloadData()
-    data.Enabled = enabled and true or false
-    self:SetAutoloadData(data)
-end
-
--- ✅ FIX: verify + fallback
 function SaveManager:LoadAutoloadConfig()
     if not self.Window then return false end
     local candidates = { self.Folder, self.BaseFolder }
@@ -287,7 +229,7 @@ function SaveManager:LoadAutoloadConfig()
                     end
                     local finalOk, finalRaw = pcall(function() return _readfile(realPath) end)
                     if not finalOk or not finalRaw or finalRaw == "" then
-                        warn("[AutoLoad] Config file not found: " .. tostring(realPath) .. " — clearing autoload.")
+                        warn("[AutoLoad] Config file not found: " .. tostring(realPath) .. " — clearing.")
                         data.Enabled = false
                         data.Path = nil
                         local okEnc, enc = pcall(function() return HttpService:JSONEncode(data) end)
@@ -299,7 +241,7 @@ function SaveManager:LoadAutoloadConfig()
                         for k, v in pairs(fdata) do
                             if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
                                 local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
-                                if not setOk then warn("[SaveManager:LoadAutoloadConfig] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr)) end
+                                if not setOk then warn("[LoadAutoload] Skip '" .. tostring(k) .. "': " .. tostring(setErr)) end
                             end
                         end
                         Library:Notify({Title = "Autoload", Description = "Configuration loaded automatically.", Duration = 3})
@@ -312,45 +254,23 @@ function SaveManager:LoadAutoloadConfig()
     return false
 end
 
-function SaveManager:BuildConfigTab(tab, folderName)
-    self:SetFolder(folderName or self.Folder)
-    if not tab or not tab.CreatePage then
-        warn("SaveManager:BuildConfigTab expects a Tab object returned by Window:CreateTab(...)")
-        return
-    end
-    local Page = tab:CreatePage("Config")
-    local UISection = Page:CreateSection("UI Settings")
-    if self.Window then
-        UISection:Toggle({
-            Title = "Transparency",
-            Desc = "Overrides main window background for a sleek 0.2 transparency visual.",
-            Value = false,
-            Callback = function(state) self.Window:SetTransparency(state and 0.2 or 0) end
-        })
-    end
-    local SaveSection = Page:CreateSection("Save Manager")
-    SaveSection:AddConfigManager(self.Folder)
-    return Page, UISection, SaveSection
-end
-
+-- ============================================================
+--  CREATE WINDOW
+-- ============================================================
 function Library:CreateWindow(options)
-    local hubName = "MarvenRiz Ui Lib"
-    local subText = "Made By Zens"
-    local subColor = AccentColor
-    local sphTextToggle = false
-    local sphWords = "ZX"
-    local sphImage = nil
-    local topbarLogo = nil
-    local logoSize = 32
-    local sphIconSize = 26
-    local windowSize = UDim2.fromOffset(580, 460)
-    local sideBarWidth = 160
+    local hubName       = "MarvenRiz Ui Lib"
+    local subText       = "Made By Zens"
+    local subColor      = AccentColor
+    local topbarLogo    = nil
+    local logoSize      = 32
+    local windowSize    = UDim2.fromOffset(580, 460)
+    local sideBarWidth  = 160
 
-    -- ✅ SPHERE ICON (dùng chung cho Sphere + Loading)
-    local SPHERE_ICON = "rbxassetid://87526284179554"
-    local SPHERE_SIZE = 56
-    local MenuIconMode = "free"  -- ✅ "free" | "tool"
-    local CurrentTool = nil      -- ✅ Tool hiện tại trong Backpack
+    local SPHERE_ICON   = "rbxassetid://87526284179554"
+    local SPHERE_SIZE   = 56
+    local MenuIconMode  = "free"
+    local CurrentTool   = nil
+    local MenuToolRespawnConn = nil
 
     if type(options) == "table" then
         hubName = options.Title or hubName
@@ -362,18 +282,11 @@ function Library:CreateWindow(options)
                 if okHex then AccentColor = cHex end
             end
         end
-        subColor = options.SubtitleColor or AccentColor
-        if options.SphereText ~= nil then sphTextToggle = options.SphereText end
-        if options.SphereWords ~= nil then
-            local wordList = string.split(tostring(options.SphereWords), " ")
-            sphWords = #wordList > 2 and (wordList[1] .. " " .. wordList[2]) or tostring(options.SphereWords)
-        end
-        sphImage = options.SphereImage
-        topbarLogo = options.Logo
-        logoSize = options.LogoSize or 32
-        sphIconSize = options.SphereIconSize or 26
-        windowSize = options.Size or windowSize
-        sideBarWidth = options.SideBarWidth or sideBarWidth
+        subColor      = options.SubtitleColor or AccentColor
+        topbarLogo    = options.Logo
+        logoSize      = options.LogoSize or 32
+        windowSize    = options.Size or windowSize
+        sideBarWidth  = options.SideBarWidth or sideBarWidth
         if options.Map ~= nil or options.MapId ~= nil then
             Library.SaveManager:SetMap(options.Map or options.MapId, options.SaveFolder)
         end
@@ -397,33 +310,9 @@ function Library:CreateWindow(options)
     Create("UIListLayout", {Parent = NotifContainer, VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12)})
     GlobalNotifContainer = NotifContainer
 
-    local function SendPremiumNotification()
-        local Notif = Create("Frame", {Parent = NotifContainer, BackgroundColor3 = Color3.fromRGB(20, 20, 22), Size = UDim2.new(1, 0, 0, 65), BackgroundTransparency = 1, ZIndex = 201, ClipsDescendants = true})
-        Create("UICorner", {Parent = Notif, CornerRadius = UDim.new(0, 8)})
-        local Stroke = Create("UIStroke", {Parent = Notif, Thickness = 1.5, Transparency = 1})
-        Create("UIGradient", {Parent = Stroke, Color = ColorSequence.new(Color3.fromRGB(255, 215, 0), Color3.fromRGB(180, 130, 20)), Rotation = 45})
-        local LockIcon = Create("ImageLabel", {Parent = Notif, BackgroundTransparency = 1, Size = UDim2.new(0, 24, 0, 24), Position = UDim2.new(0, 15, 0.5, -12), Image = "rbxassetid://6031082533", ImageColor3 = Color3.fromRGB(255, 215, 0), ImageTransparency = 1, ZIndex = 202})
-        local TitleText = Create("TextLabel", {Parent = Notif, Text = "ACCESS DENIED", Font = Enum.Font.GothamBlack, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 50, 0, 15), Size = UDim2.new(1, -60, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
-        local DescText = Create("TextLabel", {Parent = Notif, Text = 'This Is For <font color="#FFD700"><b>Whitelisted Users</b></font>', RichText = true, Font = Enum.Font.Gotham, TextSize = 14, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 50, 0, 32), Size = UDim2.new(1, -60, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
-        local Shine = Create("Frame", {Parent = Notif, BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.8, BorderSizePixel = 0, Size = UDim2.new(0, 20, 2, 0), Position = UDim2.new(-0.2, 0, -0.5, 0), Rotation = 25, ZIndex = 203})
-        Tween(Notif, {BackgroundTransparency = 0}, 0.3)
-        Tween(Stroke, {Transparency = 0}, 0.3)
-        Tween(LockIcon, {ImageTransparency = 0}, 0.3)
-        Tween(TitleText, {TextTransparency = 0}, 0.3)
-        Tween(DescText, {TextTransparency = 0}, 0.3)
-        local shineTween = TweenService:Create(Shine, TweenInfo.new(0.75, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = UDim2.new(1.2, 0, -0.5, 0)})
-        task.delay(0.2, function() shineTween:Play() end)
-        task.delay(4, function()
-            Tween(Notif, {BackgroundTransparency = 1}, 0.4)
-            Tween(Stroke, {Transparency = 1}, 0.4)
-            Tween(LockIcon, {ImageTransparency = 1}, 0.4)
-            Tween(TitleText, {TextTransparency = 1}, 0.4)
-            Tween(DescText, {TextTransparency = 1}, 0.4)
-            task.wait(0.4)
-            Notif:Destroy()
-        end)
-    end
-
+    -- ============================================================
+    --  INFO OVERLAY
+    -- ============================================================
     local InfoOverlay = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(5, 5, 8), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 150, Visible = false, Active = true})
     local InfoCard = Create("Frame", {Parent = InfoOverlay, BackgroundColor3 = Color3.fromRGB(16, 16, 20), Size = UDim2.new(0, 360, 0, 280), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 151, BackgroundTransparency = 1, ClipsDescendants = true})
     Create("UICorner", {Parent = InfoCard, CornerRadius = UDim.new(0, 8)})
@@ -433,7 +322,7 @@ function Library:CreateWindow(options)
     local InfoTitle = Create("TextLabel", {Parent = InfoHeader, Text = "Feature Info", Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 0), Size = UDim2.new(1, -60, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 152})
     local InfoCloseBtn = Create("TextButton", {Parent = InfoHeader, Text = "X", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 40, 1, 0), Position = UDim2.new(1, -40, 0, 0), ZIndex = 152, TextTransparency = 1})
     AddBounce(InfoCloseBtn)
-    local InfoScroll = Create("ScrollingFrame", {Parent = InfoCard, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 1, -60), Position = UDim2.new(0, 20, 0, 50), CanvasSize = UDim2.new(0, 0, 0, 0), ScrollBarThickness = 2, ScrollBarImageColor3 = AccentColor, BorderSizePixel = 0, ZIndex = 152})
+    local InfoScroll = Create("ScrollingFrame", {Parent = InfoCard, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 1, -60), Position = UDim2.new(0, 20, 0, 50), CanvasSize = UDim2.new(0, 0, 0, 0), ScrollBarThickness = 2, ScrollBarImageColor3 = AccentColor, BorderSizePixel = 0, ZIndex = 152, AutomaticCanvasSize = Enum.AutomaticSize.Y})
     local InfoLayout = Create("UIListLayout", {Parent = InfoScroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10)})
     local InfoDesc = Create("TextLabel", {Parent = InfoScroll, Text = "", Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 152, TextTransparency = 1})
     local InfoExampleBox = Create("Frame", {Parent = InfoScroll, BackgroundColor3 = Color3.fromRGB(10, 10, 12), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Visible = false, ZIndex = 152})
@@ -441,11 +330,10 @@ function Library:CreateWindow(options)
     Create("UIStroke", {Parent = InfoExampleBox, Color = Color3.fromRGB(40, 40, 45), Thickness = 1})
     local InfoExampleText = Create("TextLabel", {Parent = InfoExampleBox, Text = "", Font = Enum.Font.Code, TextSize = 12, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 0), Position = UDim2.new(0, 10, 0, 10), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, ZIndex = 152, TextTransparency = 1})
     Create("UIPadding", {Parent = InfoExampleBox, PaddingBottom = UDim.new(0, 10)})
-    InfoLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() InfoScroll.CanvasSize = UDim2.new(0, 0, 0, InfoLayout.AbsoluteContentSize.Y + 10) end)
 
     local function OpenInfoWindow(data)
         InfoTitle.Text = data.Title or "Information"
-        InfoDesc.Text = data.Description or "No description provided."
+        InfoDesc.Text = data.Description or "No description."
         if data.Example then InfoExampleText.Text = data.Example InfoExampleBox.Visible = true
         else InfoExampleBox.Visible = false end
         InfoOverlay.Visible = true
@@ -482,51 +370,32 @@ function Library:CreateWindow(options)
         Btn.MouseButton1Click:Connect(function() OpenInfoWindow(data) end)
     end
 
+    -- ============================================================
+    --  MAIN FRAME
+    -- ============================================================
     local MainFrame = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, Size = windowSize, Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ClipsDescendants = true, BackgroundTransparency = 1, Active = true})
     local MainScale = Create("UIScale", {Parent = MainFrame, Scale = 0.8})
     Create("UICorner", {Parent = MainFrame, CornerRadius = UDim.new(0, 8)})
     Create("UIStroke", {Parent = MainFrame, Color = Color3.fromRGB(40, 40, 45), Thickness = 1})
 
     -- ============================================================
-    -- ✅ LOADING BAR — hiện khi mở menu lần đầu
+    --  LOADING BAR
     -- ============================================================
-    local LoadingOverlay = Create("Frame", {
-        Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(5, 5, 8),
-        BackgroundTransparency = 0, Size = UDim2.new(1, 0, 1, 0),
-        ZIndex = 300, Visible = true, Active = true,
-    })
-    local LoadingIcon = Create("ImageLabel", {
-        Parent = LoadingOverlay, BackgroundTransparency = 1,
-        Size = UDim2.new(0, 90, 0, 90), Position = UDim2.new(0.5, 0, 0.5, -70),
-        AnchorPoint = Vector2.new(0.5, 0.5), Image = SPHERE_ICON,
-        ImageTransparency = 1, ScaleType = Enum.ScaleType.Fit, ZIndex = 301,
-    })
-    local LoadingBarBg = Create("Frame", {
-        Parent = LoadingOverlay, BackgroundColor3 = Color3.fromRGB(35, 35, 40),
-        Size = UDim2.new(0, 260, 0, 6), Position = UDim2.new(0.5, 0, 0.5, 30),
-        AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 301,
-    })
+    local LoadingOverlay = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(5, 5, 8), BackgroundTransparency = 0, Size = UDim2.new(1, 0, 1, 0), ZIndex = 300, Visible = true, Active = true})
+    local LoadingIcon = Create("ImageLabel", {Parent = LoadingOverlay, BackgroundTransparency = 1, Size = UDim2.new(0, 90, 0, 90), Position = UDim2.new(0.5, 0, 0.5, -70), AnchorPoint = Vector2.new(0.5, 0.5), Image = SPHERE_ICON, ImageTransparency = 1, ScaleType = Enum.ScaleType.Fit, ZIndex = 301})
+    local LoadingBarBg = Create("Frame", {Parent = LoadingOverlay, BackgroundColor3 = Color3.fromRGB(35, 35, 40), Size = UDim2.new(0, 260, 0, 6), Position = UDim2.new(0.5, 0, 0.5, 30), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 301})
     Create("UICorner", {Parent = LoadingBarBg, CornerRadius = UDim.new(1, 0)})
-    local LoadingFill = Create("Frame", {
-        Parent = LoadingBarBg, BackgroundColor3 = AccentColor,
-        Size = UDim2.new(0, 0, 1, 0), ZIndex = 302,
-    })
+    local LoadingFill = Create("Frame", {Parent = LoadingBarBg, BackgroundColor3 = AccentColor, Size = UDim2.new(0, 0, 1, 0), ZIndex = 302})
     Create("UICorner", {Parent = LoadingFill, CornerRadius = UDim.new(1, 0)})
-    local LoadingText = Create("TextLabel", {
-        Parent = LoadingOverlay, Text = "Loading...",
-        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = TextColor,
-        BackgroundTransparency = 1, Size = UDim2.new(0, 260, 0, 20),
-        Position = UDim2.new(0.5, 0, 0.5, 50), AnchorPoint = Vector2.new(0.5, 0.5),
-        ZIndex = 301, TextTransparency = 1,
-    })
+    local LoadingText = Create("TextLabel", {Parent = LoadingOverlay, Text = "Loading...", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 260, 0, 20), Position = UDim2.new(0.5, 0, 0.5, 50), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 301, TextTransparency = 1})
 
     task.spawn(function()
         Tween(LoadingIcon, {ImageTransparency = 0}, 0.4)
         task.wait(0.3)
         Tween(LoadingText, {TextTransparency = 0}, 0.3)
-        local barTween = TweenService:Create(LoadingFill, TweenInfo.new(1.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0)})
-        barTween:Play()
-        barTween.Completed:Wait()
+        local bt = TweenService:Create(LoadingFill, TweenInfo.new(1.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0)})
+        bt:Play()
+        bt.Completed:Wait()
         LoadingText.Text = "Ready!"
         task.wait(0.25)
         Tween(LoadingFill, {Size = UDim2.new(0, 0, 1, 0)}, 0.5)
@@ -542,17 +411,11 @@ function Library:CreateWindow(options)
     Tween(MainScale, {Scale = 1}, 0.5)
     Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
 
-    local BottomDragHitbox = Create("Frame", {
-        Parent = ScreenGui, BackgroundTransparency = 1,
-        Size = UDim2.new(0, 350, 0, 30),
-        AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 145, Active = true
-    })
-
-    local FloatingBottomBar = Create("Frame", {
-        Parent = BottomDragHitbox, BackgroundColor3 = CardColor,
-        BackgroundTransparency = 0, Size = UDim2.new(1, 0, 0, 6),
-        Position = UDim2.new(0, 0, 0.5, -3), ZIndex = 146
-    })
+    -- ============================================================
+    --  BOTTOM DRAG
+    -- ============================================================
+    local BottomDragHitbox = Create("Frame", {Parent = ScreenGui, BackgroundTransparency = 1, Size = UDim2.new(0, 350, 0, 30), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 145, Active = true})
+    local FloatingBottomBar = Create("Frame", {Parent = BottomDragHitbox, BackgroundColor3 = CardColor, BackgroundTransparency = 0, Size = UDim2.new(1, 0, 0, 6), Position = UDim2.new(0, 0, 0.5, -3), ZIndex = 146})
     Create("UICorner", {Parent = FloatingBottomBar, CornerRadius = UDim.new(1, 0)})
     local BottomBarStroke = Create("UIStroke", {Parent = FloatingBottomBar, Color = Color3.fromRGB(50, 50, 55), Thickness = 1.2, Transparency = 0})
     MakeDraggable(BottomDragHitbox, MainFrame)
@@ -560,18 +423,20 @@ function Library:CreateWindow(options)
     RunService.RenderStepped:Connect(function()
         if MainFrame and MainFrame.Visible then
             BottomDragHitbox.Visible = true
-            local currentScale = MainScale.Scale
-            local frameHeight = 420 * currentScale
-            local frameWidth = 650 * currentScale
-            BottomDragHitbox.Position = UDim2.new(MainFrame.Position.X.Scale, MainFrame.Position.X.Offset, MainFrame.Position.Y.Scale, MainFrame.Position.Y.Offset + (frameHeight / 2) + 20)
-            BottomDragHitbox.Size = UDim2.new(0, frameWidth * 0.6, 0, 30 * currentScale)
-            FloatingBottomBar.Size = UDim2.new(1, 0, 0, 6 * currentScale)
-            FloatingBottomBar.Position = UDim2.new(0, 0, 0.5, -(3 * currentScale))
+            local cs = MainScale.Scale
+            local fh, fw = 420 * cs, 650 * cs
+            BottomDragHitbox.Position = UDim2.new(MainFrame.Position.X.Scale, MainFrame.Position.X.Offset, MainFrame.Position.Y.Scale, MainFrame.Position.Y.Offset + (fh / 2) + 20)
+            BottomDragHitbox.Size = UDim2.new(0, fw * 0.6, 0, 30 * cs)
+            FloatingBottomBar.Size = UDim2.new(1, 0, 0, 6 * cs)
+            FloatingBottomBar.Position = UDim2.new(0, 0, 0.5, -(3 * cs))
         else
             BottomDragHitbox.Visible = false
         end
     end)
 
+    -- ============================================================
+    --  TOP BAR
+    -- ============================================================
     local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true})
     MakeDraggable(TopBar, MainFrame)
 
@@ -583,7 +448,7 @@ function Library:CreateWindow(options)
 
     local TitleContainer = Create("Frame", {Parent = TopBar, BackgroundTransparency = 1, Size = UDim2.new(0, 160, 1, 0), Position = UDim2.new(0, titleOffsetX, 0, 0)})
     local Title = Create("TextLabel", {Parent = TitleContainer, Text = hubName, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 5), Size = UDim2.new(1, 0, 0, 16), TextXAlignment = Enum.TextXAlignment.Left})
-    local Subtitle = Create("TextLabel", {Parent = TitleContainer, Text = subText, Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = subColor, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 0, 12), TextXAlignment = Enum.TextXAlignment.Left})
+    Create("TextLabel", {Parent = TitleContainer, Text = subText, Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = subColor, BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 0, 12), TextXAlignment = Enum.TextXAlignment.Left})
 
     local SearchBar = Create("Frame", {Parent = TopBar, BackgroundColor3 = CardColor, Size = UDim2.new(0, 250, 0, 26), Position = UDim2.new(0, 180, 0.5, -13)})
     Create("UICorner", {Parent = SearchBar, CornerRadius = UDim.new(0, 6)})
@@ -591,7 +456,7 @@ function Library:CreateWindow(options)
     local SearchInput = Create("TextBox", {Parent = SearchBar, BackgroundTransparency = 1, Size = UDim2.new(1, -30, 1, 0), Position = UDim2.new(0, 30, 0, 0), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, PlaceholderText = "Search..", TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
 
     local CloseBtn = Create("TextButton", {Parent = TopBar, Text = "X", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -35, 0, 0)})
-    local MinBtn = Create("TextButton", {Parent = TopBar, Text = "—", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -65, 0, 0)})
+    local MinBtn   = Create("TextButton", {Parent = TopBar, Text = "—", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -65, 0, 0)})
 
     local Sidebar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(0, sideBarWidth, 1, -40), Position = UDim2.new(0, 0, 0, 40), Active = true})
     local TabSearchBox = Create("TextBox", {Parent = Sidebar, BackgroundColor3 = CardColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 5), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, PlaceholderText = "Search tabs...", TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
@@ -599,14 +464,14 @@ function Library:CreateWindow(options)
     Create("UICorner", {Parent = TabSearchBox, CornerRadius = UDim.new(0, 4)})
     Create("UIStroke", {Parent = TabSearchBox, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
 
-    local TabContainer = Create("ScrollingFrame", {Parent = Sidebar, BackgroundTransparency = 1, Size = UDim2.new(1, -15, 1, -40), Position = UDim2.new(0, 10, 0, 40), ScrollBarThickness = 0})
+    local TabContainer = Create("ScrollingFrame", {Parent = Sidebar, BackgroundTransparency = 1, Size = UDim2.new(1, -15, 1, -40), Position = UDim2.new(0, 10, 0, 40), ScrollBarThickness = 0, AutomaticCanvasSize = Enum.AutomaticSize.Y})
     Create("UIListLayout", {Parent = TabContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5)})
     Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(40, 40, 45), BorderSizePixel = 0, Size = UDim2.new(0, 1, 1, -40), Position = UDim2.new(0, sideBarWidth, 0, 40)})
 
     local ContentArea = Create("Frame", {Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -(sideBarWidth + 5), 1, -40), Position = UDim2.new(0, sideBarWidth + 5, 0, 40), Active = true})
 
     -- ============================================================
-    -- ✅ SPHERE (Menu con khi đóng) — icon không nền
+    --  SPHERE (Menu con — mode free)
     -- ============================================================
     local Sphere = Create("ImageButton", {
         Parent = ScreenGui, BackgroundTransparency = 1,
@@ -618,7 +483,14 @@ function Library:CreateWindow(options)
     })
     MakeDraggable(Sphere, Sphere)
 
-    local Window = {CurrentTab = nil, Tabs = {}, Title = Title, AllCards = {}, MainFrame = MainFrame, CurrentTransparency = 0, ConfigElements = {}, MapId = options and (type(options) == "table") and (options.Map or options.MapId) or nil}
+    -- ============================================================
+    --  WINDOW API
+    -- ============================================================
+    local Window = {
+        CurrentTab = nil, Tabs = {}, Title = Title, AllCards = {}, MainFrame = MainFrame,
+        CurrentTransparency = 0, ConfigElements = {},
+        MapId = options and (type(options) == "table") and (options.Map or options.MapId) or nil
+    }
 
     function Window:SetTransparency(val)
         Window.CurrentTransparency = val
@@ -633,7 +505,93 @@ function Library:CreateWindow(options)
         SaveManager:SetMap(mapOption)
     end
 
-    -- ✅ MinBtn: hiện Sphere icon
+    -- ============================================================
+    --  TOOL MODE
+    -- ============================================================
+    local function CreateMenuTool()
+        if CurrentTool and CurrentTool.Parent then return end
+        if MainFrame.Visible then return end
+        if MenuIconMode ~= "tool" then return end
+        local player = Players.LocalPlayer
+        if not player then return end
+        local backpack = player:FindFirstChildOfClass("Backpack")
+        if not backpack then
+            task.spawn(function()
+                local bp = player:WaitForChild("Backpack", 5)
+                if bp and MenuIconMode == "tool" and not MainFrame.Visible then
+                    CurrentTool = nil
+                    CreateMenuTool()
+                end
+            end)
+            return
+        end
+        local ok, menuTool = pcall(function()
+            local t = Instance.new("Tool")
+            t.Name = "MarvenRiz Menu"
+            t.ToolTip = "Bấm để mở menu MarvenRiz"
+            t.RequiresHandle = false
+            t.CanBeDropped = false
+            t.TextureId = SPHERE_ICON
+            return t
+        end)
+        if not ok or not menuTool then
+            warn("[MarvenRiz] Cannot create tool: " .. tostring(menuTool))
+            return
+        end
+        menuTool.Activated:Connect(function()
+            MainFrame.Visible = true
+            BottomDragHitbox.Visible = true
+            Tween(MainScale, {Scale = 1}, 0.4)
+            Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
+            Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
+            Tween(BottomBarStroke, {Transparency = 0}, 0.4)
+            if CurrentTool then pcall(function() CurrentTool:Destroy() end) CurrentTool = nil end
+        end)
+        menuTool.Parent = backpack
+        CurrentTool = menuTool
+        menuTool.AncestryChanged:Connect(function(_, parent)
+            if parent == nil then
+                CurrentTool = nil
+                if not MainFrame.Visible and MenuIconMode == "tool" then
+                    task.delay(0.15, function()
+                        if not MainFrame.Visible and MenuIconMode == "tool" and (not CurrentTool or not CurrentTool.Parent) then
+                            CreateMenuTool()
+                        end
+                    end)
+                end
+            end
+        end)
+    end
+
+    local playerRef = Players.LocalPlayer
+    if playerRef and not MenuToolRespawnConn then
+        MenuToolRespawnConn = playerRef.CharacterAdded:Connect(function()
+            task.wait(1)
+            CurrentTool = nil
+            if not MainFrame.Visible and MenuIconMode == "tool" then CreateMenuTool() end
+        end)
+    end
+
+    function Library:SetMenuIconMode(mode)
+        MenuIconMode = (mode == "tool") and "tool" or "free"
+        if MenuIconMode == "free" and CurrentTool then
+            pcall(function() CurrentTool:Destroy() end)
+            CurrentTool = nil
+        end
+        if not MainFrame.Visible then
+            if MenuIconMode == "free" then
+                Sphere.Visible = true
+                Sphere.ImageTransparency = 0
+            else
+                Sphere.Visible = false
+                CreateMenuTool()
+            end
+        end
+    end
+
+    -- ============================================================
+    --  MIN BUTTON — đóng menu
+    -- ============================================================
     MinBtn.MouseButton1Click:Connect(function()
         Tween(MainScale, {Scale = 0}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
@@ -642,13 +600,10 @@ function Library:CreateWindow(options)
         task.wait(0.3)
         MainFrame.Visible = false
         BottomDragHitbox.Visible = false
-
         if MenuIconMode == "tool" then
-            -- ✅ Mode Tool: tạo Tool trong Backpack
             Sphere.Visible = false
             CreateMenuTool()
         else
-            -- ✅ Mode Free: hiện Sphere như cũ
             Sphere.Visible = true
             Sphere.Size = UDim2.new(0, 0, 0, 0)
             Sphere.ImageTransparency = 1
@@ -657,7 +612,9 @@ function Library:CreateWindow(options)
         end
     end)
 
-    -- ✅ Sphere click: mở lại menu
+    -- ============================================================
+    --  SPHERE CLICK — mở menu
+    -- ============================================================
     Sphere.MouseButton1Click:Connect(function()
         Tween(Sphere, {Size = UDim2.new(0, 0, 0, 0)}, 0.3)
         Tween(Sphere, {ImageTransparency = 1}, 0.3)
@@ -671,13 +628,16 @@ function Library:CreateWindow(options)
         Tween(BottomBarStroke, {Transparency = 0}, 0.4)
     end)
 
+    -- ============================================================
+    --  CLOSE POPUP
+    -- ============================================================
     local Popup = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 100, Visible = false, Active = true})
-    local PopupCard = Create("Frame", {Parent = Popup, BackgroundColor3 = Color3.fromRGB(20, 20, 24), Size = UDim2.new(0, 320, 0, 160), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 101, BackgroundTransparency = 1, ClipsDescendants = false})
+    local PopupCard = Create("Frame", {Parent = Popup, BackgroundColor3 = Color3.fromRGB(20, 20, 24), Size = UDim2.new(0, 320, 0, 160), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 101, BackgroundTransparency = 1})
     Create("UICorner", {Parent = PopupCard, CornerRadius = UDim.new(0, 12)})
     local PopupScale = Create("UIScale", {Parent = PopupCard, Scale = 0.8})
     local PopupStroke = Create("UIStroke", {Parent = PopupCard, Color = Color3.fromRGB(50, 50, 55), Thickness = 1, Transparency = 1})
     local PopupTitle = Create("TextLabel", {Parent = PopupCard, Text = "Exit Application", Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 0, 25), ZIndex = 102, TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Center})
-    local PopupText = Create("TextLabel", {Parent = PopupCard, Text = "Are you sure you want to close MarvenRiz Hub? Unsaved configurations might be lost.", Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 55), ZIndex = 102, TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true})
+    local PopupText = Create("TextLabel", {Parent = PopupCard, Text = "Close MarvenRiz Hub?", Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 55), ZIndex = 102, TextTransparency = 1, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true})
     local YesBtn = Create("TextButton", {Parent = PopupCard, Text = "Confirm", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = AccentColor, Size = UDim2.new(0, 125, 0, 36), Position = UDim2.new(0.5, 10, 0, 105), ZIndex = 102, BackgroundTransparency = 1, TextTransparency = 1, AutoButtonColor = false})
     Create("UICorner", {Parent = YesBtn, CornerRadius = UDim.new(0, 6)})
     AddBounce(YesBtn)
@@ -710,10 +670,16 @@ function Library:CreateWindow(options)
         Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.3)
         Tween(BottomBarStroke, {Transparency = 1}, 0.3)
         for _, desc in ipairs(MainFrame:GetDescendants()) do
-            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then Tween(desc, {TextTransparency = 1}, 0.3) if desc.BackgroundTransparency < 1 then Tween(desc, {BackgroundTransparency = 1}, 0.3) end
-            elseif desc:IsA("ImageLabel") or desc:IsA("ImageButton") then Tween(desc, {ImageTransparency = 1}, 0.3)
-            elseif desc:IsA("Frame") or desc:IsA("ScrollingFrame") then if desc.BackgroundTransparency < 1 then Tween(desc, {BackgroundTransparency = 1}, 0.3) end
-            elseif desc:IsA("UIStroke") then Tween(desc, {Transparency = 1}, 0.3) end
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                Tween(desc, {TextTransparency = 1}, 0.3)
+                if desc.BackgroundTransparency < 1 then Tween(desc, {BackgroundTransparency = 1}, 0.3) end
+            elseif desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
+                Tween(desc, {ImageTransparency = 1}, 0.3)
+            elseif desc:IsA("Frame") or desc:IsA("ScrollingFrame") then
+                if desc.BackgroundTransparency < 1 then Tween(desc, {BackgroundTransparency = 1}, 0.3) end
+            elseif desc:IsA("UIStroke") then
+                Tween(desc, {Transparency = 1}, 0.3)
+            end
         end
         task.wait(0.35)
         ScreenGui:Destroy()
@@ -732,6 +698,9 @@ function Library:CreateWindow(options)
         Popup.Visible = false
     end)
 
+    -- ============================================================
+    --  SEARCH FILTERS
+    -- ============================================================
     TabSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         local query = TabSearchBox.Text:lower()
         for _, tabInfo in ipairs(Window.Tabs) do
@@ -768,9 +737,12 @@ function Library:CreateWindow(options)
         end
     end)
 
+    -- ============================================================
+    --  CREATE TAB
+    -- ============================================================
     function Window:CreateTab(tabName, isDefault, isLocked)
         local isWhitelisted = false
-        local player = game:GetService("Players").LocalPlayer
+        local player = Players.LocalPlayer
         if player then
             for _, allowedUser in ipairs(Library.WhitelistedUsers) do
                 if player.Name == allowedUser or player.DisplayName == allowedUser then isWhitelisted = true break end
@@ -796,7 +768,10 @@ function Library:CreateWindow(options)
         table.insert(Window.Tabs, TabConfig)
 
         TabBtn.MouseButton1Click:Connect(function()
-            if isLocked and not isWhitelisted then SendPremiumNotification() return end
+            if isLocked and not isWhitelisted then
+                Library:Notify({Title = "Access Denied", Description = "This tab is for whitelisted users only.", Duration = 3})
+                return
+            end
             if Window.CurrentTab == TabConfig then return end
             if Window.CurrentTab then
                 Tween(Window.CurrentTab.Button, {BackgroundTransparency = 1}, 0.2)
@@ -837,7 +812,6 @@ function Library:CreateWindow(options)
                 Size = UDim2.new(1, -10, 1, -10), Position = UDim2.new(0, 5, 0, 5),
                 ScrollBarThickness = 2, ScrollBarImageColor3 = Color3.fromRGB(60, 60, 65),
                 Visible = false, BorderSizePixel = 0,
-                -- ✅ FIX: tự động co giãn canvas + cho phép scroll
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
                 CanvasSize = UDim2.new(0, 0, 0, 0),
                 ScrollingEnabled = true,
@@ -852,14 +826,13 @@ function Library:CreateWindow(options)
             local L_Layout = Create("UIListLayout", {Parent = LeftColumn, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10)})
             local R_Layout = Create("UIListLayout", {Parent = RightColumn, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10)})
 
-            -- ✅ FIX: force update CanvasSize + fallback nếu AutomaticCanvasSize không hoạt động
             local function UpdateCanvas()
                 local maxH = math.max(L_Layout.AbsoluteContentSize.Y, R_Layout.AbsoluteContentSize.Y)
                 PageScroll.CanvasSize = UDim2.new(0, 0, 0, maxH + 20)
             end
             L_Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
             R_Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
-            task.defer(UpdateCanvas)  -- set lần đầu
+            task.defer(UpdateCanvas)
 
             local PageObj = {Scroll = PageScroll, Btn = PageBtn, Highlight = PageHighlight, Left = true, LeftCol = LeftColumn, RightCol = RightColumn}
             table.insert(TabConfig.Pages, PageObj)
@@ -892,10 +865,12 @@ function Library:CreateWindow(options)
                 if side == "Left" or side == "left" then targetColumn = LeftColumn
                 elseif side == "Right" or side == "right" then targetColumn = RightColumn
                 else targetColumn = PageObj.Left and LeftColumn or RightColumn PageObj.Left = not PageObj.Left end
+
                 local SectionContainer = Create("Frame", {Parent = targetColumn, BackgroundColor3 = CardColor, Size = UDim2.new(1, 0, 0, 30), AutomaticSize = Enum.AutomaticSize.Y, ClipsDescendants = true})
                 Create("UICorner", {Parent = SectionContainer, CornerRadius = UDim.new(0, 6)})
                 table.insert(Window.AllCards, {Card = SectionContainer, OrigParent = targetColumn, Tab = TabConfig, Page = PageObj, SearchIndex = nil})
                 Create("TextLabel", {Parent = SectionContainer, Text = sectionName, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 30), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+
                 local ItemContainer = Create("Frame", {Parent = SectionContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 30), AutomaticSize = Enum.AutomaticSize.Y})
                 Create("UIPadding", {Parent = ItemContainer, PaddingBottom = UDim.new(0, 10), PaddingTop = UDim.new(0, 5)})
                 Create("UIListLayout", {Parent = ItemContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8)})
@@ -912,11 +887,11 @@ function Library:CreateWindow(options)
                     Btn.MouseLeave:Connect(function() Tween(Btn, {BackgroundColor3 = BackgroundColor}, 0.2) end)
                     Btn.MouseButton1Click:Connect(function()
                         SafeCopyToClipboard(copyText)
-                        local oldText = Btn.Text
-                        Btn.Text = "Copied to Clipboard!"
+                        local old = Btn.Text
+                        Btn.Text = "Copied!"
                         Tween(Btn, {TextColor3 = AccentColor, BackgroundColor3 = HoverColor}, 0.2)
                         task.wait(1.5)
-                        if Btn.Parent then Btn.Text = oldText Tween(Btn, {TextColor3 = TextColor, BackgroundColor3 = BackgroundColor}, 0.2) end
+                        if Btn.Parent then Btn.Text = old Tween(Btn, {TextColor3 = TextColor, BackgroundColor3 = BackgroundColor}, 0.2) end
                     end)
                     AddInfoIcon(BtnFrame, UDim2.new(1, -40, 0.5, -8), infoData)
                 end
@@ -941,12 +916,12 @@ function Library:CreateWindow(options)
                     Create("UIStroke", {Parent = ParaFrame, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
                     Create("UIPadding", {Parent = ParaFrame, PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 32), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10)})
                     local TitleLbl = Create("TextLabel", {Parent = ParaFrame, Text = title or "", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, hasTitle and 16 or 0), Position = UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, Visible = hasTitle, ClipsDescendants = true})
-                    local ContentLbl = Create("TextLabel", {Parent = ParaFrame, Text = content or "", Font = Enum.Font.Gotham, TextSize = 8.5, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), Position = hasTitle and UDim2.new(0, 0, 0, 22) or UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, LineHeight = 1.15})
+                    local ContentLbl = Create("TextLabel", {Parent = ParaFrame, Text = content or "", Font = Enum.Font.Gotham, TextSize = 10, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), Position = hasTitle and UDim2.new(0, 0, 0, 22) or UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, AutomaticSize = Enum.AutomaticSize.Y, LineHeight = 1.15})
                     AddInfoIcon(ParaFrame, UDim2.new(1, -24, 0, 8), infoData)
-                    local ParaHandle = {}
-                    ParaHandle.SetTitle = function(_s, t) if t == nil and _s ~= nil and type(_s) ~= "table" then t = _s end local show = t ~= nil and t ~= "" TitleLbl.Text = t or "" TitleLbl.Visible = show Tween(TitleLbl, {Size = UDim2.new(1, 0, 0, show and 16 or 0)}, 0.2) Tween(ContentLbl, {Position = show and UDim2.new(0, 0, 0, 22) or UDim2.new(0, 0, 0, 0)}, 0.2) end
-                    ParaHandle.SetContent = function(_s, c) if c == nil and _s ~= nil and type(_s) ~= "table" then c = _s end ContentLbl.Text = c or "" end
-                    return ParaHandle
+                    local H = {}
+                    H.SetTitle = function(_s, t) if t == nil and _s ~= nil and type(_s) ~= "table" then t = _s end local show = t ~= nil and t ~= "" TitleLbl.Text = t or "" TitleLbl.Visible = show Tween(TitleLbl, {Size = UDim2.new(1, 0, 0, show and 16 or 0)}, 0.2) Tween(ContentLbl, {Position = show and UDim2.new(0, 0, 0, 22) or UDim2.new(0, 0, 0, 0)}, 0.2) end
+                    H.SetContent = function(_s, c) if c == nil and _s ~= nil and type(_s) ~= "table" then c = _s end ContentLbl.Text = c or "" end
+                    return H
                 end
 
                 function Elements:AddToggle(name, default, callback, infoData)
@@ -974,7 +949,7 @@ function Library:CreateWindow(options)
                     local val = default or min
                     local SliFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 45)})
                     Create("TextLabel", {Parent = SliFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 15), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
-                    local ValTxt = Create("TextLabel", {Parent = SliFrame, Text = tostring(val), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 0, 15), Position = UDim2.new(1, -40, 0, 0), TextXAlignment = Enum.TextXAlignment.Right})
+                    local ValTxt = Create("TextLabel", {Parent = SliFrame, Text = tostring(val), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 40, 0, 15), Position = UDim2.new(1, -50, 0, 0), TextXAlignment = Enum.TextXAlignment.Right})
                     local TrackBase = Create("Frame", {Parent = SliFrame, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 6), Position = UDim2.new(0, 10, 0, 25)})
                     Create("UICorner", {Parent = TrackBase, CornerRadius = UDim.new(1, 0)})
                     Create("UIStroke", {Parent = TrackBase, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
@@ -996,7 +971,7 @@ function Library:CreateWindow(options)
                     Knob.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end end)
                     UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
                     UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then Update(input) end end)
-                    AddInfoIcon(SliFrame, UDim2.new(1, -65, 0, 0), infoData)
+                    AddInfoIcon(SliFrame, UDim2.new(1, -70, 0, 0), infoData)
                     if callback then callback(val) end
                     Window.ConfigElements[name] = {Set = internalSet, Get = function() return val end}
                 end
@@ -1070,27 +1045,10 @@ function Library:CreateWindow(options)
                         listHeight = math.max(maxVisible, 1) * 25
                         ListFrame.CanvasSize = UDim2.new(0, 0, 0, DList.AbsoluteContentSize.Y)
                         if dropped then
-                            local dynamicHeight = math.min(DList.AbsoluteContentSize.Y, listHeight)
-                            local newOpenHeight = 50 + 32 + dynamicHeight
-                            ListFrame.Size = UDim2.new(1, -20, 0, dynamicHeight)
-                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, newOpenHeight)}, 0.1)
+                            local dh = math.min(DList.AbsoluteContentSize.Y, listHeight)
+                            ListFrame.Size = UDim2.new(1, -20, 0, dh)
+                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, 50 + 32 + dh)}, 0.1)
                         end
-                    end
-                    local function RefreshOptions(newOptions, preserveSelection)
-                        newOptions = newOptions or options
-                        preserveSelection = (preserveSelection == nil) and true or preserveSelection
-                        if isMulti then
-                            if preserveSelection and type(selected) == "table" then
-                                local kept = {}
-                                for _, v in ipairs(selected) do if table.find(newOptions, v) then table.insert(kept, v) end end
-                                selected = kept
-                            else selected = {} end
-                        else
-                            if not (preserveSelection and table.find(newOptions, selected)) then selected = newOptions[1] end
-                        end
-                        RenderOptions(newOptions)
-                        UpdateText()
-                        if callback then callback(selected) end
                     end
                     RenderOptions(options)
                     UpdateText()
@@ -1103,10 +1061,9 @@ function Library:CreateWindow(options)
                     DList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                         ListFrame.CanvasSize = UDim2.new(0, 0, 0, DList.AbsoluteContentSize.Y)
                         if dropped then
-                            local dynamicHeight = math.min(DList.AbsoluteContentSize.Y, listHeight)
-                            local newOpenHeight = 50 + 32 + dynamicHeight
-                            ListFrame.Size = UDim2.new(1, -20, 0, dynamicHeight)
-                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, newOpenHeight)}, 0.1)
+                            local dh = math.min(DList.AbsoluteContentSize.Y, listHeight)
+                            ListFrame.Size = UDim2.new(1, -20, 0, dh)
+                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, 50 + 32 + dh)}, 0.1)
                         end
                     end)
                     MainBtn.MouseButton1Click:Connect(function()
@@ -1115,10 +1072,9 @@ function Library:CreateWindow(options)
                             SearchBox.Visible = true
                             SearchBox.Text = ""
                             Tween(Arrow, {Rotation = 180}, 0.3)
-                            local dynamicHeight = math.min(DList.AbsoluteContentSize.Y, listHeight)
-                            local newOpenHeight = 50 + 32 + dynamicHeight
-                            ListFrame.Size = UDim2.new(1, -20, 0, dynamicHeight)
-                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, newOpenHeight)}, 0.3)
+                            local dh = math.min(DList.AbsoluteContentSize.Y, listHeight)
+                            ListFrame.Size = UDim2.new(1, -20, 0, dh)
+                            Tween(DropFrame, {Size = UDim2.new(1, 0, 0, 50 + 32 + dh)}, 0.3)
                         else
                             SearchBox.Visible = false
                             Tween(Arrow, {Rotation = 0}, 0.3)
@@ -1128,13 +1084,13 @@ function Library:CreateWindow(options)
                     AddInfoIcon(DropFrame, UDim2.new(1, -25, 0, 0), infoData)
                     if callback then callback(selected) end
                     Window.ConfigElements[name] = {Set = internalSet, Get = function() return selected end}
-                    local DropdownHandle = {}
-                    DropdownHandle.Refresh = function(_s, newOptions, preserveSelection) RefreshOptions(newOptions, preserveSelection) end
-                    DropdownHandle.RefreshOptions = DropdownHandle.Refresh
-                    DropdownHandle.SetOptions = DropdownHandle.Refresh
-                    DropdownHandle.Set = internalSet
-                    DropdownHandle.Get = function() return selected end
-                    return DropdownHandle
+                    local H = {}
+                    H.Refresh = function(_s, o, p) if o then RenderOptions(o) if callback then callback(selected) end end end
+                    H.RefreshOptions = H.Refresh
+                    H.SetOptions = H.Refresh
+                    H.Set = internalSet
+                    H.Get = function() return selected end
+                    return H
                 end
 
                 function Elements:AddTextbox(name, placeholder, default, callback, infoData)
@@ -1148,7 +1104,7 @@ function Library:CreateWindow(options)
                         Input.Text = tostring(v)
                         if callback then callback(v) end
                     end
-                    Input.FocusLost:Connect(function(enterPressed) internalSet(Input.Text) end)
+                    Input.FocusLost:Connect(function() internalSet(Input.Text) end)
                     AddInfoIcon(TxtFrame, UDim2.new(1, -25, 0, 0), infoData)
                     if callback then callback(Input.Text) end
                     Window.ConfigElements[name] = {Set = internalSet, Get = function() return Input.Text end}
@@ -1213,28 +1169,20 @@ function Library:CreateWindow(options)
                         if callback then callback(color) end
                     end
                     local draggingSV, draggingHue = false, false
-                    SVMap.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingSV = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end)
-                    HueSlider.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingHue = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end)
-                    -- ✅ FIX: luôn trả ScrollingEnabled về true + debounce
                     local function EndDrag()
                         draggingSV = false
                         draggingHue = false
                         if PageObj and PageObj.Scroll then
                             task.defer(function()
-                                if PageObj.Scroll and PageObj.Scroll.Parent then
-                                    PageObj.Scroll.ScrollingEnabled = true
-                                end
+                                if PageObj.Scroll and PageObj.Scroll.Parent then PageObj.Scroll.ScrollingEnabled = true end
                             end)
                         end
                     end
-                    UserInputService.InputEnded:Connect(function(input)
-                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                            EndDrag()
-                        end
-                    end)
-                    -- Fallback: nếu InputEnded bị miss (mobile), clear mỗi frame
+                    SVMap.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingSV = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end)
+                    HueSlider.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingHue = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end)
+                    UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then EndDrag() end end)
                     RunService.Heartbeat:Connect(function()
-                        if (draggingSV or draggingHue) then
+                        if draggingSV or draggingHue then
                             local pressed = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
                                 or UserInputService:IsMouseButtonPressed(Enum.UserInputType.Touch)
                             if not pressed then EndDrag() end
@@ -1263,7 +1211,7 @@ function Library:CreateWindow(options)
                 end
 
                 -- ============================================================
-                -- ✅ CONFIG MANAGER (đã fix Star + Auto Load)
+                --  CONFIG MANAGER (Star = Auto Load toggle)
                 -- ============================================================
                 function Elements:AddConfigManager(folderName)
                     folderName = folderName or Library.SaveManager.Folder or "MarvenRizSave"
@@ -1283,20 +1231,17 @@ function Library:CreateWindow(options)
                         if okEncode then _writefile(folderName .. "/autoload.json", encoded) end
                     end
 
-                    local ManagerFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 280)})
-                    local ManagerSearch = Create("TextBox", {Parent = ManagerFrame, PlaceholderText = "Search Saves Loader...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
+                    local ManagerFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 250)})
+                    local ManagerSearch = Create("TextBox", {Parent = ManagerFrame, PlaceholderText = "Search Saves...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
                     Create("UIPadding", {Parent = ManagerSearch, PaddingLeft = UDim.new(0, 8)})
                     Create("UICorner", {Parent = ManagerSearch, CornerRadius = UDim.new(0, 4)})
                     Create("UIStroke", {Parent = ManagerSearch, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
 
-                    local Monitor = Create("ScrollingFrame", {Parent = ManagerFrame, BackgroundColor3 = Color3.fromRGB(15, 15, 18), Size = UDim2.new(1, -20, 0, 110), Position = UDim2.new(0, 10, 0, 35), ScrollBarThickness = 2, BorderSizePixel = 0, CanvasSize = UDim2.new(0, 0, 0, 0)})
+                    local Monitor = Create("ScrollingFrame", {Parent = ManagerFrame, BackgroundColor3 = Color3.fromRGB(15, 15, 18), Size = UDim2.new(1, -20, 0, 110), Position = UDim2.new(0, 10, 0, 35), ScrollBarThickness = 2, BorderSizePixel = 0, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y})
                     Create("UICorner", {Parent = Monitor, CornerRadius = UDim.new(0, 4)})
                     Create("UIStroke", {Parent = Monitor, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
                     local MonitorLayout = Create("UIListLayout", {Parent = Monitor, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5)})
                     Create("UIPadding", {Parent = Monitor, PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
-                    MonitorLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                        Monitor.CanvasSize = UDim2.new(0, 0, 0, MonitorLayout.AbsoluteContentSize.Y + 10)
-                    end)
 
                     local deleteMode = false
                     local editMode = false
@@ -1324,16 +1269,11 @@ function Library:CreateWindow(options)
                     Create("UICorner", {Parent = CancelActionBtn, CornerRadius = UDim.new(0, 4)})
                     AddBounce(CancelActionBtn)
 
-                    AddInfoIcon(ManagerFrame, UDim2.new(1, -20, 0, -22), {
-                        Title = "Saves Loader Config Protocol",
-                        Description = "1. Create Save: nhập tên + Create Save.\n2. Chọn ☆ để đánh dấu file Auto Load (phải bật Auto Load trước).\n3. Delete Mode: bật → click file (đỏ) → Delete Selected → Yes.\n4. Edit: click Edit → đổi tên → Save Edit.\n5. Cancel để thoát chế độ."
-                    })
-
                     local InternalConfirmPopup = Create("Frame", {Parent = ManagerFrame, BackgroundColor3 = Color3.fromRGB(20, 20, 24), Size = UDim2.new(1, -20, 1, -20), Position = UDim2.new(0, 10, 0, 10), ZIndex = 60, BackgroundTransparency = 1, Visible = false})
                     Create("UICorner", {Parent = InternalConfirmPopup, CornerRadius = UDim.new(0, 8)})
                     Create("UIStroke", {Parent = InternalConfirmPopup, Color = Color3.fromRGB(180, 50, 50), Thickness = 1, Transparency = 1})
                     local P_Title = Create("TextLabel", {Parent = InternalConfirmPopup, Text = "Confirm Deletion?", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Color3.fromRGB(255, 60, 60), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 0, 40), TextTransparency = 1, ZIndex = 61})
-                    local P_Desc = Create("TextLabel", {Parent = InternalConfirmPopup, Text = "You are about to delete these specific saves loaders permanently.", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 70), TextWrapped = true, TextTransparency = 1, ZIndex = 61})
+                    local P_Desc = Create("TextLabel", {Parent = InternalConfirmPopup, Text = "Delete selected saves permanently?", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 70), TextWrapped = true, TextTransparency = 1, ZIndex = 61})
                     local P_Yes = Create("TextButton", {Parent = InternalConfirmPopup, Text = "Yes", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = Color3.fromRGB(180, 50, 50), Size = UDim2.new(0.5, -30, 0, 30), Position = UDim2.new(0, 20, 0, 130), AutoButtonColor = false, BackgroundTransparency = 1, TextTransparency = 1, ZIndex = 61})
                     Create("UICorner", {Parent = P_Yes, CornerRadius = UDim.new(0, 4)})
                     AddBounce(P_Yes)
@@ -1368,7 +1308,6 @@ function Library:CreateWindow(options)
 
                     local RefreshMonitor
 
-                    -- ✅ FIX: StarBtn yêu cầu Auto Load bật trước + verify file
                     local function BuildRow(filepath)
                         local displayFName = DisplayNameFromPath(filepath) or "Unnamed"
                         local currentAutoload = ReadAutoloadData().Path
@@ -1401,46 +1340,27 @@ function Library:CreateWindow(options)
                                 Tween(Row, {BackgroundColor3 = Color3.fromRGB(180, 50, 50)}, 0.2)
                             end
                         end)
-                        -- Bấm ☆ lần 2 → tắt Auto Load (Enabled=false, Path=nil)
+
                         StarBtn.MouseButton1Click:Connect(function()
                             if deleteMode or editMode then return end
                             local data = ReadAutoloadData()
-
                             if isAutoload then
-                                -- Bỏ chọn ☆ → tắt Auto Load
                                 data.Path = nil
                                 data.Enabled = false
                                 WriteAutoloadData(data)
-                                Library:Notify({
-                                    Title = "Auto Load Disabled",
-                                    Description = displayFName .. " đã bỏ chọn. Auto Load tắt.",
-                                    Duration = 3
-                                })
+                                Library:Notify({Title = "Auto Load Disabled", Description = displayFName .. " bỏ chọn. Auto Load tắt.", Duration = 3})
                             else
-                                -- Verify file tồn tại trước khi chọn
                                 local exists = false
-                                for _, fp in ipairs(_listfiles(folderName)) do
-                                    if fp == filepath then exists = true break end
-                                end
+                                for _, fp in ipairs(_listfiles(folderName)) do if fp == filepath then exists = true break end end
                                 if not exists then
-                                    Library:Notify({
-                                        Title = "File không tồn tại",
-                                        Description = "File save đã bị xóa hoặc di chuyển. Hãy tạo save mới.",
-                                        Duration = 4
-                                    })
+                                    Library:Notify({Title = "File không tồn tại", Description = "File save đã bị xóa.", Duration = 4})
                                     RefreshMonitor()
                                     return
                                 end
-
-                                -- Chọn ☆ → tự bật Auto Load
                                 data.Path = filepath
                                 data.Enabled = true
                                 WriteAutoloadData(data)
-                                Library:Notify({
-                                    Title = "Auto Load Enabled",
-                                    Description = displayFName .. " sẽ tự load khi khởi động.",
-                                    Duration = 3
-                                })
+                                Library:Notify({Title = "Auto Load Enabled", Description = displayFName .. " sẽ tự load khi khởi động.", Duration = 3})
                             end
                             RefreshMonitor()
                         end)
@@ -1451,13 +1371,10 @@ function Library:CreateWindow(options)
                             if s and type(data) == "table" then
                                 for k, v in pairs(data) do
                                     if Window.ConfigElements[k] and Window.ConfigElements[k].Set then
-                                        local setOk, setErr = pcall(function() Window.ConfigElements[k].Set(v) end)
-                                        if not setOk then warn("[Saves Loader] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr)) end
+                                        pcall(function() Window.ConfigElements[k].Set(v) end)
                                     end
                                 end
-                                Library:Notify({Title = "Saves Loader", Description = "Successfully loaded " .. displayFName})
-                            else
-                                Library:Notify({Title = "Saves Loader", Description = "Failed to read " .. filepath})
+                                Library:Notify({Title = "Loaded", Description = displayFName .. " applied.", Duration = 3})
                             end
                         end)
 
@@ -1478,8 +1395,6 @@ function Library:CreateWindow(options)
                         for _, v in ipairs(Monitor:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
                         selectedForDelete = {}
                         for _, filepath in ipairs(ListAllSaveFiles()) do BuildRow(filepath) end
-
-                        -- ✅ FIX: tự clear autoload nếu file bị xóa
                         local autoloadData = ReadAutoloadData()
                         if autoloadData.Path then
                             local exists = false
@@ -1497,11 +1412,9 @@ function Library:CreateWindow(options)
                         for k, el in pairs(Window.ConfigElements) do if el.Get then payload[k] = el.Get() end end
                         local encoded = HttpService:JSONEncode(payload)
                         local uniqueKey = tostring(math.floor(tick()))
-                        local finalPath = folderName .. "/" .. saveName .. "_" .. uniqueKey .. ".json"
-                        _writefile(finalPath, encoded)
+                        _writefile(folderName .. "/" .. saveName .. "_" .. uniqueKey .. ".json", encoded)
                         RefreshMonitor()
-                        Library:Notify({Title = "Saved Successfully", Description = "Config [" .. saveName .. "] secured."})
-                        return finalPath
+                        Library:Notify({Title = "Saved", Description = "Config [" .. saveName .. "] saved."})
                     end
 
                     CreateBtn.MouseButton1Click:Connect(function()
@@ -1561,16 +1474,14 @@ function Library:CreateWindow(options)
                                 end
                             end
                         end
-                        if autoCleared then
-                            WriteAutoloadData(autoData)
-                        end
+                        if autoCleared then WriteAutoloadData(autoData) end
                         deleteMode = false
                         DeleteTogBtn.Text = "Delete Mode: OFF"
                         DeleteTogBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
                         ActionArea.Visible = false
                         CreateBtn.Visible = true
                         RefreshMonitor()
-                        Library:Notify({Title = "Deletions Complete", Description = ("Erased %d file(s)."):format(deletedCount)})
+                        Library:Notify({Title = "Deletions", Description = ("Erased %d file(s)."):format(deletedCount)})
                         HideInternalPopup()
                     end)
 
@@ -1630,85 +1541,16 @@ function Library:CreateWindow(options)
         end
         return TabConfig
     end
-	    -- ============================================================
-    -- ✅ SET MENU ICON MODE
-    -- ============================================================
-    function Library:SetMenuIconMode(mode)
-        MenuIconMode = (mode == "tool") and "tool" or "free"
-        -- Nếu đang có Tool mà đổi sang free → xóa Tool, hiện Sphere
-        if MenuIconMode == "free" and CurrentTool then
-            pcall(function() CurrentTool:Destroy() end)
-            CurrentTool = nil
-        end
-        -- Cập nhật UI hiện tại nếu menu đang đóng
-        if not MainFrame.Visible then
-            if MenuIconMode == "free" then
-                Sphere.Visible = true
-                Sphere.ImageTransparency = 0
-            else
-                Sphere.Visible = false
-                -- Tạo Tool ngay nếu đang đóng menu
-                CreateMenuTool()
-            end
-        end
-    end
 
     -- ============================================================
-    -- ✅ TẠO TOOL KHI ĐÓNG MENU Ở MODE "tool"
+    --  EXPOSE API
     -- ============================================================
-    function CreateMenuTool()
-        if CurrentTool then return end
-
-        local player = game.Players.LocalPlayer
-        local backpack = player:FindFirstChildOfClass("Backpack")
-        if not backpack then return end
-
-        local tool = Instance.new("Tool")
-        tool.Name = "MarvenRiz Menu"
-        tool.ToolTip = "Bấm để mở menu MarvenRiz"
-        tool.RequiresHandle = false
-        tool.CanBeDropped = false
-        tool.TextureId = SPHERE_ICON
-
-        tool.Activated:Connect(function()
-            -- Mở menu chính
-            MainFrame.Visible = true
-            BottomDragHitbox.Visible = true
-            Tween(MainScale, {Scale = 1}, 0.4)
-            Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
-            Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
-            Tween(BottomBarStroke, {Transparency = 0}, 0.4)
-            -- Xóa tool
-            if CurrentTool then
-                pcall(function() CurrentTool:Destroy() end)
-                CurrentTool = nil
-            end
-        end)
-
-        tool.Parent = backpack
-        CurrentTool = tool
-    end
-	
-	-- ✅ Fallback: nếu Tool bị xóa mà chưa mở menu → hiện lại Sphere
-        tool.AncestryChanged:Connect(function()
-            if tool.Parent == nil and not MainFrame.Visible and MenuIconMode == "tool" then
-                task.wait(0.1)
-                -- Nếu vẫn chưa có tool mới và menu vẫn đóng → tạo lại
-                if not MainFrame.Visible and MenuIconMode == "tool" and (not CurrentTool or not CurrentTool.Parent) then
-                    CurrentTool = nil
-                    CreateMenuTool()
-                end
-            end
-        end)
-
-    -- ✅ expose để script ngoài có thể gọi nếu cần
+    Window.SetMenuIconMode = function(self, mode) return Library:SetMenuIconMode(mode) end
+    Window.GetMenuIconMode = function() return MenuIconMode end
     Window.CreateMenuTool = CreateMenuTool
-	
-	-- ✅ Sync mode ban đầu từ ConfigElements (nếu Auto Load chạy sau CreateWindow,
-    -- thì callback sẽ gọi SetMenuIconMode — nhưng nếu user bấm Min trước khi
-    -- Auto Load xong thì cần fallback: đọc từ config file)
+
+    -- ✅ Sync mode từ config đã lưu (nếu Auto Load chạy trước)
     task.defer(function()
-        -- Đọc giá trị "Menu Icon Mode" từ file autoload nếu có
         local folder = Library.SaveManager.Folder
         local ok, raw = pcall(function() return _readfile(folder .. "/autoload.json") end)
         if ok and raw and raw ~= "" then
@@ -1724,7 +1566,7 @@ function Library:CreateWindow(options)
             end
         end
     end)
-	
+
     Library.SaveManager.Window = Window
     return Window
 end
