@@ -271,6 +271,11 @@ function Library:CreateWindow(options)
     local MenuIconMode  = "free"
     local CurrentTool   = nil
     local MenuToolRespawnConn = nil
+	
+	local MenuKeybind   = Enum.KeyCode.T
+    local MenuKeybindConn = nil
+    local KeybindListening = false
+    local KeybindCaptureBtn = nil  -- tham chiếu tới nút hiển thị phím
 
     if type(options) == "table" then
         hubName = options.Title or hubName
@@ -1109,6 +1114,79 @@ function Library:CreateWindow(options)
                     if callback then callback(Input.Text) end
                     Window.ConfigElements[name] = {Set = internalSet, Get = function() return Input.Text end}
                 end
+				
+				function Elements:AddKeybind(name, defaultKey, callback, infoData)
+                    local currentKey = defaultKey or Enum.KeyCode.T
+                    local isListening = false
+
+                    local KbFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30)})
+                    Create("TextLabel", {Parent = KbFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -120, 1, 0), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+
+                    local Btn = Create("TextButton", {Parent = KbFrame, Text = currentKey.Name, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(0, 90, 0, 24), Position = UDim2.new(1, -100, 0.5, -12), AutoButtonColor = false})
+                    Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(0, 4)})
+                    Create("UIStroke", {Parent = Btn, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
+                    AddBounce(Btn)
+
+                    local function StopListen()
+                        isListening = false
+                        KeybindListening = false
+                        Btn.Text = currentKey.Name
+                        Tween(Btn, {BackgroundColor3 = BackgroundColor, TextColor3 = TextColor}, 0.2)
+                        Btn:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(45, 45, 50)
+                    end
+
+                    local function StartListen()
+                        isListening = true
+                        KeybindListening = true
+                        Btn.Text = "Press a key..."
+                        Tween(Btn, {BackgroundColor3 = Color3.fromRGB(60, 40, 100), TextColor3 = Color3.fromRGB(255, 215, 0)}, 0.2)
+                        Btn:FindFirstChildOfClass("UIStroke").Color = AccentColor
+                    end
+
+                    local function ApplyKey(newKey)
+                        currentKey = newKey
+                        Btn.Text = currentKey.Name
+                        KeybindCaptureBtn = Btn
+                        if callback then callback(newKey) end
+                    end
+
+                    Btn.MouseButton1Click:Connect(function()
+                        if isListening then StopListen() else StartListen() end
+                    end)
+
+                    local listenConn
+                    listenConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                        if not isListening then return end
+                        if input.UserInputType == Enum.UserInputType.Keyboard then
+                            if input.KeyCode == Enum.KeyCode.Escape then StopListen() return end
+                            if input.KeyCode == Enum.KeyCode.Backspace then
+                                ApplyKey(Enum.KeyCode.T)
+                                StopListen()
+                                return
+                            end
+                            ApplyKey(input.KeyCode)
+                            StopListen()
+                        end
+                    end)
+
+                    AddInfoIcon(KbFrame, UDim2.new(1, -120, 0.5, -8), infoData)
+
+                    if callback then callback(currentKey) end
+                    KeybindCaptureBtn = Btn
+
+                    Window.ConfigElements[name] = {
+                        Set = function(v)
+                            local key
+                            if typeof(v) == "EnumItem" then key = v
+                            elseif type(v) == "string" then
+                                local ok, k = pcall(function() return Enum.KeyCode[v] end)
+                                if ok then key = k end
+                            end
+                            if key then ApplyKey(key) end
+                        end,
+                        Get = function() return currentKey.Name end,
+                    }
+                end
 
                 function Elements:AddColorPicker(name, defaultColor, callback, infoData)
                     local color = Color3.fromRGB(255, 255, 255)
@@ -1525,6 +1603,7 @@ function Library:CreateWindow(options)
                 function Elements:Dropdown(config) config = config or {} return self:AddDropdown(config.Title, config.Options, config.Multi, config.Value, config.Callback, BuildInfo(config)) end
                 function Elements:Textbox(config) config = config or {} return self:AddTextbox(config.Title, config.Placeholder, config.Value, config.Callback, BuildInfo(config)) end
                 function Elements:ColorPicker(config) config = config or {} return self:AddColorPicker(config.Title, config.Value, config.Callback, BuildInfo(config)) end
+				function Elements:Keybind(config) config = config or {} return self:AddKeybind(config.Title, config.Value, config.Callback, BuildInfo(config)) end
                 function Elements:ConfigManager(config) config = config or {} return self:AddConfigManager(config.Folder) end
 
                 return Elements
@@ -1548,6 +1627,39 @@ function Library:CreateWindow(options)
     Window.SetMenuIconMode = function(self, mode) return Library:SetMenuIconMode(mode) end
     Window.GetMenuIconMode = function() return MenuIconMode end
     Window.CreateMenuTool = CreateMenuTool
+	
+	    -- ============================================================
+    --  KEYBIND SYSTEM
+    -- ============================================================
+    local function OpenMenu()
+        if MainFrame.Visible then return end
+        if CurrentTool then pcall(function() CurrentTool:Destroy() end) CurrentTool = nil end
+        Sphere.Visible = false
+        MainFrame.Visible = true
+        BottomDragHitbox.Visible = true
+        Tween(MainScale, {Scale = 1}, 0.4)
+        Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
+        Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
+        Tween(BottomBarStroke, {Transparency = 0}, 0.4)
+    end
+    Window.OpenMenu = OpenMenu
+
+    local function RebindMenuKey(newKey)
+        MenuKeybind = newKey
+        if MenuKeybindConn then MenuKeybindConn:Disconnect() MenuKeybindConn = nil end
+        MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if KeybindListening then return end
+            if input.KeyCode == MenuKeybind then OpenMenu() end
+        end)
+        if KeybindCaptureBtn and KeybindCaptureBtn.Parent then
+            KeybindCaptureBtn.Text = MenuKeybind.Name
+        end
+    end
+    Window.SetMenuKeybind = RebindMenuKey
+    Window.GetMenuKeybind = function() return MenuKeybind end
+
+    RebindMenuKey(MenuKeybind)
 
     -- ✅ Sync mode từ config đã lưu (nếu Auto Load chạy trước)
     task.defer(function()
