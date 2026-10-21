@@ -257,6 +257,8 @@ function Library:CreateWindow(options)
     local SPHERE_SIZE   = 56
     local MenuIconMode  = "phone"   -- "phone" | "pc"
 	local CurrentScale  = 1
+    local IsAnimating   = false   -- ✅ chặn spam
+    local LastToggle    = 0       -- ✅ debounce
 
     -- ✅ Keybind state (KHÔNG có RebindMenuKey cũ)
     local MenuKeybind      = Enum.KeyCode.T
@@ -534,23 +536,26 @@ function Library:CreateWindow(options)
     -- ============================================================
     --  OPEN / CLOSE / TOGGLE
     -- ============================================================
-        local function OpenMenu()
-        if MainFrame.Visible then return end
+    local function OpenMenu()
+        if MainFrame.Visible or IsAnimating then return end   -- ✅ chặn khi đang animate
+        IsAnimating = true
         Sphere.Visible = false
         MainFrame.Visible = true
         BottomDragHitbox.Visible = true
-        -- ✅ dùng CurrentScale thay vì 1
         Tween(MainScale, {Scale = CurrentScale}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
         Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
         Tween(BottomBarStroke, {Transparency = 0}, 0.4)
+        task.delay(0.4, function() IsAnimating = false end)   -- ✅ mở khóa sau 0.4s
     end
     Window.OpenMenu = OpenMenu
 
-        local function CloseMenu()
-        if not MainFrame.Visible then return end
-        -- ✅ lưu scale trước khi tween về 0
+    local function CloseMenu()
+        if not MainFrame.Visible or IsAnimating then return end   -- ✅ chặn khi đang animate
+        IsAnimating = true
         CurrentScale = MainScale.Scale
+        -- ✅ clamp để tránh scale quá nhỏ nếu spam
+        if CurrentScale < 0.3 then CurrentScale = 1 end
         Tween(MainScale, {Scale = 0}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
         Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.4)
@@ -567,10 +572,15 @@ function Library:CreateWindow(options)
         else
             Sphere.Visible = false
         end
+        task.delay(0.1, function() IsAnimating = false end)   -- ✅ mở khóa sau 0.1s
     end
     Window.CloseMenu = CloseMenu
 
     local function ToggleMenu()
+        -- ✅ debounce: bỏ qua nếu bấm quá nhanh (< 0.2s)
+        local now = tick()
+        if now - LastToggle < 0.2 then return end
+        LastToggle = now
         if MainFrame.Visible then CloseMenu() else OpenMenu() end
     end
     Window.ToggleMenu = ToggleMenu
@@ -588,11 +598,16 @@ function Library:CreateWindow(options)
             MenuKeybindConn = nil
         end
 
-        -- ✅ KHÔNG check KeybindListening → menu keybind luôn hoạt động
+        -- ✅ FIX: dùng InputBegan nhưng thêm debounce riêng cho keybind
+        local lastKeyPress = 0
         MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if gameProcessed then return end
             local pressedName = input.KeyCode and input.KeyCode.Name or nil
             if pressedName and pressedName == targetName then
+                -- ✅ debounce 0.25s
+                local now = tick()
+                if now - lastKeyPress < 0.25 then return end
+                lastKeyPress = now
                 ToggleMenu()
             end
         end)
