@@ -1115,14 +1115,19 @@ function Library:CreateWindow(options)
                     Window.ConfigElements[name] = {Set = internalSet, Get = function() return Input.Text end}
                 end
 				
-				function Elements:AddKeybind(name, defaultKey, callback, infoData)
-                    local currentKey = defaultKey or Enum.KeyCode.T
+				                function Elements:AddKeybind(name, defaultKey, callback, infoData)
+                    local currentKey = (Window and Window.NormalizeKey and Window.NormalizeKey(defaultKey))
+                        or (function()
+                            local ok, k = pcall(function() return Enum.KeyCode[defaultKey] end)
+                            if ok and k then return k end
+                            return Enum.KeyCode.T
+                        end)()
                     local isListening = false
 
                     local KbFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30)})
                     Create("TextLabel", {Parent = KbFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -120, 1, 0), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
 
-                    local Btn = Create("TextButton", {Parent = KbFrame, Text = currentKey.Name, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(0, 90, 0, 24), Position = UDim2.new(1, -100, 0.5, -12), AutoButtonColor = false})
+                    local Btn = Create("TextButton", {Parent = KbFrame, Text = currentKey.Name or "T", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(0, 90, 0, 24), Position = UDim2.new(1, -100, 0.5, -12), AutoButtonColor = false})
                     Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(0, 4)})
                     Create("UIStroke", {Parent = Btn, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
                     AddBounce(Btn)
@@ -1130,9 +1135,10 @@ function Library:CreateWindow(options)
                     local function StopListen()
                         isListening = false
                         KeybindListening = false
-                        Btn.Text = currentKey.Name
+                        Btn.Text = currentKey.Name or "T"
                         Tween(Btn, {BackgroundColor3 = BackgroundColor, TextColor3 = TextColor}, 0.2)
-                        Btn:FindFirstChildOfClass("UIStroke").Color = Color3.fromRGB(45, 45, 50)
+                        local st = Btn:FindFirstChildOfClass("UIStroke")
+                        if st then st.Color = Color3.fromRGB(45, 45, 50) end
                     end
 
                     local function StartListen()
@@ -1140,19 +1146,16 @@ function Library:CreateWindow(options)
                         KeybindListening = true
                         Btn.Text = "Press a key..."
                         Tween(Btn, {BackgroundColor3 = Color3.fromRGB(60, 40, 100), TextColor3 = Color3.fromRGB(255, 215, 0)}, 0.2)
-                        Btn:FindFirstChildOfClass("UIStroke").Color = AccentColor
+                        local st = Btn:FindFirstChildOfClass("UIStroke")
+                        if st then st.Color = AccentColor end
                     end
 
                     local function ApplyKey(newKey)
                         -- ✅ FIX: dùng NormalizeKey
-                        local key = (Window and Window.NormalizeKey and Window.NormalizeKey(newKey))
-                            or (type(newKey) == "string" and (pcall(function() return Enum.KeyCode[newKey] end) and Enum.KeyCode[newKey]))
-                            or Enum.KeyCode.T
+                        local key = (Window and Window.NormalizeKey and Window.NormalizeKey(newKey)) or Enum.KeyCode.T
                         currentKey = key
-                        Btn.Text = (key and key.Name) or "T"
-                        if name == "Menu Keybind" then
-                            KeybindCaptureBtn = Btn
-                        end
+                        Btn.Text = key.Name or "T"
+                        if name == "Menu Keybind" then KeybindCaptureBtn = Btn end
                         if callback then callback(key) end
                     end
 
@@ -1160,43 +1163,34 @@ function Library:CreateWindow(options)
                         if isListening then StopListen() else StartListen() end
                     end)
 
-                    local listenConn
-                    listenConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                    UserInputService.InputBegan:Connect(function(input, gameProcessed)
                         if not isListening then return end
-                        if input.UserInputType == Enum.UserInputType.Keyboard then
-                            -- ✅ FIX: dùng NormalizeKey cho input.KeyCode
-                            local pressedKey = Window.NormalizeKey and Window.NormalizeKey(input.KeyCode) or input.KeyCode
-                            if pressedKey == Enum.KeyCode.Escape then
-                                StopListen()
-                                return
-                            end
-                            if pressedKey == Enum.KeyCode.Backspace then
-                                ApplyKey(Enum.KeyCode.T)
-                                StopListen()
-                                return
-                            end
-                            ApplyKey(pressedKey)
+                        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                        -- ✅ FIX: normalize input.KeyCode
+                        local pressedKey = (Window and Window.NormalizeKey and Window.NormalizeKey(input.KeyCode)) or input.KeyCode
+                        local pName = pressedKey and pressedKey.Name or nil
+                        if pName == "Escape" then StopListen() return end
+                        if pName == "Backspace" then
+                            ApplyKey(Enum.KeyCode.T)
                             StopListen()
+                            return
                         end
+                        ApplyKey(pressedKey)
+                        StopListen()
                     end)
 
                     AddInfoIcon(KbFrame, UDim2.new(1, -120, 0.5, -8), infoData)
 
-                    -- ✅ FIX: gán KeybindCaptureBtn trước khi callback để RebindMenuKey update đúng nút
-                    if name == "Menu Keybind" then
-                        KeybindCaptureBtn = Btn
-                    end
+                    if name == "Menu Keybind" then KeybindCaptureBtn = Btn end
+                    -- ✅ FIX: gọi callback với key đã normalize
                     if callback then callback(currentKey) end
 
                     Window.ConfigElements[name] = {
                         Set = function(v)
-                            -- ✅ FIX: dùng NormalizeKey
                             local key = (Window and Window.NormalizeKey and Window.NormalizeKey(v)) or Enum.KeyCode.T
                             ApplyKey(key)
                         end,
-                        Get = function()
-                            return currentKey and currentKey.Name or "T"
-                        end,
+                        Get = function() return currentKey and currentKey.Name or "T" end,
                     }
                 end
 
@@ -1641,7 +1635,7 @@ function Library:CreateWindow(options)
     Window.CreateMenuTool = CreateMenuTool
 	
 	    -- ============================================================
-    --  KEYBIND SYSTEM
+    --  KEYBIND SYSTEM (fixed — không dùng typeof)
     -- ============================================================
     local function OpenMenu()
         if MainFrame.Visible then return end
@@ -1656,52 +1650,88 @@ function Library:CreateWindow(options)
     end
     Window.OpenMenu = OpenMenu
 
-        -- ✅ Hàm chuẩn hóa bất kỳ input nào thành Enum.KeyCode
+    -- ✅ Ẩn menu (giống MinBtn) — dùng cho toggle keybind
+    local function CloseMenu()
+        if not MainFrame.Visible then return end
+        Tween(MainScale, {Scale = 0}, 0.4)
+        Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
+        Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.4)
+        Tween(BottomBarStroke, {Transparency = 1}, 0.4)
+        task.wait(0.3)
+        MainFrame.Visible = false
+        BottomDragHitbox.Visible = false
+        if MenuIconMode == "tool" then
+            Sphere.Visible = false
+            CreateMenuTool()
+        else
+            Sphere.Visible = true
+            Sphere.Size = UDim2.new(0, 0, 0, 0)
+            Sphere.ImageTransparency = 1
+            Tween(Sphere, {Size = UDim2.new(0, SPHERE_SIZE, 0, SPHERE_SIZE)}, 0.4)
+            Tween(Sphere, {ImageTransparency = 0}, 0.4)
+        end
+    end
+    Window.CloseMenu = CloseMenu
+
+    -- ✅ Toggle: đang đóng thì mở, đang mở thì đóng
+    local function ToggleMenu()
+        if MainFrame.Visible then
+            CloseMenu()
+        else
+            OpenMenu()
+        end
+    end
+    Window.ToggleMenu = ToggleMenu
+
+    -- ✅ Hàm chuẩn hóa: KHÔNG dùng typeof — chỉ dùng .Name + pcall Enum.KeyCode
     local function NormalizeKey(input)
         if input == nil then return Enum.KeyCode.T end
-        -- Nếu là string → parse
+        -- string → parse
         if type(input) == "string" then
             local ok, k = pcall(function() return Enum.KeyCode[input] end)
             if ok and k then return k end
             return Enum.KeyCode.T
         end
-        -- Nếu là EnumItem (userdata hoặc wrap table) → dùng .Name
+        -- table hoặc EnumItem (có .Name string) → parse theo Name
         local okName, name = pcall(function() return input.Name end)
         if okName and type(name) == "string" and name ~= "" then
             local ok, k = pcall(function() return Enum.KeyCode[name] end)
             if ok and k then return k end
         end
-        -- Nếu là table có field Name
+        -- table có field Name
         if type(input) == "table" and type(input.Name) == "string" then
             local ok, k = pcall(function() return Enum.KeyCode[input.Name] end)
             if ok and k then return k end
         end
-        -- Fallback
         return Enum.KeyCode.T
     end
     Window.NormalizeKey = NormalizeKey
+    Library.NormalizeKey = NormalizeKey
 
+    local MenuKeybindConn = nil
     local function RebindMenuKey(newKey)
-        -- ✅ FIX: dùng NormalizeKey thay vì typeof
         local key = NormalizeKey(newKey)
         MenuKeybind = key
         if MenuKeybindConn then MenuKeybindConn:Disconnect() MenuKeybindConn = nil end
         MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if gameProcessed then return end
             if KeybindListening then return end
-            if input.KeyCode == MenuKeybind then OpenMenu() end
+            -- ✅ FIX: so sánh bằng .Name để tránh lỗi wrap EnumItem
+            local pressedName = input.KeyCode and input.KeyCode.Name or nil
+            local targetName = MenuKeybind and MenuKeybind.Name or nil
+            if pressedName and targetName and pressedName == targetName then
+                ToggleMenu()  -- ✅ toggle thay vì chỉ mở
+            end
         end)
         if KeybindCaptureBtn and KeybindCaptureBtn.Parent then
             local nm = MenuKeybind and MenuKeybind.Name
-            if type(nm) == "string" then
-                KeybindCaptureBtn.Text = nm
-            end
+            if type(nm) == "string" then KeybindCaptureBtn.Text = nm end
         end
     end
-	
     Window.SetMenuKeybind = RebindMenuKey
     Window.GetMenuKeybind = function() return MenuKeybind end
 
+    -- Gọi ban đầu (không qua NormalizeKey vì MenuKeybind = Enum.KeyCode.T sẵn)
     RebindMenuKey(MenuKeybind)
 
     -- ✅ Sync mode từ config đã lưu (nếu Auto Load chạy trước)
