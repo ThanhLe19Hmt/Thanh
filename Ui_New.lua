@@ -1251,31 +1251,7 @@ function Library:CreateWindow(options)
                     local selectedForDelete = {}
                     local editTargetFile = ""
 
-                    local AutoloadRow = Create("Frame", {Parent = ManagerFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 150)})
-                    Create("TextLabel", {Parent = AutoloadRow, Text = "Auto Load", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
-                    local autoloadState = ReadAutoloadData().Enabled == true
-                    local AutoloadLever = Create("TextButton", {Parent = AutoloadRow, Text = "", BackgroundColor3 = autoloadState and AccentColor or Color3.fromRGB(45, 45, 50), Size = UDim2.new(0, 36, 0, 18), Position = UDim2.new(1, -36, 0.5, -9), AutoButtonColor = false})
-                    Create("UICorner", {Parent = AutoloadLever, CornerRadius = UDim.new(1, 0)})
-                    AddBounce(AutoloadLever)
-                    local AutoloadKnob = Create("Frame", {Parent = AutoloadLever, BackgroundColor3 = Color3.fromRGB(255, 255, 255), Size = UDim2.new(0, 14, 0, 14), Position = autoloadState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)})
-                    Create("UICorner", {Parent = AutoloadKnob, CornerRadius = UDim.new(1, 0)})
-
-                    -- ✅ FIX: yêu cầu chọn ☆ trước khi bật Auto Load
-                    AutoloadLever.MouseButton1Click:Connect(function()
-                        local data = ReadAutoloadData()
-                        if not autoloadState and not data.Path then
-                            Library:Notify({Title = "Auto Load", Description = "Hãy chọn một save bằng ngôi sao ☆ trước khi bật Auto Load.", Duration = 4})
-                            return
-                        end
-                        autoloadState = not autoloadState
-                        data.Enabled = autoloadState
-                        WriteAutoloadData(data)
-                        Tween(AutoloadLever, {BackgroundColor3 = autoloadState and AccentColor or Color3.fromRGB(45, 45, 50)}, 0.3)
-                        Tween(AutoloadKnob, {Position = autoloadState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)}, 0.3)
-                        Library:Notify({Title = "Auto Load " .. (autoloadState and "Enabled" or "Disabled"), Description = autoloadState and "Config sẽ tự load lần sau." or "Auto Load đã tắt.", Duration = 3})
-                    end)
-
-                    local Controls = Create("Frame", {Parent = ManagerFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 80), Position = UDim2.new(0, 10, 0, 185)})
+                    local Controls = Create("Frame", {Parent = ManagerFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 80), Position = UDim2.new(0, 10, 0, 150)})
                     local NameBox = Create("TextBox", {Parent = Controls, PlaceholderText = "Enter save name...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, 0, 0, 26), Position = UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
                     Create("UIPadding", {Parent = NameBox, PaddingLeft = UDim.new(0, 8)})
                     Create("UICorner", {Parent = NameBox, CornerRadius = UDim.new(0, 4)})
@@ -1373,36 +1349,44 @@ function Library:CreateWindow(options)
                                 Tween(Row, {BackgroundColor3 = Color3.fromRGB(180, 50, 50)}, 0.2)
                             end
                         end)
-
-                        -- ✅ FIX: StarBtn — cho phép chọn ☆ bất kể Auto Load ON/OFF
+                        -- Bấm ☆ lần 2 → tắt Auto Load (Enabled=false, Path=nil)
                         StarBtn.MouseButton1Click:Connect(function()
                             if deleteMode or editMode then return end
                             local data = ReadAutoloadData()
 
                             if isAutoload then
-                                -- Bỏ chọn ☆
+                                -- Bỏ chọn ☆ → tắt Auto Load
                                 data.Path = nil
-                                data.Enabled = autoloadState
+                                data.Enabled = false
                                 WriteAutoloadData(data)
-                                Library:Notify({Title = "Autoload Target Cleared", Description = displayFName .. " is no longer the remembered Auto Load config."})
+                                Library:Notify({
+                                    Title = "Auto Load Disabled",
+                                    Description = displayFName .. " đã bỏ chọn. Auto Load tắt.",
+                                    Duration = 3
+                                })
                             else
-                                -- Chọn ☆: verify file tồn tại
+                                -- Verify file tồn tại trước khi chọn
                                 local exists = false
                                 for _, fp in ipairs(_listfiles(folderName)) do
                                     if fp == filepath then exists = true break end
                                 end
                                 if not exists then
-                                    Library:Notify({Title = "File không tồn tại", Description = "File save đã bị xóa hoặc di chuyển.", Duration = 4})
+                                    Library:Notify({
+                                        Title = "File không tồn tại",
+                                        Description = "File save đã bị xóa hoặc di chuyển. Hãy tạo save mới.",
+                                        Duration = 4
+                                    })
                                     RefreshMonitor()
                                     return
                                 end
+
+                                -- Chọn ☆ → tự bật Auto Load
                                 data.Path = filepath
-                                -- ✅ Giữ nguyên Enabled hiện tại (không ép true)
-                                data.Enabled = autoloadState
+                                data.Enabled = true
                                 WriteAutoloadData(data)
                                 Library:Notify({
-                                    Title = "Autoload Target Set",
-                                    Description = displayFName .. " sẽ được dùng khi Auto Load bật.",
+                                    Title = "Auto Load Enabled",
+                                    Description = displayFName .. " sẽ tự load khi khởi động.",
                                     Duration = 3
                                 })
                             end
@@ -1452,9 +1436,6 @@ function Library:CreateWindow(options)
                                 autoloadData.Path = nil
                                 autoloadData.Enabled = false
                                 WriteAutoloadData(autoloadData)
-                                autoloadState = false
-                                Tween(AutoloadLever, {BackgroundColor3 = Color3.fromRGB(45, 45, 50)}, 0.3)
-                                Tween(AutoloadKnob, {Position = UDim2.new(0, 2, 0.5, -7)}, 0.3)
                             end
                         end
                     end
@@ -1530,9 +1511,6 @@ function Library:CreateWindow(options)
                         end
                         if autoCleared then
                             WriteAutoloadData(autoData)
-                            autoloadState = false
-                            Tween(AutoloadLever, {BackgroundColor3 = Color3.fromRGB(45, 45, 50)}, 0.3)
-                            Tween(AutoloadKnob, {Position = UDim2.new(0, 2, 0.5, -7)}, 0.3)
                         end
                         deleteMode = false
                         DeleteTogBtn.Text = "Delete Mode: OFF"
