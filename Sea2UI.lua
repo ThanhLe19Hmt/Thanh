@@ -256,6 +256,7 @@ function Library:CreateWindow(options)
     local SPHERE_ICON   = "rbxassetid://87526284179554"
     local SPHERE_SIZE   = 56
     local MenuIconMode  = "phone"   -- "phone" | "pc"
+	local CurrentScale  = 1
 
     -- ✅ Keybind state (KHÔNG có RebindMenuKey cũ)
     local MenuKeybind      = Enum.KeyCode.T
@@ -490,6 +491,16 @@ function Library:CreateWindow(options)
             Tween(FloatingBottomBar, {BackgroundTransparency = val > 0 and 0.2 or 0}, 0.3)
         end
     end
+	
+	function Window:SetScale(val)
+        CurrentScale = val
+        if MainFrame.Visible then
+            Tween(MainScale, {Scale = val}, 0.2)
+        end
+    end
+    function Window:GetScale()
+        return CurrentScale
+    end
 
     function Window:SetMap(mapOption)
         Window.MapId = mapOption
@@ -523,20 +534,23 @@ function Library:CreateWindow(options)
     -- ============================================================
     --  OPEN / CLOSE / TOGGLE
     -- ============================================================
-    local function OpenMenu()
+        local function OpenMenu()
         if MainFrame.Visible then return end
         Sphere.Visible = false
         MainFrame.Visible = true
         BottomDragHitbox.Visible = true
-        Tween(MainScale, {Scale = 1}, 0.4)
+        -- ✅ dùng CurrentScale thay vì 1
+        Tween(MainScale, {Scale = CurrentScale}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
         Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
         Tween(BottomBarStroke, {Transparency = 0}, 0.4)
     end
     Window.OpenMenu = OpenMenu
 
-    local function CloseMenu()
+        local function CloseMenu()
         if not MainFrame.Visible then return end
+        -- ✅ lưu scale trước khi tween về 0
+        CurrentScale = MainScale.Scale
         Tween(MainScale, {Scale = 0}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
         Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.4)
@@ -1440,7 +1454,29 @@ function Library:CreateWindow(options)
                                 data.Path = filepath
                                 data.Enabled = true
                                 WriteAutoloadData(data)
-                                Library:Notify({Title = "Auto Load Enabled", Description = displayFName .. " sẽ tự load khi khởi động.", Duration = 3})
+
+                                -- ✅ FIX: load ngay lập tức
+                                local loadOk, fileData = pcall(function()
+                                    return HttpService:JSONDecode(_readfile(filepath))
+                                end)
+                                if loadOk and type(fileData) == "table" then
+                                    for k, v in pairs(fileData) do
+                                        if Window.ConfigElements[k] and Window.ConfigElements[k].Set then
+                                            pcall(function() Window.ConfigElements[k].Set(v) end)
+                                        end
+                                    end
+                                    Library:Notify({
+                                        Title = "Auto Load Enabled",
+                                        Description = displayFName .. " đã được load ngay. Sẽ tự load khi khởi động.",
+                                        Duration = 4
+                                    })
+                                else
+                                    Library:Notify({
+                                        Title = "Auto Load Enabled",
+                                        Description = displayFName .. " sẽ tự load khi khởi động (file lỗi, không load ngay).",
+                                        Duration = 4
+                                    })
+                                end
                             end
                             RefreshMonitor()
                         end)
