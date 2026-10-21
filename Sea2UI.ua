@@ -1134,7 +1134,8 @@ function Library:CreateWindow(options)
 
                     local function StopListen()
                         isListening = false
-                        KeybindListening = false
+                        -- ✅ FIX: chỉ reset nếu chính mình đang set
+                        if KeybindListening then KeybindListening = false end
                         Btn.Text = currentKey.Name or "T"
                         Tween(Btn, {BackgroundColor3 = BackgroundColor, TextColor3 = TextColor}, 0.2)
                         local st = Btn:FindFirstChildOfClass("UIStroke")
@@ -1175,6 +1176,9 @@ function Library:CreateWindow(options)
                             StopListen()
                             return
                         end
+                        -- ✅ FIX: gọi ApplyKey (→ callback) TRƯỚC StopListen để đảm bảo
+                        -- KeybindListening vẫn true trong lúc RebindMenuKey chạy
+                        -- (tránh key vừa bấm kích hoạt menu)
                         ApplyKey(pressedKey)
                         StopListen()
                     end)
@@ -1708,26 +1712,35 @@ function Library:CreateWindow(options)
     Window.NormalizeKey = NormalizeKey
     Library.NormalizeKey = NormalizeKey
 
-    local MenuKeybindConn = nil
+        local MenuKeybindConn = nil
     local function RebindMenuKey(newKey)
         local key = NormalizeKey(newKey)
         MenuKeybind = key
-        if MenuKeybindConn then MenuKeybindConn:Disconnect() MenuKeybindConn = nil end
+
+        -- ✅ FIX: disconnect connection cũ TRƯỚC khi tạo mới
+        if MenuKeybindConn then
+            MenuKeybindConn:Disconnect()
+            MenuKeybindConn = nil
+        end
+
+        -- ✅ FIX: lưu targetName local để tránh closure capture MenuKeybind thay đổi
+        local targetName = key.Name
+
         MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if gameProcessed then return end
-            if KeybindListening then return end
-            -- ✅ FIX: so sánh bằng .Name để tránh lỗi wrap EnumItem
+            if KeybindListening then return end   -- chỉ block khi đang listen đổi phím
             local pressedName = input.KeyCode and input.KeyCode.Name or nil
-            local targetName = MenuKeybind and MenuKeybind.Name or nil
-            if pressedName and targetName and pressedName == targetName then
-                ToggleMenu()  -- ✅ toggle thay vì chỉ mở
+            -- ✅ FIX: so sánh với targetName cố định, không đọc MenuKeybind động
+            if pressedName == targetName then
+                ToggleMenu()
             end
         end)
+
         if KeybindCaptureBtn and KeybindCaptureBtn.Parent then
-            local nm = MenuKeybind and MenuKeybind.Name
-            if type(nm) == "string" then KeybindCaptureBtn.Text = nm end
+            if type(targetName) == "string" then KeybindCaptureBtn.Text = targetName end
         end
     end
+	
     Window.SetMenuKeybind = RebindMenuKey
     Window.GetMenuKeybind = function() return MenuKeybind end
 
