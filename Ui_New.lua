@@ -1144,9 +1144,20 @@ function Library:CreateWindow(options)
                     end
 
                     local function ApplyKey(newKey)
+                        -- ✅ FIX: guard nil + fallback
+                        if type(newKey) == "string" then
+                            local ok, k = pcall(function() return Enum.KeyCode[newKey] end)
+                            if ok and k then newKey = k else newKey = Enum.KeyCode.T end
+                        end
+                        if typeof(newKey) ~= "EnumItem" or not newKey.Name then
+                            newKey = Enum.KeyCode.T
+                        end
                         currentKey = newKey
                         Btn.Text = currentKey.Name
-                        KeybindCaptureBtn = Btn
+                        -- ✅ FIX: không gán global nữa, chỉ update nếu callback chính là menu keybind
+                        if name == "Menu Keybind" then
+                            KeybindCaptureBtn = Btn
+                        end
                         if callback then callback(newKey) end
                     end
 
@@ -1171,20 +1182,27 @@ function Library:CreateWindow(options)
 
                     AddInfoIcon(KbFrame, UDim2.new(1, -120, 0.5, -8), infoData)
 
+                    -- ✅ FIX: gán KeybindCaptureBtn trước khi callback để RebindMenuKey update đúng nút
+                    if name == "Menu Keybind" then
+                        KeybindCaptureBtn = Btn
+                    end
                     if callback then callback(currentKey) end
-                    KeybindCaptureBtn = Btn
 
                     Window.ConfigElements[name] = {
                         Set = function(v)
-                            local key
-                            if typeof(v) == "EnumItem" then key = v
+                            -- ✅ FIX: guard toàn diện
+                            local key = Enum.KeyCode.T
+                            if typeof(v) == "EnumItem" then
+                                key = v
                             elseif type(v) == "string" then
                                 local ok, k = pcall(function() return Enum.KeyCode[v] end)
-                                if ok then key = k end
+                                if ok and k then key = k end
                             end
                             if key then ApplyKey(key) end
                         end,
-                        Get = function() return currentKey.Name end,
+                        Get = function()
+                            return currentKey and currentKey.Name or "T"
+                        end,
                     }
                 end
 
@@ -1645,6 +1663,21 @@ function Library:CreateWindow(options)
     Window.OpenMenu = OpenMenu
 
     local function RebindMenuKey(newKey)
+        -- ✅ FIX: guard nil + fallback về T
+        if not newKey then
+            warn("[MarvenRiz] RebindMenuKey: newKey is nil — fallback to T")
+            newKey = Enum.KeyCode.T
+        end
+        -- Nếu newKey là string → parse
+        if type(newKey) == "string" then
+            local ok, k = pcall(function() return Enum.KeyCode[newKey] end)
+            if ok and k then newKey = k else newKey = Enum.KeyCode.T end
+        end
+        if typeof(newKey) ~= "EnumItem" then
+            warn("[MarvenRiz] RebindMenuKey: invalid key type " .. typeof(newKey) .. " — fallback to T")
+            newKey = Enum.KeyCode.T
+        end
+
         MenuKeybind = newKey
         if MenuKeybindConn then MenuKeybindConn:Disconnect() MenuKeybindConn = nil end
         MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1652,8 +1685,12 @@ function Library:CreateWindow(options)
             if KeybindListening then return end
             if input.KeyCode == MenuKeybind then OpenMenu() end
         end)
+        -- ✅ FIX: chỉ update nút nếu nút còn tồn tại + Name là string
         if KeybindCaptureBtn and KeybindCaptureBtn.Parent then
-            KeybindCaptureBtn.Text = MenuKeybind.Name
+            local nm = MenuKeybind and MenuKeybind.Name
+            if type(nm) == "string" then
+                KeybindCaptureBtn.Text = nm
+            end
         end
     end
     Window.SetMenuKeybind = RebindMenuKey
