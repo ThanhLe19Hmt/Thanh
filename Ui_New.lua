@@ -1374,33 +1374,37 @@ function Library:CreateWindow(options)
                             end
                         end)
 
-                        -- ✅ FIX: StarBtn
+                        -- ✅ FIX: StarBtn — cho phép chọn ☆ bất kể Auto Load ON/OFF
                         StarBtn.MouseButton1Click:Connect(function()
                             if deleteMode or editMode then return end
                             local data = ReadAutoloadData()
 
-                            if not autoloadState then
-                                Library:Notify({Title = "Auto Load chưa bật", Description = "Hãy bật Auto Load (toggle phía trên) trước khi chọn ngôi sao ☆.", Duration = 4})
-                                return
-                            end
-
                             if isAutoload then
+                                -- Bỏ chọn ☆
                                 data.Path = nil
                                 data.Enabled = autoloadState
                                 WriteAutoloadData(data)
                                 Library:Notify({Title = "Autoload Target Cleared", Description = displayFName .. " is no longer the remembered Auto Load config."})
                             else
+                                -- Chọn ☆: verify file tồn tại
                                 local exists = false
-                                for _, fp in ipairs(_listfiles(folderName)) do if fp == filepath then exists = true break end end
+                                for _, fp in ipairs(_listfiles(folderName)) do
+                                    if fp == filepath then exists = true break end
+                                end
                                 if not exists then
-                                    Library:Notify({Title = "File không tồn tại", Description = "File save đã bị xóa hoặc di chuyển. Hãy tạo save mới.", Duration = 4})
+                                    Library:Notify({Title = "File không tồn tại", Description = "File save đã bị xóa hoặc di chuyển.", Duration = 4})
                                     RefreshMonitor()
                                     return
                                 end
                                 data.Path = filepath
+                                -- ✅ Giữ nguyên Enabled hiện tại (không ép true)
                                 data.Enabled = autoloadState
                                 WriteAutoloadData(data)
-                                Library:Notify({Title = "Autoload Target Set", Description = displayFName .. " will be used when Auto Load is enabled."})
+                                Library:Notify({
+                                    Title = "Autoload Target Set",
+                                    Description = displayFName .. " sẽ được dùng khi Auto Load bật.",
+                                    Duration = 3
+                                })
                             end
                             RefreshMonitor()
                         end)
