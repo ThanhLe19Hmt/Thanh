@@ -1105,20 +1105,23 @@ function Library:CreateWindow(options)
                     UserInputService.InputBegan:Connect(function(input, gameProcessed)
                         if not isListening then return end
                         if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                        -- ✅ FIX: normalize input.KeyCode
                         local pressedKey = (Window and Window.NormalizeKey and Window.NormalizeKey(input.KeyCode)) or input.KeyCode
                         local pName = pressedKey and pressedKey.Name or nil
-                        if pName == "Escape" then StopListen() return end
-                        if pName == "Backspace" then
-                            ApplyKey(Enum.KeyCode.T)
+
+                        if pName == "Escape" then
                             StopListen()
                             return
                         end
-                        -- ✅ FIX: gọi ApplyKey (→ callback) TRƯỚC StopListen để đảm bảo
-                        -- KeybindListening vẫn true trong lúc RebindMenuKey chạy
-                        -- (tránh key vừa bấm kích hoạt menu)
-                        ApplyKey(pressedKey)
+                        if pName == "Backspace" then
+                            -- ✅ FIX: StopListen TRƯỚC
+                            StopListen()
+                            ApplyKey(Enum.KeyCode.T)
+                            return
+                        end
+                        -- ✅ FIX: StopListen TRƯỚC ApplyKey
+                        -- → KeybindListening = false → connection mới không bị block
                         StopListen()
+                        ApplyKey(pressedKey)
                     end)
 
                     AddInfoIcon(KbFrame, UDim2.new(1, -120, 0.5, -8), infoData)
@@ -1649,25 +1652,26 @@ function Library:CreateWindow(options)
     Library.NormalizeKey = NormalizeKey
 
         local MenuKeybindConn = nil
-    local function RebindMenuKey(newKey)
+        local function RebindMenuKey(newKey)
         local key = NormalizeKey(newKey)
         MenuKeybind = key
 
-        -- ✅ FIX: disconnect connection cũ TRƯỚC khi tạo mới
+        -- Disconnect connection cũ TRƯỚC
         if MenuKeybindConn then
             MenuKeybindConn:Disconnect()
             MenuKeybindConn = nil
         end
 
-        -- ✅ FIX: lưu targetName local để tránh closure capture MenuKeybind thay đổi
+        -- Capture targetName local
         local targetName = key.Name
 
+        -- ✅ FIX: BỎ hoàn toàn check KeybindListening
+        -- Lý do: menu keybind chính PHẢI luôn hoạt động, kể cả khi
+        -- đang đổi phím khác. Nếu check → bị block → chỉ T hoạt động.
         MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if gameProcessed then return end
-            if KeybindListening then return end   -- chỉ block khi đang listen đổi phím
             local pressedName = input.KeyCode and input.KeyCode.Name or nil
-            -- ✅ FIX: so sánh với targetName cố định, không đọc MenuKeybind động
-            if pressedName == targetName then
+            if pressedName and pressedName == targetName then
                 ToggleMenu()
             end
         end)
