@@ -1,7 +1,7 @@
 -- ============================================================
---  MarvenRiz UI Library — Full Clean Build
---  Bao gồm: Sphere icon, Loading bar, Auto Load qua Star,
---  Menu Icon Mode (free/tool), Scroll fix, Màu menu
+--  MarvenRiz UI Library — Final Clean Build
+--  Bao gồm: Loading bar, Auto Load qua Star, Keybind toggle,
+--  Menu Icon Mode (Điện thoại / PC), Scroll fix, Màu menu
 -- ============================================================
 
 local TweenService     = game:GetService("TweenService")
@@ -181,17 +181,6 @@ function SaveManager:SetMap(mapOption, baseFolder)
     self:SetFolder(mapKey and (self.BaseFolder .. "/" .. mapKey) or self.BaseFolder)
 end
 
-function SaveManager:GetConfigs()
-    if not _isfolder(self.Folder) then _makefolder(self.Folder) end
-    local list = {}
-    for _, fp in ipairs(_listfiles(self.Folder)) do
-        local rawName = fp:match("([^/\\]+)%.json$")
-        if rawName and not IsAutoloadFile(fp) then table.insert(list, rawName) end
-    end
-    table.sort(list)
-    return list
-end
-
 function SaveManager:GetAutoloadData()
     local ok, raw = pcall(function() return _readfile(self.Folder .. "/autoload.json") end)
     if ok and raw and raw ~= "" then
@@ -229,7 +218,6 @@ function SaveManager:LoadAutoloadConfig()
                     end
                     local finalOk, finalRaw = pcall(function() return _readfile(realPath) end)
                     if not finalOk or not finalRaw or finalRaw == "" then
-                        warn("[AutoLoad] Config file not found: " .. tostring(realPath) .. " — clearing.")
                         data.Enabled = false
                         data.Path = nil
                         local okEnc, enc = pcall(function() return HttpService:JSONEncode(data) end)
@@ -240,8 +228,7 @@ function SaveManager:LoadAutoloadConfig()
                     if okF and type(fdata) == "table" then
                         for k, v in pairs(fdata) do
                             if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
-                                local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
-                                if not setOk then warn("[LoadAutoload] Skip '" .. tostring(k) .. "': " .. tostring(setErr)) end
+                                pcall(function() self.Window.ConfigElements[k].Set(v, true) end)
                             end
                         end
                         Library:Notify({Title = "Autoload", Description = "Configuration loaded automatically.", Duration = 3})
@@ -268,14 +255,13 @@ function Library:CreateWindow(options)
 
     local SPHERE_ICON   = "rbxassetid://87526284179554"
     local SPHERE_SIZE   = 56
-    local MenuIconMode  = "free"
-    local CurrentTool   = nil
-    local MenuToolRespawnConn = nil
-	
-	local MenuKeybind   = Enum.KeyCode.T
-    local MenuKeybindConn = nil
+    local MenuIconMode  = "phone"   -- "phone" | "pc"
+
+    -- ✅ Keybind state (KHÔNG có RebindMenuKey cũ)
+    local MenuKeybind      = Enum.KeyCode.T
+    local MenuKeybindConn  = nil
     local KeybindListening = false
-    local KeybindCaptureBtn = nil  -- tham chiếu tới nút hiển thị phím
+    local KeybindCaptureBtn = nil
 
     if type(options) == "table" then
         hubName = options.Title or hubName
@@ -476,7 +462,7 @@ function Library:CreateWindow(options)
     local ContentArea = Create("Frame", {Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -(sideBarWidth + 5), 1, -40), Position = UDim2.new(0, sideBarWidth + 5, 0, 40), Active = true})
 
     -- ============================================================
-    --  SPHERE (Menu con — mode free)
+    --  SPHERE (mode phone)
     -- ============================================================
     local Sphere = Create("ImageButton", {
         Parent = ScreenGui, BackgroundTransparency = 1,
@@ -489,7 +475,7 @@ function Library:CreateWindow(options)
     MakeDraggable(Sphere, Sphere)
 
     -- ============================================================
-    --  WINDOW API
+    --  WINDOW OBJECT
     -- ============================================================
     local Window = {
         CurrentTab = nil, Tabs = {}, Title = Title, AllCards = {}, MainFrame = MainFrame,
@@ -510,32 +496,47 @@ function Library:CreateWindow(options)
         SaveManager:SetMap(mapOption)
     end
 
-    function Library:SetMenuIconMode(mode)
-        -- ✅ FIX: chỉ có 2 mode: "phone" | "pc"
-        MenuIconMode = (mode == "pc") and "pc" or "phone"
-
-        -- Dọn dẹp Tool cũ (nếu có từ version trước)
-        if CurrentTool then
-            pcall(function() CurrentTool:Destroy() end)
-            CurrentTool = nil
+    -- ============================================================
+    --  NORMALIZE KEY
+    -- ============================================================
+    local function NormalizeKey(input)
+        if input == nil then return Enum.KeyCode.T end
+        if type(input) == "string" then
+            local ok, k = pcall(function() return Enum.KeyCode[input] end)
+            if ok and k then return k end
+            return Enum.KeyCode.T
         end
-
-        -- Cập nhật UI hiện tại nếu menu đang đóng
-        if not MainFrame.Visible then
-            if MenuIconMode == "phone" then
-                Sphere.Visible = true
-                Sphere.ImageTransparency = 0
-            else
-                -- PC: ẩn hoàn toàn, chỉ mở bằng keybind
-                Sphere.Visible = false
-            end
+        local okName, name = pcall(function() return input.Name end)
+        if okName and type(name) == "string" and name ~= "" then
+            local ok, k = pcall(function() return Enum.KeyCode[name] end)
+            if ok and k then return k end
         end
+        if type(input) == "table" and type(input.Name) == "string" then
+            local ok, k = pcall(function() return Enum.KeyCode[input.Name] end)
+            if ok and k then return k end
+        end
+        return Enum.KeyCode.T
     end
+    Window.NormalizeKey = NormalizeKey
+    Library.NormalizeKey = NormalizeKey
 
     -- ============================================================
-    --  MIN BUTTON — đóng menu
+    --  OPEN / CLOSE / TOGGLE
     -- ============================================================
-    MinBtn.MouseButton1Click:Connect(function()
+    local function OpenMenu()
+        if MainFrame.Visible then return end
+        Sphere.Visible = false
+        MainFrame.Visible = true
+        BottomDragHitbox.Visible = true
+        Tween(MainScale, {Scale = 1}, 0.4)
+        Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
+        Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
+        Tween(BottomBarStroke, {Transparency = 0}, 0.4)
+    end
+    Window.OpenMenu = OpenMenu
+
+    local function CloseMenu()
+        if not MainFrame.Visible then return end
         Tween(MainScale, {Scale = 0}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
         Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.4)
@@ -550,25 +551,75 @@ function Library:CreateWindow(options)
             Tween(Sphere, {Size = UDim2.new(0, SPHERE_SIZE, 0, SPHERE_SIZE)}, 0.4)
             Tween(Sphere, {ImageTransparency = 0}, 0.4)
         else
-            -- PC: ẩn hoàn toàn
             Sphere.Visible = false
         end
+    end
+    Window.CloseMenu = CloseMenu
+
+    local function ToggleMenu()
+        if MainFrame.Visible then CloseMenu() else OpenMenu() end
+    end
+    Window.ToggleMenu = ToggleMenu
+
+    -- ============================================================
+    --  KEYBIND SYSTEM (final — không check KeybindListening)
+    -- ============================================================
+    local function ApplyMenuKeybind(newKey)
+        local safeKey = NormalizeKey(newKey)
+        MenuKeybind = safeKey
+        local targetName = safeKey.Name
+
+        if MenuKeybindConn then
+            MenuKeybindConn:Disconnect()
+            MenuKeybindConn = nil
+        end
+
+        -- ✅ KHÔNG check KeybindListening → menu keybind luôn hoạt động
+        MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            local pressedName = input.KeyCode and input.KeyCode.Name or nil
+            if pressedName and pressedName == targetName then
+                ToggleMenu()
+            end
+        end)
+
+        if KeybindCaptureBtn and KeybindCaptureBtn.Parent then
+            if type(targetName) == "string" then KeybindCaptureBtn.Text = targetName end
+        end
+    end
+
+    function Window:SetMenuKeybind(newKey) ApplyMenuKeybind(newKey) end
+    function Window:GetMenuKeybind() return MenuKeybind end
+
+    ApplyMenuKeybind(MenuKeybind)
+
+    -- ============================================================
+    --  MENU ICON MODE
+    -- ============================================================
+    function Library:SetMenuIconMode(mode)
+        MenuIconMode = (mode == "pc") and "pc" or "phone"
+        if not MainFrame.Visible then
+            if MenuIconMode == "phone" then
+                Sphere.Visible = true
+                Sphere.ImageTransparency = 0
+            else
+                Sphere.Visible = false
+            end
+        end
+    end
+
+    -- ============================================================
+    --  MIN BUTTON
+    -- ============================================================
+    MinBtn.MouseButton1Click:Connect(function()
+        CloseMenu()
     end)
 
     -- ============================================================
-    --  SPHERE CLICK — mở menu
+    --  SPHERE CLICK (mode phone)
     -- ============================================================
     Sphere.MouseButton1Click:Connect(function()
-        Tween(Sphere, {Size = UDim2.new(0, 0, 0, 0)}, 0.3)
-        Tween(Sphere, {ImageTransparency = 1}, 0.3)
-        task.wait(0.2)
-        Sphere.Visible = false
-        MainFrame.Visible = true
-        BottomDragHitbox.Visible = true
-        Tween(MainScale, {Scale = 1}, 0.4)
-        Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
-        Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
-        Tween(BottomBarStroke, {Transparency = 0}, 0.4)
+        OpenMenu()
     end)
 
     -- ============================================================
@@ -712,7 +763,7 @@ function Library:CreateWindow(options)
 
         TabBtn.MouseButton1Click:Connect(function()
             if isLocked and not isWhitelisted then
-                Library:Notify({Title = "Access Denied", Description = "This tab is for whitelisted users only.", Duration = 3})
+                Library:Notify({Title = "Access Denied", Description = "Whitelisted users only.", Duration = 3})
                 return
             end
             if Window.CurrentTab == TabConfig then return end
@@ -1028,7 +1079,7 @@ function Library:CreateWindow(options)
                     if callback then callback(selected) end
                     Window.ConfigElements[name] = {Set = internalSet, Get = function() return selected end}
                     local H = {}
-                    H.Refresh = function(_s, o, p) if o then RenderOptions(o) if callback then callback(selected) end end end
+                    H.Refresh = function(_s, o) if o then RenderOptions(o) if callback then callback(selected) end end end
                     H.RefreshOptions = H.Refresh
                     H.SetOptions = H.Refresh
                     H.Set = internalSet
@@ -1051,92 +1102,6 @@ function Library:CreateWindow(options)
                     AddInfoIcon(TxtFrame, UDim2.new(1, -25, 0, 0), infoData)
                     if callback then callback(Input.Text) end
                     Window.ConfigElements[name] = {Set = internalSet, Get = function() return Input.Text end}
-                end
-				
-				                function Elements:AddKeybind(name, defaultKey, callback, infoData)
-                    local currentKey = (Window and Window.NormalizeKey and Window.NormalizeKey(defaultKey))
-                        or (function()
-                            local ok, k = pcall(function() return Enum.KeyCode[defaultKey] end)
-                            if ok and k then return k end
-                            return Enum.KeyCode.T
-                        end)()
-                    local isListening = false
-
-                    local KbFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30)})
-                    Create("TextLabel", {Parent = KbFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -120, 1, 0), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
-
-                    local Btn = Create("TextButton", {Parent = KbFrame, Text = currentKey.Name or "T", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(0, 90, 0, 24), Position = UDim2.new(1, -100, 0.5, -12), AutoButtonColor = false})
-                    Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(0, 4)})
-                    Create("UIStroke", {Parent = Btn, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
-                    AddBounce(Btn)
-
-                    local function StopListen()
-                        isListening = false
-                        -- ✅ FIX: chỉ reset nếu chính mình đang set
-                        if KeybindListening then KeybindListening = false end
-                        Btn.Text = currentKey.Name or "T"
-                        Tween(Btn, {BackgroundColor3 = BackgroundColor, TextColor3 = TextColor}, 0.2)
-                        local st = Btn:FindFirstChildOfClass("UIStroke")
-                        if st then st.Color = Color3.fromRGB(45, 45, 50) end
-                    end
-
-                    local function StartListen()
-                        isListening = true
-                        KeybindListening = true
-                        Btn.Text = "Press a key..."
-                        Tween(Btn, {BackgroundColor3 = Color3.fromRGB(60, 40, 100), TextColor3 = Color3.fromRGB(255, 215, 0)}, 0.2)
-                        local st = Btn:FindFirstChildOfClass("UIStroke")
-                        if st then st.Color = AccentColor end
-                    end
-
-                    local function ApplyKey(newKey)
-                        -- ✅ FIX: dùng NormalizeKey
-                        local key = (Window and Window.NormalizeKey and Window.NormalizeKey(newKey)) or Enum.KeyCode.T
-                        currentKey = key
-                        Btn.Text = key.Name or "T"
-                        if name == "Menu Keybind" then KeybindCaptureBtn = Btn end
-                        if callback then callback(key) end
-                    end
-
-                    Btn.MouseButton1Click:Connect(function()
-                        if isListening then StopListen() else StartListen() end
-                    end)
-
-                    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-                        if not isListening then return end
-                        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-                        local pressedKey = (Window and Window.NormalizeKey and Window.NormalizeKey(input.KeyCode)) or input.KeyCode
-                        local pName = pressedKey and pressedKey.Name or nil
-
-                        if pName == "Escape" then
-                            StopListen()
-                            return
-                        end
-                        if pName == "Backspace" then
-                            -- ✅ FIX: StopListen TRƯỚC
-                            StopListen()
-                            ApplyKey(Enum.KeyCode.T)
-                            return
-                        end
-                        -- ✅ FIX: StopListen TRƯỚC ApplyKey
-                        -- → KeybindListening = false → connection mới không bị block
-                        StopListen()
-                        ApplyKey(pressedKey)
-                    end)
-
-                    AddInfoIcon(KbFrame, UDim2.new(1, -120, 0.5, -8), infoData)
-
-                    if name == "Menu Keybind" then KeybindCaptureBtn = Btn end
-                    -- ✅ FIX: gọi callback với key đã normalize
-                    if callback then callback(currentKey) end
-
-                    Window.ConfigElements[name] = {
-                        Set = function(v)
-                            local key = (Window and Window.NormalizeKey and Window.NormalizeKey(v)) or Enum.KeyCode.T
-                            ApplyKey(key)
-                        end,
-                        Get = function() return currentKey and currentKey.Name or "T" end,
-                    }
                 end
 
                 function Elements:AddColorPicker(name, defaultColor, callback, infoData)
@@ -1240,7 +1205,93 @@ function Library:CreateWindow(options)
                 end
 
                 -- ============================================================
-                --  CONFIG MANAGER (Star = Auto Load toggle)
+                --  KEYBIND (final — có fromUser flag, auto-load không ghi đè)
+                -- ============================================================
+                function Elements:AddKeybind(name, defaultKey, callback, infoData)
+                    local currentKey = NormalizeKey(defaultKey)
+                    local isListening = false
+                    local userChanged = false       -- ✅ user đã tự đổi phím
+                    local autoLoadDone = false      -- ✅ auto-load đã chạy lần đầu
+
+                    local KbFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30)})
+                    Create("TextLabel", {Parent = KbFrame, Text = name, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -120, 1, 0), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+
+                    local Btn = Create("TextButton", {Parent = KbFrame, Text = currentKey.Name or "T", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(0, 90, 0, 24), Position = UDim2.new(1, -100, 0.5, -12), AutoButtonColor = false})
+                    Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(0, 4)})
+                    Create("UIStroke", {Parent = Btn, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
+                    AddBounce(Btn)
+
+                    local function StopListen()
+                        isListening = false
+                        KeybindListening = false
+                        Btn.Text = currentKey.Name or "T"
+                        Tween(Btn, {BackgroundColor3 = BackgroundColor, TextColor3 = TextColor}, 0.2)
+                        local st = Btn:FindFirstChildOfClass("UIStroke")
+                        if st then st.Color = Color3.fromRGB(45, 45, 50) end
+                    end
+
+                    local function StartListen()
+                        isListening = true
+                        KeybindListening = true
+                        Btn.Text = "Press a key..."
+                        Tween(Btn, {BackgroundColor3 = Color3.fromRGB(60, 40, 100), TextColor3 = Color3.fromRGB(255, 215, 0)}, 0.2)
+                        local st = Btn:FindFirstChildOfClass("UIStroke")
+                        if st then st.Color = AccentColor end
+                    end
+
+                    local function ApplyKey(newKey, fromUser)
+                        local key = NormalizeKey(newKey)
+                        currentKey = key
+                        Btn.Text = key.Name or "T"
+                        if name == "Menu Keybind" then KeybindCaptureBtn = Btn end
+                        if fromUser then userChanged = true end
+                        if callback then
+                            local ok, err = pcall(callback, key)
+                            if not ok then warn("[AddKeybind] callback error: " .. tostring(err)) end
+                        end
+                    end
+
+                    Btn.MouseButton1Click:Connect(function()
+                        if isListening then StopListen() else StartListen() end
+                    end)
+
+                    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+                        if not isListening then return end
+                        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                        local pressedKey = NormalizeKey(input.KeyCode)
+                        local pName = pressedKey and pressedKey.Name or nil
+
+                        if pName == "Escape" then StopListen() return end
+                        if pName == "Backspace" then
+                            StopListen()
+                            ApplyKey(Enum.KeyCode.T, true)
+                            return
+                        end
+                        StopListen()
+                        ApplyKey(pressedKey, true)
+                    end)
+
+                    AddInfoIcon(KbFrame, UDim2.new(1, -120, 0.5, -8), infoData)
+
+                    if name == "Menu Keybind" then KeybindCaptureBtn = Btn end
+                    if callback then callback(currentKey) end
+
+                    Window.ConfigElements[name] = {
+                        Set = function(v)
+                            -- ✅ nếu user đã tự đổi phím và auto-load chưa chạy → bỏ qua lần đầu
+                            if userChanged and not autoLoadDone then
+                                autoLoadDone = true
+                                return
+                            end
+                            autoLoadDone = true
+                            ApplyKey(v, false)
+                        end,
+                        Get = function() return currentKey and currentKey.Name or "T" end,
+                    }
+                end
+
+                -- ============================================================
+                --  CONFIG MANAGER
                 -- ============================================================
                 function Elements:AddConfigManager(folderName)
                     folderName = folderName or Library.SaveManager.Folder or "MarvenRizSave"
@@ -1377,7 +1428,7 @@ function Library:CreateWindow(options)
                                 data.Path = nil
                                 data.Enabled = false
                                 WriteAutoloadData(data)
-                                Library:Notify({Title = "Auto Load Disabled", Description = displayFName .. " bỏ chọn. Auto Load tắt.", Duration = 3})
+                                Library:Notify({Title = "Auto Load Disabled", Description = displayFName .. " bỏ chọn.", Duration = 3})
                             else
                                 local exists = false
                                 for _, fp in ipairs(_listfiles(folderName)) do if fp == filepath then exists = true break end end
@@ -1554,7 +1605,7 @@ function Library:CreateWindow(options)
                 function Elements:Dropdown(config) config = config or {} return self:AddDropdown(config.Title, config.Options, config.Multi, config.Value, config.Callback, BuildInfo(config)) end
                 function Elements:Textbox(config) config = config or {} return self:AddTextbox(config.Title, config.Placeholder, config.Value, config.Callback, BuildInfo(config)) end
                 function Elements:ColorPicker(config) config = config or {} return self:AddColorPicker(config.Title, config.Value, config.Callback, BuildInfo(config)) end
-				function Elements:Keybind(config) config = config or {} return self:AddKeybind(config.Title, config.Value, config.Callback, BuildInfo(config)) end
+                function Elements:Keybind(config) config = config or {} return self:AddKeybind(config.Title, config.Value, config.Callback, BuildInfo(config)) end
                 function Elements:ConfigManager(config) config = config or {} return self:AddConfigManager(config.Folder) end
 
                 return Elements
@@ -1573,121 +1624,8 @@ function Library:CreateWindow(options)
     end
 
     -- ============================================================
-    --  EXPOSE API
+    --  SYNC MODE TỪ CONFIG ĐÃ LƯU
     -- ============================================================
-    Window.SetMenuIconMode = function(self, mode) return Library:SetMenuIconMode(mode) end
-    Window.GetMenuIconMode = function() return MenuIconMode end
-	
-	    -- ============================================================
-    --  KEYBIND SYSTEM (fixed — không dùng typeof)
-    -- ============================================================
-        local function OpenMenu()
-        if MainFrame.Visible then return end
-        Sphere.Visible = false
-        MainFrame.Visible = true
-        BottomDragHitbox.Visible = true
-        Tween(MainScale, {Scale = 1}, 0.4)
-        Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
-        Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
-        Tween(BottomBarStroke, {Transparency = 0}, 0.4)
-    end
-    Window.OpenMenu = OpenMenu
-
-    -- ✅ Ẩn menu (giống MinBtn) — dùng cho toggle keybind
-        local function CloseMenu()
-        if not MainFrame.Visible then return end
-        Tween(MainScale, {Scale = 0}, 0.4)
-        Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
-        Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.4)
-        Tween(BottomBarStroke, {Transparency = 1}, 0.4)
-        task.wait(0.3)
-        MainFrame.Visible = false
-        BottomDragHitbox.Visible = false
-        if MenuIconMode == "phone" then
-            Sphere.Visible = true
-            Sphere.Size = UDim2.new(0, 0, 0, 0)
-            Sphere.ImageTransparency = 1
-            Tween(Sphere, {Size = UDim2.new(0, SPHERE_SIZE, 0, SPHERE_SIZE)}, 0.4)
-            Tween(Sphere, {ImageTransparency = 0}, 0.4)
-        else
-            -- PC: ẩn hoàn toàn, chỉ mở bằng keybind
-            Sphere.Visible = false
-        end
-    end
-    Window.CloseMenu = CloseMenu
-
-    -- ✅ Toggle: đang đóng thì mở, đang mở thì đóng
-    local function ToggleMenu()
-        if MainFrame.Visible then
-            CloseMenu()
-        else
-            OpenMenu()
-        end
-    end
-    Window.ToggleMenu = ToggleMenu
-
-    -- ✅ Hàm chuẩn hóa: KHÔNG dùng typeof — chỉ dùng .Name + pcall Enum.KeyCode
-    local function NormalizeKey(input)
-        if input == nil then return Enum.KeyCode.T end
-        -- string → parse
-        if type(input) == "string" then
-            local ok, k = pcall(function() return Enum.KeyCode[input] end)
-            if ok and k then return k end
-            return Enum.KeyCode.T
-        end
-        -- table hoặc EnumItem (có .Name string) → parse theo Name
-        local okName, name = pcall(function() return input.Name end)
-        if okName and type(name) == "string" and name ~= "" then
-            local ok, k = pcall(function() return Enum.KeyCode[name] end)
-            if ok and k then return k end
-        end
-        -- table có field Name
-        if type(input) == "table" and type(input.Name) == "string" then
-            local ok, k = pcall(function() return Enum.KeyCode[input.Name] end)
-            if ok and k then return k end
-        end
-        return Enum.KeyCode.T
-    end
-    Window.NormalizeKey = NormalizeKey
-    Library.NormalizeKey = NormalizeKey
-
-        local MenuKeybindConn = nil
-        local function RebindMenuKey(newKey)
-        local key = NormalizeKey(newKey)
-        MenuKeybind = key
-
-        -- Disconnect connection cũ TRƯỚC
-        if MenuKeybindConn then
-            MenuKeybindConn:Disconnect()
-            MenuKeybindConn = nil
-        end
-
-        -- Capture targetName local
-        local targetName = key.Name
-
-        -- ✅ FIX: BỎ hoàn toàn check KeybindListening
-        -- Lý do: menu keybind chính PHẢI luôn hoạt động, kể cả khi
-        -- đang đổi phím khác. Nếu check → bị block → chỉ T hoạt động.
-        MenuKeybindConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-            if gameProcessed then return end
-            local pressedName = input.KeyCode and input.KeyCode.Name or nil
-            if pressedName and pressedName == targetName then
-                ToggleMenu()
-            end
-        end)
-
-        if KeybindCaptureBtn and KeybindCaptureBtn.Parent then
-            if type(targetName) == "string" then KeybindCaptureBtn.Text = targetName end
-        end
-    end
-	
-    Window.SetMenuKeybind = RebindMenuKey
-    Window.GetMenuKeybind = function() return MenuKeybind end
-
-    -- Gọi ban đầu (không qua NormalizeKey vì MenuKeybind = Enum.KeyCode.T sẵn)
-    RebindMenuKey(MenuKeybind)
-
-    -- ✅ Sync mode từ config đã lưu (nếu Auto Load chạy trước)
     task.defer(function()
         local folder = Library.SaveManager.Folder
         local ok, raw = pcall(function() return _readfile(folder .. "/autoload.json") end)
@@ -1698,9 +1636,7 @@ function Library:CreateWindow(options)
                 if okF and cfgRaw and cfgRaw ~= "" then
                     local okC, cfg = pcall(function() return HttpService:JSONDecode(cfgRaw) end)
                     if okC and type(cfg) == "table" then
-                        local savedMode = cfg["Menu Icon Mode"]
-                        -- ✅ FIX: "PC" hoặc "Điện thoại" (fallback: "Điện thoại")
-                        if savedMode == "PC" then
+                        if cfg["Menu Icon Mode"] == "PC" then
                             Library:SetMenuIconMode("pc")
                         else
                             Library:SetMenuIconMode("phone")
