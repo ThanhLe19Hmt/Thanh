@@ -304,7 +304,6 @@ end
 function SaveManager:LoadAutoloadConfig()
     if not self.Window then return false end
 
-    -- ✅ FIX: thử cả folder map-subfolder và folder gốc
     local candidates = { self.Folder, self.BaseFolder }
     for _, folder in ipairs(candidates) do
         if folder and _isfolder(folder) then
@@ -313,22 +312,33 @@ function SaveManager:LoadAutoloadConfig()
             if ok and raw and raw ~= "" then
                 local okDecode, data = pcall(function() return HttpService:JSONDecode(raw) end)
                 if okDecode and type(data) == "table" and data.Enabled and data.Path then
-                    -- Kiểm tra file config còn tồn tại không
+                    -- ✅ FIX: verify file config tồn tại
                     local fileOk, fileRaw = pcall(function() return _readfile(data.Path) end)
+                    local realPath = data.Path
                     if not fileOk or not fileRaw or fileRaw == "" then
-                        -- Thử path khác: nếu data.Path là path tuyệt đối cũ, thử rebuild
+                        -- Fallback: thử tìm file cùng tên trong folder hiện tại
                         local fname = data.Path:match("([^/\\]+)$")
-                        local altPath = folder .. "/" .. (fname or "")
-                        local altOk, altRaw = pcall(function() return _readfile(altPath) end)
-                        if altOk and altRaw and altRaw ~= "" then
-                            data.Path = altPath
-                        else
-                            warn("[AutoLoad] Config file not found: " .. tostring(data.Path))
-                            continue
+                        local altPath = fname and (folder .. "/" .. fname) or nil
+                        if altPath then
+                            local altOk, altRaw = pcall(function() return _readfile(altPath) end)
+                            if altOk and altRaw and altRaw ~= "" then
+                                realPath = altPath
+                            end
                         end
                     end
 
-                    local okF, fdata = pcall(function() return HttpService:JSONDecode(_readfile(data.Path)) end)
+                    -- Nếu vẫn không đọc được → clear autoload
+                    local finalOk, finalRaw = pcall(function() return _readfile(realPath) end)
+                    if not finalOk or not finalRaw or finalRaw == "" then
+                        warn("[AutoLoad] Config file not found: " .. tostring(realPath) .. " — clearing autoload.")
+                        data.Enabled = false
+                        data.Path = nil
+                        local okEnc, enc = pcall(function() return HttpService:JSONEncode(data) end)
+                        if okEnc then _writefile(path, enc) end
+                        continue
+                    end
+
+                    local okF, fdata = pcall(function() return HttpService:JSONDecode(finalRaw) end)
                     if okF and type(fdata) == "table" then
                         for k, v in pairs(fdata) do
                             if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
@@ -549,6 +559,98 @@ function Library:CreateWindow(options)
     Create("UIStroke", {Parent = MainFrame, Color = Color3.fromRGB(40, 40, 45), Thickness = 1})
     Tween(MainScale, {Scale = 1}, 0.5)
     Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
+	
+	    -- ============================================================
+    --  LOADING BAR (hiện khi mở menu lần đầu)
+    -- ============================================================
+    local LoadingOverlay = Create("Frame", {
+        Parent = ScreenGui,
+        BackgroundColor3 = Color3.fromRGB(5, 5, 8),
+        BackgroundTransparency = 0,
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 300,
+        Visible = true,
+        Active = true,
+    })
+
+    local LoadingIcon = Create("ImageLabel", {
+        Parent = LoadingOverlay,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 90, 0, 90),
+        Position = UDim2.new(0.5, 0, 0.5, -70),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Image = SPHERE_ICON,
+        ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 301,
+    })
+
+    local LoadingBarBg = Create("Frame", {
+        Parent = LoadingOverlay,
+        BackgroundColor3 = Color3.fromRGB(35, 35, 40),
+        Size = UDim2.new(0, 260, 0, 6),
+        Position = UDim2.new(0.5, 0, 0.5, 30),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = 301,
+    })
+    Create("UICorner", {Parent = LoadingBarBg, CornerRadius = UDim.new(1, 0)})
+
+    local LoadingFill = Create("Frame", {
+        Parent = LoadingBarBg,
+        BackgroundColor3 = AccentColor,
+        Size = UDim2.new(0, 0, 1, 0),
+        ZIndex = 302,
+    })
+    Create("UICorner", {Parent = LoadingFill, CornerRadius = UDim.new(1, 0)})
+
+    local LoadingText = Create("TextLabel", {
+        Parent = LoadingOverlay,
+        Text = "Loading...",
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        TextColor3 = TextColor,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 260, 0, 20),
+        Position = UDim2.new(0.5, 0, 0.5, 50),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = 301,
+        TextTransparency = 1,
+    })
+
+    -- Animation: icon hiện → thanh chạy → text hiện → xong thì thu nhỏ
+    task.spawn(function()
+        -- 1. Icon fade in
+        Tween(LoadingIcon, {ImageTransparency = 0}, 0.4)
+        task.wait(0.3)
+
+        -- 2. Text fade in
+        Tween(LoadingText, {TextTransparency = 0}, 0.3)
+
+        -- 3. Thanh fill chạy 0% → 100%
+        local barTween = TweenService:Create(
+            LoadingFill,
+            TweenInfo.new(1.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(1, 0, 1, 0)}
+        )
+        barTween:Play()
+        barTween.Completed:Wait()
+
+        -- 4. Đổi text
+        LoadingText.Text = "Ready!"
+        task.wait(0.25)
+
+        -- 5. Thanh thu nhỏ lại (chiều rộng) + fade
+        Tween(LoadingFill, {Size = UDim2.new(0, 0, 1, 0)}, 0.5)
+        Tween(LoadingText, {TextTransparency = 1}, 0.4)
+        Tween(LoadingBarBg, {BackgroundTransparency = 1}, 0.4)
+        Tween(LoadingIcon, {ImageTransparency = 1}, 0.4)
+        task.wait(0.5)
+
+        -- 6. Xóa overlay
+        Tween(LoadingOverlay, {BackgroundTransparency = 1}, 0.5)
+        task.wait(0.5)
+        LoadingOverlay:Destroy()
+    end)
 
     local BottomDragHitbox = Create("Frame", {
         Parent = ScreenGui,
@@ -640,13 +742,37 @@ function Library:CreateWindow(options)
 
     local ContentArea = Create("Frame", {Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -(sideBarWidth + 5), 1, -40), Position = UDim2.new(0, sideBarWidth + 5, 0, 40), Active = true})
 
-    local Sphere = Create("ImageButton", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 0.2, Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Visible = false, AutoButtonColor = false, ImageTransparency = 1, ClipsDescendants = true})
-    Create("UICorner", {Parent = Sphere, CornerRadius = UDim.new(0, 20)})
-    Create("UIStroke", {Parent = Sphere, Color = Color3.fromRGB(200,0,0), Thickness = 2})
-    
-   
-    local SphereImageLabel = Create("ImageLabel", {Parent = Sphere, BackgroundTransparency = 1, Size = UDim2.new(0, sphIconSize, 0, sphIconSize), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Image = sphImage or "", ImageTransparency = 1, Visible = (not sphTextToggle and sphImage ~= nil)})
-    local SphereTextLabel = Create("TextLabel", {Parent = Sphere, Text = sphWords, Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), TextTransparency = 1, Visible = sphTextToggle})
+        -- ============================================================
+    --  SPHERE (Menu con khi đóng)
+    --  ✅ FIX: dùng ImageLabel icon, KHÔNG nền trong suốt
+    -- ============================================================
+    local SPHERE_ICON = "rbxassetid://87526284179554"
+    local SPHERE_SIZE = 56
+
+    local Sphere = Create("ImageButton", {
+        Parent = ScreenGui,
+        BackgroundTransparency = 1,          -- ✅ không nền
+        Size = UDim2.new(0, SPHERE_SIZE, 0, SPHERE_SIZE),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Visible = false,
+        AutoButtonColor = false,
+        Image = SPHERE_ICON,
+        ImageTransparency = 0,                -- ✅ icon hiện rõ
+        ScaleType = Enum.ScaleType.Fit,
+        ClipsDescendants = false,
+    })
+    -- Không tạo UICorner/UIStroke cho Sphere (vì là icon, không nền)
+
+    -- Viền sáng nhẹ (tùy chọn, có thể bỏ nếu muốn thuần icon)
+    local SphereStroke = Create("UIStroke", {
+        Parent = Sphere,
+        Color = Color3.fromRGB(255, 255, 255),
+        Thickness = 0,
+        Transparency = 1,
+    })
+
+    -- Giữ MakeDraggable để kéo icon khi đóng menu
     MakeDraggable(Sphere, Sphere)
 
     local Window = {CurrentTab = nil, Tabs = {}, Title = Title, AllCards = {}, MainFrame = MainFrame, CurrentTransparency = 0, ConfigElements = {}, MapId = options and (type(options) == "table") and (options.Map or options.MapId) or nil}
@@ -664,7 +790,8 @@ function Library:CreateWindow(options)
         SaveManager:SetMap(mapOption)
     end
 
-    MinBtn.MouseButton1Click:Connect(function()
+        MinBtn.MouseButton1Click:Connect(function()
+        -- Ẩn menu
         Tween(MainScale, {Scale = 0}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = 1}, 0.4)
         Tween(FloatingBottomBar, {BackgroundTransparency = 1}, 0.4)
@@ -672,25 +799,23 @@ function Library:CreateWindow(options)
         task.wait(0.3)
         MainFrame.Visible = false
         BottomDragHitbox.Visible = false
+
+        -- ✅ Hiện icon menu con (không nền)
         Sphere.Visible = true
-        Tween(Sphere, {Size = UDim2.new(0, 50, 0, 50)}, 0.4)
-        
-       
-        if not sphTextToggle and sphImage then
-            Tween(SphereImageLabel, {ImageTransparency = 0}, 0.4)
-        elseif sphTextToggle then
-            Tween(SphereTextLabel, {TextTransparency = 0}, 0.4)
-        end
+        Sphere.Size = UDim2.new(0, 0, 0, 0)
+        Sphere.ImageTransparency = 1
+        Tween(Sphere, {Size = UDim2.new(0, SPHERE_SIZE, 0, SPHERE_SIZE)}, 0.4)
+        Tween(Sphere, {ImageTransparency = 0}, 0.4)
     end)
 
     Sphere.MouseButton1Click:Connect(function()
+        -- Thu nhỏ icon
         Tween(Sphere, {Size = UDim2.new(0, 0, 0, 0)}, 0.3)
-        
-        if not sphTextToggle and sphImage then Tween(SphereImageLabel, {ImageTransparency = 1}, 0.3) end
-        if sphTextToggle then Tween(SphereTextLabel, {TextTransparency = 1}, 0.3) end
-        
+        Tween(Sphere, {ImageTransparency = 1}, 0.3)
         task.wait(0.2)
         Sphere.Visible = false
+
+        -- Hiện lại menu
         MainFrame.Visible = true
         BottomDragHitbox.Visible = true
         Tween(MainScale, {Scale = 1}, 0.4)
@@ -1639,20 +1764,69 @@ function Library:CreateWindow(options)
                 end
             end)
 
-            StarBtn.MouseButton1Click:Connect(function()
+                        StarBtn.MouseButton1Click:Connect(function()
                 if deleteMode or editMode then return end
                 local data = ReadAutoloadData()
+
+                -- ✅ FIX: Nếu chưa bật Auto Load, yêu cầu bật trước
+                if not autoloadState then
+                    Library:Notify({
+                        Title = "Auto Load chưa bật",
+                        Description = "Hãy bật Auto Load (toggle phía trên) trước khi chọn ngôi sao ☆.",
+                        Duration = 4,
+                    })
+                    return
+                end
+
                 if isAutoload then
                     data.Path = nil
+                    data.Enabled = autoloadState
                     WriteAutoloadData(data)
                     Library:Notify({Title = "Autoload Target Cleared", Description = displayFName .. " is no longer the remembered Auto Load config."})
                 else
+                    -- Verify file tồn tại trước khi set
+                    local exists = false
+                    for _, fp in ipairs(_listfiles(folderName)) do
+                        if fp == filepath then exists = true break end
+                    end
+                    if not exists then
+                        Library:Notify({
+                            Title = "File không tồn tại",
+                            Description = "File save đã bị xóa hoặc di chuyển. Hãy tạo save mới.",
+                            Duration = 4,
+                        })
+                        RefreshMonitor()
+                        return
+                    end
+
                     data.Path = filepath
+                    data.Enabled = autoloadState  -- ✅ đảm bảo Enabled luôn khớp state hiện tại
                     WriteAutoloadData(data)
                     Library:Notify({Title = "Autoload Target Set", Description = displayFName .. " will be used when Auto Load is enabled."})
                 end
                 RefreshMonitor()
             end)
+			
+			-- ✅ FIX: kiểm tra autoload path còn tồn tại không, nếu không thì clear
+        local autoloadData = ReadAutoloadData()
+        if autoloadData.Path then
+            local exists = false
+            for _, fp in ipairs(_listfiles(folderName)) do
+                if fp == autoloadData.Path then exists = true break end
+            end
+            if not exists then
+                autoloadData.Path = nil
+                autoloadData.Enabled = false
+                WriteAutoloadData(autoloadData)
+                autoloadState = false
+                -- Cập nhật UI toggle nếu đã tạo (AutoloadLever có thể chưa tạo do scope)
+                if AutoloadLever and AutoloadKnob then
+                    Tween(AutoloadLever, {BackgroundColor3 = Color3.fromRGB(45, 45, 50)}, 0.3)
+                    Tween(AutoloadKnob, {Position = UDim2.new(0, 2, 0.5, -7)}, 0.3)
+                end
+            end
+        end
+    end
 
             LoadBtn.MouseButton1Click:Connect(function()
                 if deleteMode or editMode then return end
