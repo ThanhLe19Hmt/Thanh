@@ -303,20 +303,47 @@ end
 
 function SaveManager:LoadAutoloadConfig()
     if not self.Window then return false end
-    local data = self:GetAutoloadData()
-    if not data.Enabled or not data.Path then return false end
-    local ok, fdata = pcall(function() return HttpService:JSONDecode(_readfile(data.Path)) end)
-    if ok and type(fdata) == "table" then
-        for k, v in pairs(fdata) do
-            if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
-                local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
-                if not setOk then
-                    warn("[SaveManager:LoadAutoloadConfig] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
+
+    -- ✅ FIX: thử cả folder map-subfolder và folder gốc
+    local candidates = { self.Folder, self.BaseFolder }
+    for _, folder in ipairs(candidates) do
+        if folder and _isfolder(folder) then
+            local path = folder .. "/autoload.json"
+            local ok, raw = pcall(function() return _readfile(path) end)
+            if ok and raw and raw ~= "" then
+                local okDecode, data = pcall(function() return HttpService:JSONDecode(raw) end)
+                if okDecode and type(data) == "table" and data.Enabled and data.Path then
+                    -- Kiểm tra file config còn tồn tại không
+                    local fileOk, fileRaw = pcall(function() return _readfile(data.Path) end)
+                    if not fileOk or not fileRaw or fileRaw == "" then
+                        -- Thử path khác: nếu data.Path là path tuyệt đối cũ, thử rebuild
+                        local fname = data.Path:match("([^/\\]+)$")
+                        local altPath = folder .. "/" .. (fname or "")
+                        local altOk, altRaw = pcall(function() return _readfile(altPath) end)
+                        if altOk and altRaw and altRaw ~= "" then
+                            data.Path = altPath
+                        else
+                            warn("[AutoLoad] Config file not found: " .. tostring(data.Path))
+                            continue
+                        end
+                    end
+
+                    local okF, fdata = pcall(function() return HttpService:JSONDecode(_readfile(data.Path)) end)
+                    if okF and type(fdata) == "table" then
+                        for k, v in pairs(fdata) do
+                            if self.Window.ConfigElements[k] and self.Window.ConfigElements[k].Set then
+                                local setOk, setErr = pcall(function() self.Window.ConfigElements[k].Set(v) end)
+                                if not setOk then
+                                    warn("[SaveManager:LoadAutoloadConfig] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
+                                end
+                            end
+                        end
+                        Library:Notify({Title = "Autoload", Description = "Configuration loaded automatically.", Duration = 3})
+                        return true
+                    end
                 end
             end
         end
-        Library:Notify({Title = "Autoload", Description = "Configuration loaded automatically.", Duration = 3})
-        return true
     end
     return false
 end
@@ -1418,337 +1445,372 @@ function Library:CreateWindow(options)
                 end
 
                 function Elements:AddConfigManager(folderName)
-                    folderName = folderName or "MarvenRizSave"
-                    if not _isfolder(folderName) then _makefolder(folderName) end
+    -- ✅ FIX: dùng chung folder với SaveManager để Auto Load & Save/Load đồng bộ
+    folderName = folderName or Library.SaveManager.Folder or "MarvenRizSave"
+    if not _isfolder(folderName) then _makefolder(folderName) end
 
-                    local function ReadAutoloadData()
-                        local ok, raw = pcall(function() return _readfile(folderName .. "/autoload.json") end)
-                        if ok and raw and raw ~= "" then
-                            local okDecode, data = pcall(function() return HttpService:JSONDecode(raw) end)
-                            if okDecode and type(data) == "table" then return data end
-                        end
-                        return {Enabled = false, Path = nil}
-                    end
+    local function ReadAutoloadData()
+        local ok, raw = pcall(function() return _readfile(folderName .. "/autoload.json") end)
+        if ok and raw and raw ~= "" then
+            local okDecode, data = pcall(function() return HttpService:JSONDecode(raw) end)
+            if okDecode and type(data) == "table" then return data end
+        end
+        return {Enabled = false, Path = nil}
+    end
 
-                    local function WriteAutoloadData(data)
-                        if not _isfolder(folderName) then _makefolder(folderName) end
-                        local okEncode, encoded = pcall(function() return HttpService:JSONEncode(data) end)
-                        if okEncode then _writefile(folderName .. "/autoload.json", encoded) end
-                    end
+    local function WriteAutoloadData(data)
+        if not _isfolder(folderName) then _makefolder(folderName) end
+        local okEncode, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+        if okEncode then _writefile(folderName .. "/autoload.json", encoded) end
+    end
 
-                    local ManagerFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 280)})
-                    
-                    local ManagerSearch = Create("TextBox", {Parent = ManagerFrame, PlaceholderText = "Search Saves Loader...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
-                    Create("UIPadding", {Parent = ManagerSearch, PaddingLeft = UDim.new(0, 8)})
-                    Create("UICorner", {Parent = ManagerSearch, CornerRadius = UDim.new(0, 4)})
-                    Create("UIStroke", {Parent = ManagerSearch, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
+    local ManagerFrame = Create("Frame", {Parent = ItemContainer, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 280)})
 
-                    local Monitor = Create("ScrollingFrame", {Parent = ManagerFrame, BackgroundColor3 = Color3.fromRGB(15, 15, 18), Size = UDim2.new(1, -20, 0, 110), Position = UDim2.new(0, 10, 0, 35), ScrollBarThickness = 2, BorderSizePixel = 0, CanvasSize = UDim2.new(0, 0, 0, 0)})
-                    Create("UICorner", {Parent = Monitor, CornerRadius = UDim.new(0, 4)})
-                    Create("UIStroke", {Parent = Monitor, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
-                    local MonitorLayout = Create("UIListLayout", {Parent = Monitor, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5)})
-                    Create("UIPadding", {Parent = Monitor, PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
+    local ManagerSearch = Create("TextBox", {Parent = ManagerFrame, PlaceholderText = "Search Saves Loader...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
+    Create("UIPadding", {Parent = ManagerSearch, PaddingLeft = UDim.new(0, 8)})
+    Create("UICorner", {Parent = ManagerSearch, CornerRadius = UDim.new(0, 4)})
+    Create("UIStroke", {Parent = ManagerSearch, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
 
-                    MonitorLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                        Monitor.CanvasSize = UDim2.new(0, 0, 0, MonitorLayout.AbsoluteContentSize.Y + 10)
-                    end)
+    local Monitor = Create("ScrollingFrame", {Parent = ManagerFrame, BackgroundColor3 = Color3.fromRGB(15, 15, 18), Size = UDim2.new(1, -20, 0, 110), Position = UDim2.new(0, 10, 0, 35), ScrollBarThickness = 2, BorderSizePixel = 0, CanvasSize = UDim2.new(0, 0, 0, 0)})
+    Create("UICorner", {Parent = Monitor, CornerRadius = UDim.new(0, 4)})
+    Create("UIStroke", {Parent = Monitor, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
+    local MonitorLayout = Create("UIListLayout", {Parent = Monitor, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5)})
+    Create("UIPadding", {Parent = Monitor, PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5)})
 
-                    local deleteMode = false
-                    local editMode = false
-                    local selectedForDelete = {}
-                    local editTargetFile = ""
+    MonitorLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        Monitor.CanvasSize = UDim2.new(0, 0, 0, MonitorLayout.AbsoluteContentSize.Y + 10)
+    end)
 
-                    local AutoloadRow = Create("Frame", {Parent = ManagerFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 150)})
-                    Create("TextLabel", {Parent = AutoloadRow, Text = "Auto Load", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
+    local deleteMode = false
+    local editMode = false
+    local selectedForDelete = {}   -- [filepath] = true
+    local editTargetFile = ""
 
-                    local autoloadState = ReadAutoloadData().Enabled == true
-                    local AutoloadLever = Create("TextButton", {Parent = AutoloadRow, Text = "", BackgroundColor3 = autoloadState and AccentColor or Color3.fromRGB(45, 45, 50), Size = UDim2.new(0, 36, 0, 18), Position = UDim2.new(1, -36, 0.5, -9), AutoButtonColor = false})
-                    Create("UICorner", {Parent = AutoloadLever, CornerRadius = UDim.new(1, 0)})
-                    AddBounce(AutoloadLever)
-                    local AutoloadKnob = Create("Frame", {Parent = AutoloadLever, BackgroundColor3 = Color3.fromRGB(255, 255, 255), Size = UDim2.new(0, 14, 0, 14), Position = autoloadState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)})
-                    Create("UICorner", {Parent = AutoloadKnob, CornerRadius = UDim.new(1, 0)})
+    local AutoloadRow = Create("Frame", {Parent = ManagerFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 150)})
+    Create("TextLabel", {Parent = AutoloadRow, Text = "Auto Load", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -60, 1, 0), Position = UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
 
-                    AutoloadLever.MouseButton1Click:Connect(function()
-                        local data = ReadAutoloadData()
-                        if not autoloadState and not data.Path then
-                            Library:Notify({Title = "Auto Load", Description = "Pick a saved config with the star (☆) first, then enable Auto Load.", Duration = 3})
-                            return
-                        end
-                        autoloadState = not autoloadState
-                        data.Enabled = autoloadState
-                        WriteAutoloadData(data)
-                        Tween(AutoloadLever, {BackgroundColor3 = autoloadState and AccentColor or Color3.fromRGB(45, 45, 50)}, 0.3)
-                        Tween(AutoloadKnob, {Position = autoloadState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)}, 0.3)
-                        Library:Notify({
-                            Title = "Auto Load " .. (autoloadState and "Enabled" or "Disabled"),
-                            Description = autoloadState and "Your remembered config will now load automatically on startup." or "Auto Load turned off. Your remembered config is still saved.",
-                            Duration = 3
-                        })
-                    end)
+    local autoloadState = ReadAutoloadData().Enabled == true
+    local AutoloadLever = Create("TextButton", {Parent = AutoloadRow, Text = "", BackgroundColor3 = autoloadState and AccentColor or Color3.fromRGB(45, 45, 50), Size = UDim2.new(0, 36, 0, 18), Position = UDim2.new(1, -36, 0.5, -9), AutoButtonColor = false})
+    Create("UICorner", {Parent = AutoloadLever, CornerRadius = UDim.new(1, 0)})
+    AddBounce(AutoloadLever)
+    local AutoloadKnob = Create("Frame", {Parent = AutoloadLever, BackgroundColor3 = Color3.fromRGB(255, 255, 255), Size = UDim2.new(0, 14, 0, 14), Position = autoloadState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)})
+    Create("UICorner", {Parent = AutoloadKnob, CornerRadius = UDim.new(1, 0)})
 
-                    local Controls = Create("Frame", {Parent = ManagerFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 80), Position = UDim2.new(0, 10, 0, 185)})
+    AutoloadLever.MouseButton1Click:Connect(function()
+        local data = ReadAutoloadData()
+        if not autoloadState and not data.Path then
+            Library:Notify({Title = "Auto Load", Description = "Pick a saved config with the star (☆) first, then enable Auto Load.", Duration = 3})
+            return
+        end
+        autoloadState = not autoloadState
+        data.Enabled = autoloadState
+        WriteAutoloadData(data)
+        Tween(AutoloadLever, {BackgroundColor3 = autoloadState and AccentColor or Color3.fromRGB(45, 45, 50)}, 0.3)
+        Tween(AutoloadKnob, {Position = autoloadState and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)}, 0.3)
+        Library:Notify({
+            Title = "Auto Load " .. (autoloadState and "Enabled" or "Disabled"),
+            Description = autoloadState and "Your remembered config will now load automatically on startup." or "Auto Load turned off.",
+            Duration = 3
+        })
+    end)
 
-                    local NameBox = Create("TextBox", {Parent = Controls, PlaceholderText = "Enter save name...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, 0, 0, 26), Position = UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
-                    Create("UIPadding", {Parent = NameBox, PaddingLeft = UDim.new(0, 8)})
-                    Create("UICorner", {Parent = NameBox, CornerRadius = UDim.new(0, 4)})
-                    Create("UIStroke", {Parent = NameBox, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
+    local Controls = Create("Frame", {Parent = ManagerFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 80), Position = UDim2.new(0, 10, 0, 185)})
 
-                    local CreateBtn = Create("TextButton", {Parent = Controls, Text = "Create Save", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255), BackgroundColor3 = Color3.fromRGB(190, 140, 255), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0, 0, 0, 35), AutoButtonColor = false})
-                    Create("UICorner", {Parent = CreateBtn, CornerRadius = UDim.new(0, 4)})
-                    AddBounce(CreateBtn)
+    local NameBox = Create("TextBox", {Parent = Controls, PlaceholderText = "Enter save name...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, 0, 0, 26), Position = UDim2.new(0, 0, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
+    Create("UIPadding", {Parent = NameBox, PaddingLeft = UDim.new(0, 8)})
+    Create("UICorner", {Parent = NameBox, CornerRadius = UDim.new(0, 4)})
+    Create("UIStroke", {Parent = NameBox, Color = Color3.fromRGB(45, 45, 50), Thickness = 1})
 
-                    local DeleteTogBtn = Create("TextButton", {Parent = Controls, Text = "Delete Mode: OFF", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(45, 45, 50), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0.5, 5, 0, 35), AutoButtonColor = false})
-                    Create("UICorner", {Parent = DeleteTogBtn, CornerRadius = UDim.new(0, 4)})
-                    AddBounce(DeleteTogBtn)
+    local CreateBtn = Create("TextButton", {Parent = Controls, Text = "Create Save", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255), BackgroundColor3 = Color3.fromRGB(190, 140, 255), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0, 0, 0, 35), AutoButtonColor = false})
+    Create("UICorner", {Parent = CreateBtn, CornerRadius = UDim.new(0, 4)})
+    AddBounce(CreateBtn)
 
-                    local ActionArea = Create("Frame", {Parent = Controls, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26), Position = UDim2.new(0, 0, 0, 35), Visible = false})
-                    
-                    local ConfirmActionBtn = Create("TextButton", {Parent = ActionArea, Text = "Confirm", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255), BackgroundColor3 = Color3.fromRGB(200, 50, 50), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0, 0, 0, 0), AutoButtonColor = false})
-                    Create("UICorner", {Parent = ConfirmActionBtn, CornerRadius = UDim.new(0, 4)})
-                    AddBounce(ConfirmActionBtn)
+    local DeleteTogBtn = Create("TextButton", {Parent = Controls, Text = "Delete Mode: OFF", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(45, 45, 50), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0.5, 5, 0, 35), AutoButtonColor = false})
+    Create("UICorner", {Parent = DeleteTogBtn, CornerRadius = UDim.new(0, 4)})
+    AddBounce(DeleteTogBtn)
 
-                    local CancelActionBtn = Create("TextButton", {Parent = ActionArea, Text = "Cancel", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(60, 60, 65), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0.5, 5, 0, 0), AutoButtonColor = false})
-                    Create("UICorner", {Parent = CancelActionBtn, CornerRadius = UDim.new(0, 4)})
-                    AddBounce(CancelActionBtn)
+    local ActionArea = Create("Frame", {Parent = Controls, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26), Position = UDim2.new(0, 0, 0, 35), Visible = false})
 
-                    AddInfoIcon(ManagerFrame, UDim2.new(1, -20, 0, -22), {
-                        Title = "Saves Loader Config Protocol",
-                        Description = "Welcome to the Saves System. Here are your instructions:\n\n" ..
-                        "1. Create a Save: Type a name in the text box below and click 'Create Save'. This executes the configuration saving.\n" ..
-                        "2. Create a Name: Any string is valid. Naming it the exact same as an existing save will not overwrite the old one; it inherently creates a new duplicate file seamlessly.\n" ..
-                        "3. Delete a Save Loader: Click 'Delete Mode: OFF' to toggle it ON. Click the file you want deleted (it turns red). Click 'Delete Selected'. A prompt will appear; click Yes to permanently erase.\n" ..
-                        "4. Saves Loader Functionality: The system pulls all modified user data (Toggles, Sliders, Colors) and exports it securely as JSON to your workspace. Clicking 'Load' pulls it back in.\n" ..
-                        "5. Edit / Overwrite: Click 'Edit' on a save. Change the name inside the input box, then click 'Save Edit'. This effectively edits the target.\n" ..
-                        "6. Unedit Saves Loader: If you mistakenly clicked 'Edit' or 'Delete Mode', simply click the 'Cancel' button to back out without causing changes."
-                    })
+    local ConfirmActionBtn = Create("TextButton", {Parent = ActionArea, Text = "Confirm", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Color3.fromRGB(255,255,255), BackgroundColor3 = Color3.fromRGB(200, 50, 50), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0, 0, 0, 0), AutoButtonColor = false})
+    Create("UICorner", {Parent = ConfirmActionBtn, CornerRadius = UDim.new(0, 4)})
+    AddBounce(ConfirmActionBtn)
 
-                    local InternalConfirmPopup = Create("Frame", {Parent = ManagerFrame, BackgroundColor3 = Color3.fromRGB(20, 20, 24), Size = UDim2.new(1, -20, 1, -20), Position = UDim2.new(0, 10, 0, 10), ZIndex = 60, BackgroundTransparency = 1, Visible = false})
-                    Create("UICorner", {Parent = InternalConfirmPopup, CornerRadius = UDim.new(0, 8)})
-                    Create("UIStroke", {Parent = InternalConfirmPopup, Color = Color3.fromRGB(180, 50, 50), Thickness = 1, Transparency = 1})
-                    
-                    local P_Title = Create("TextLabel", {Parent = InternalConfirmPopup, Text = "Confirm Deletion?", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Color3.fromRGB(255, 60, 60), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 0, 40), TextTransparency = 1, ZIndex = 61})
-                    local P_Desc = Create("TextLabel", {Parent = InternalConfirmPopup, Text = "You are about to delete these specific saves loaders permanently.", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 70), TextWrapped = true, TextTransparency = 1, ZIndex = 61})
-                    
-                    local P_Yes = Create("TextButton", {Parent = InternalConfirmPopup, Text = "Yes", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = Color3.fromRGB(180, 50, 50), Size = UDim2.new(0.5, -30, 0, 30), Position = UDim2.new(0, 20, 0, 130), AutoButtonColor = false, BackgroundTransparency = 1, TextTransparency = 1, ZIndex = 61})
-                    Create("UICorner", {Parent = P_Yes, CornerRadius = UDim.new(0, 4)})
-                    AddBounce(P_Yes)
-                    
-                    local P_No = Create("TextButton", {Parent = InternalConfirmPopup, Text = "No", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(45, 45, 50), Size = UDim2.new(0.5, -30, 0, 30), Position = UDim2.new(0.5, 10, 0, 130), AutoButtonColor = false, BackgroundTransparency = 1, TextTransparency = 1, ZIndex = 61})
-                    Create("UICorner", {Parent = P_No, CornerRadius = UDim.new(0, 4)})
-                    AddBounce(P_No)
+    local CancelActionBtn = Create("TextButton", {Parent = ActionArea, Text = "Cancel", Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(60, 60, 65), Size = UDim2.new(0.5, -5, 0, 26), Position = UDim2.new(0.5, 5, 0, 0), AutoButtonColor = false})
+    Create("UICorner", {Parent = CancelActionBtn, CornerRadius = UDim.new(0, 4)})
+    AddBounce(CancelActionBtn)
 
-                    local function HideInternalPopup()
-                        Tween(InternalConfirmPopup, {BackgroundTransparency = 1}, 0.3)
-                        Tween(InternalConfirmPopup:FindFirstChild("UIStroke"), {Transparency = 1}, 0.3)
-                        Tween(P_Title, {TextTransparency = 1}, 0.3)
-                        Tween(P_Desc, {TextTransparency = 1}, 0.3)
-                        Tween(P_Yes, {BackgroundTransparency = 1, TextTransparency = 1}, 0.3)
-                        Tween(P_No, {BackgroundTransparency = 1, TextTransparency = 1}, 0.3)
-                        task.wait(0.3)
-                        InternalConfirmPopup.Visible = false
-                    end
+    AddInfoIcon(ManagerFrame, UDim2.new(1, -20, 0, -22), {
+        Title = "Saves Loader Config Protocol",
+        Description = "Welcome to the Saves System. Here are your instructions:\n\n" ..
+        "1. Create a Save: Type a name in the text box below and click 'Create Save'.\n" ..
+        "2. Create a Name: Any string is valid. Naming it the exact same as an existing save will not overwrite the old one; it inherently creates a new duplicate file seamlessly.\n" ..
+        "3. Delete a Save Loader: Click 'Delete Mode: OFF' to toggle it ON. Click the file you want deleted (it turns red). Click 'Delete Selected'. A prompt will appear; click Yes to permanently erase.\n" ..
+        "4. Saves Loader Functionality: The system pulls all modified user data (Toggles, Sliders, Colors) and exports it securely as JSON to your workspace.\n" ..
+        "5. Edit / Overwrite: Click 'Edit' on a save. Change the name inside the input box, then click 'Save Edit'.\n" ..
+        "6. Unedit Saves Loader: If you mistakenly clicked 'Edit' or 'Delete Mode', simply click the 'Cancel' button."
+    })
 
-                    local function RefreshMonitor()
-                        for _, v in ipairs(Monitor:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
-                        selectedForDelete = {}
+    local InternalConfirmPopup = Create("Frame", {Parent = ManagerFrame, BackgroundColor3 = Color3.fromRGB(20, 20, 24), Size = UDim2.new(1, -20, 1, -20), Position = UDim2.new(0, 10, 0, 10), ZIndex = 60, BackgroundTransparency = 1, Visible = false})
+    Create("UICorner", {Parent = InternalConfirmPopup, CornerRadius = UDim.new(0, 8)})
+    Create("UIStroke", {Parent = InternalConfirmPopup, Color = Color3.fromRGB(180, 50, 50), Thickness = 1, Transparency = 1})
 
-                        local currentAutoload = ReadAutoloadData().Path
+    local P_Title = Create("TextLabel", {Parent = InternalConfirmPopup, Text = "Confirm Deletion?", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Color3.fromRGB(255, 60, 60), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 0, 40), TextTransparency = 1, ZIndex = 61})
+    local P_Desc = Create("TextLabel", {Parent = InternalConfirmPopup, Text = "You are about to delete these specific saves loaders permanently.", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 40), Position = UDim2.new(0, 20, 0, 70), TextWrapped = true, TextTransparency = 1, ZIndex = 61})
 
-                        local files = _listfiles(folderName)
-                        for _, filepath in ipairs(files) do
-                            local rawName = filepath:match("([^/\\]+)%.json$")
-                            if rawName and not IsAutoloadFile(filepath) then
-                                local displayFName = rawName:gsub("_%d+%.%d+$", ""):gsub("_%d+$", "")
-                                local isAutoload = (currentAutoload == filepath)
+    local P_Yes = Create("TextButton", {Parent = InternalConfirmPopup, Text = "Yes", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = Color3.fromRGB(180, 50, 50), Size = UDim2.new(0.5, -30, 0, 30), Position = UDim2.new(0, 20, 0, 130), AutoButtonColor = false, BackgroundTransparency = 1, TextTransparency = 1, ZIndex = 61})
+    Create("UICorner", {Parent = P_Yes, CornerRadius = UDim.new(0, 4)})
+    AddBounce(P_Yes)
 
-                                local Row = Create("Frame", {Parent = Monitor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, 0, 0, 30)})
-                                Create("UICorner", {Parent = Row, CornerRadius = UDim.new(0, 4)})
-                                
-                                local Title = Create("TextLabel", {Parent = Row, Text = displayFName, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -84, 1, 0), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
-                                
-                                local StarBtn = Create("TextButton", {Parent = Row, Text = isAutoload and "★" or "☆", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = isAutoload and Color3.fromRGB(255, 215, 0) or SubTextColor, BackgroundColor3 = Color3.fromRGB(45, 45, 50), Size = UDim2.new(0, 22, 0, 20), Position = UDim2.new(1, -103, 0.5, -10), AutoButtonColor = false})
-                                Create("UICorner", {Parent = StarBtn, CornerRadius = UDim.new(0, 4)})
-                                AddBounce(StarBtn)
+    local P_No = Create("TextButton", {Parent = InternalConfirmPopup, Text = "No", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(45, 45, 50), Size = UDim2.new(0.5, -30, 0, 30), Position = UDim2.new(0.5, 10, 0, 130), AutoButtonColor = false, BackgroundTransparency = 1, TextTransparency = 1, ZIndex = 61})
+    Create("UICorner", {Parent = P_No, CornerRadius = UDim.new(0, 4)})
+    AddBounce(P_No)
 
-                                local LoadBtn = Create("TextButton", {Parent = Row, Text = "Load", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(45, 120, 60), Size = UDim2.new(0, 32, 0, 20), Position = UDim2.new(1, -77, 0.5, -10), AutoButtonColor = false})
-                                Create("UICorner", {Parent = LoadBtn, CornerRadius = UDim.new(0, 4)})
-                                AddBounce(LoadBtn)
+    local function HideInternalPopup()
+        Tween(InternalConfirmPopup, {BackgroundTransparency = 1}, 0.3)
+        Tween(InternalConfirmPopup:FindFirstChild("UIStroke"), {Transparency = 1}, 0.3)
+        Tween(P_Title, {TextTransparency = 1}, 0.3)
+        Tween(P_Desc, {TextTransparency = 1}, 0.3)
+        Tween(P_Yes, {BackgroundTransparency = 1, TextTransparency = 1}, 0.3)
+        Tween(P_No, {BackgroundTransparency = 1, TextTransparency = 1}, 0.3)
+        task.wait(0.3)
+        InternalConfirmPopup.Visible = false
+    end
 
-                                local EditBtn = Create("TextButton", {Parent = Row, Text = "Edit", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(150, 100, 45), Size = UDim2.new(0, 30, 0, 20), Position = UDim2.new(1, -40, 0.5, -10), AutoButtonColor = false})
-                                Create("UICorner", {Parent = EditBtn, CornerRadius = UDim.new(0, 4)})
-                                AddBounce(EditBtn)
+    -- ✅ FIX: Lấy toàn bộ file trong folder (đúng folder của SaveManager)
+    local function ListAllSaveFiles()
+        if not _isfolder(folderName) then _makefolder(folderName) end
+        local out = {}
+        for _, fp in ipairs(_listfiles(folderName)) do
+            if not IsAutoloadFile(fp) then
+                table.insert(out, fp)
+            end
+        end
+        return out
+    end
 
-                                local SelectionMask = Create("TextButton", {Parent = Row, Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, -110, 1, 0), ZIndex = 2})
-                                
-                                SelectionMask.MouseButton1Click:Connect(function()
-                                    if deleteMode then
-                                        if selectedForDelete[filepath] then
-                                            selectedForDelete[filepath] = nil
-                                            Tween(Row, {BackgroundColor3 = BackgroundColor}, 0.2)
-                                        else
-                                            selectedForDelete[filepath] = true
-                                            Tween(Row, {BackgroundColor3 = Color3.fromRGB(180, 50, 50)}, 0.2)
-                                        end
-                                    end
-                                end)
+    -- ✅ FIX: Tách tên hiển thị khỏi path đầy đủ (bỏ suffix _<timestamp>)
+    local function DisplayNameFromPath(fp)
+        local raw = fp:match("([^/\\]+)%.json$")
+        if not raw then return nil end
+        -- Bỏ "_<số>" hoặc "_<số>.<số>" ở cuối
+        return (raw:gsub("_%d+%.%d+$", ""):gsub("_%d+$", ""))
+    end
 
-                                StarBtn.MouseButton1Click:Connect(function()
-                                    if deleteMode or editMode then return end
-                                    local data = ReadAutoloadData()
-                                    if isAutoload then
-                                        data.Path = nil
-                                        WriteAutoloadData(data)
-                                        Library:Notify({Title = "Autoload Target Cleared", Description = displayFName .. " is no longer the remembered Auto Load config."})
-                                    else
-                                        data.Path = filepath
-                                        WriteAutoloadData(data)
-                                        Library:Notify({Title = "Autoload Target Set", Description = displayFName .. " will be used when Auto Load is enabled."})
-                                    end
-                                    RefreshMonitor()
-                                end)
+    local function RefreshMonitor()
+        for _, v in ipairs(Monitor:GetChildren()) do
+            if v:IsA("Frame") then v:Destroy() end
+        end
+        selectedForDelete = {}
 
-                                LoadBtn.MouseButton1Click:Connect(function()
-                                    if deleteMode or editMode then return end
-                                    local s, data = pcall(function() return HttpService:JSONDecode(_readfile(filepath)) end)
-                                    if s and type(data) == "table" then
-                                        for k, v in pairs(data) do
-                                            if Window.ConfigElements[k] and Window.ConfigElements[k].Set then
-                                                local setOk, setErr = pcall(function() Window.ConfigElements[k].Set(v) end)
-                                                if not setOk then
-                                                    warn("[Saves Loader] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
-                                                end
-                                            end
-                                        end
-                                        Library:Notify({Title = "Saves Loader", Description = "Successfully loaded " .. displayFName})
-                                    end
-                                end)
+        local currentAutoload = ReadAutoloadData().Path
 
-                                EditBtn.MouseButton1Click:Connect(function()
-                                    if deleteMode then return end
-                                    editMode = true
-                                    editTargetFile = filepath
-                                    NameBox.Text = displayFName
-                                    CreateBtn.Visible = false
-                                    DeleteTogBtn.Visible = false
-                                    ActionArea.Visible = true
-                                    ConfirmActionBtn.Text = "Save Edit"
-                                    ConfirmActionBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 200)
-                                end)
-                            end
-                        end
-                    end
+        for _, filepath in ipairs(ListAllSaveFiles()) do
+            local displayFName = DisplayNameFromPath(filepath) or "Unnamed"
+            local isAutoload = (currentAutoload == filepath)
 
-                    local function ExecuteSave(saveName)
-                        local payload = {}
-                        for k, el in pairs(Window.ConfigElements) do
-                            if el.Get then payload[k] = el.Get() end
-                        end
-                        local encoded = HttpService:JSONEncode(payload)
-                        local uniqueKey = tostring(math.floor(tick()))
-                        local finalPath = folderName .. "/" .. saveName .. "_" .. uniqueKey .. ".json"
-                        _writefile(finalPath, encoded)
-                        RefreshMonitor()
-                        Library:Notify({Title = "Saved Successfully", Description = "Config [" .. saveName .. "] secured."})
-                    end
+            local Row = Create("Frame", {Parent = Monitor, BackgroundColor3 = BackgroundColor, Size = UDim2.new(1, 0, 0, 30)})
+            Create("UICorner", {Parent = Row, CornerRadius = UDim.new(0, 4)})
 
-                    CreateBtn.MouseButton1Click:Connect(function()
-                        if NameBox.Text ~= "" then ExecuteSave(NameBox.Text) end
-                    end)
+            local Title = Create("TextLabel", {Parent = Row, Text = displayFName, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -84, 1, 0), Position = UDim2.new(0, 10, 0, 0), TextXAlignment = Enum.TextXAlignment.Left})
 
-                    DeleteTogBtn.MouseButton1Click:Connect(function()
-                        if editMode then return end
-                        deleteMode = not deleteMode
-                        DeleteTogBtn.Text = deleteMode and "Delete Mode: ON" or "Delete Mode: OFF"
-                        Tween(DeleteTogBtn, {BackgroundColor3 = deleteMode and Color3.fromRGB(180, 50, 50) or Color3.fromRGB(45, 45, 50)}, 0.2)
-                        
-                        ActionArea.Visible = deleteMode
-                        CreateBtn.Visible = not deleteMode
-                        if deleteMode then
-                            ConfirmActionBtn.Text = "Delete Selected"
-                            ConfirmActionBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-                        else
-                            RefreshMonitor()
-                        end
-                    end)
+            local StarBtn = Create("TextButton", {Parent = Row, Text = isAutoload and "★" or "☆", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = isAutoload and Color3.fromRGB(255, 215, 0) or SubTextColor, BackgroundColor3 = Color3.fromRGB(45, 45, 50), Size = UDim2.new(0, 22, 0, 20), Position = UDim2.new(1, -103, 0.5, -10), AutoButtonColor = false})
+            Create("UICorner", {Parent = StarBtn, CornerRadius = UDim.new(0, 4)})
+            AddBounce(StarBtn)
 
-                    ConfirmActionBtn.MouseButton1Click:Connect(function()
-                        if deleteMode then
-                            InternalConfirmPopup.Visible = true
-                            Tween(InternalConfirmPopup, {BackgroundTransparency = 0.1}, 0.3)
-                            Tween(InternalConfirmPopup:FindFirstChild("UIStroke"), {Transparency = 0.5}, 0.3)
-                            Tween(P_Title, {TextTransparency = 0}, 0.3)
-                            Tween(P_Desc, {TextTransparency = 0}, 0.3)
-                            Tween(P_Yes, {BackgroundTransparency = 0, TextTransparency = 0}, 0.3)
-                            Tween(P_No, {BackgroundTransparency = 0, TextTransparency = 0}, 0.3)
-                        elseif editMode then
-                            local newName = NameBox.Text
-                            if newName ~= "" then
-                                pcall(function() _delfile(editTargetFile) end)
-                                ExecuteSave(newName)
-                            end
-                            editMode = false
-                            ActionArea.Visible = false
-                            CreateBtn.Visible = true
-                            DeleteTogBtn.Visible = true
-                            RefreshMonitor()
-                        end
-                    end)
+            local LoadBtn = Create("TextButton", {Parent = Row, Text = "Load", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(45, 120, 60), Size = UDim2.new(0, 32, 0, 20), Position = UDim2.new(1, -77, 0.5, -10), AutoButtonColor = false})
+            Create("UICorner", {Parent = LoadBtn, CornerRadius = UDim.new(0, 4)})
+            AddBounce(LoadBtn)
 
-                    P_Yes.MouseButton1Click:Connect(function()
-                        local autoData = ReadAutoloadData()
-                        local autoCleared = false
-                        for file, _ in pairs(selectedForDelete) do
-                            pcall(function() _delfile(file) end)
-                            if autoData.Path == file then
-                                autoData.Path = nil
-                                autoData.Enabled = false
-                                autoCleared = true
-                            end
-                        end
-                        if autoCleared then
-                            WriteAutoloadData(autoData)
-                            autoloadState = false
-                            Tween(AutoloadLever, {BackgroundColor3 = Color3.fromRGB(45, 45, 50)}, 0.3)
-                            Tween(AutoloadKnob, {Position = UDim2.new(0, 2, 0.5, -7)}, 0.3)
-                        end
-                        deleteMode = false
-                        DeleteTogBtn.Text = "Delete Mode: OFF"
-                        DeleteTogBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-                        ActionArea.Visible = false
-                        CreateBtn.Visible = true
-                        RefreshMonitor()
-                        Library:Notify({Title = "Deletions Complete", Description = "Selected saves erased from system."})
-                        HideInternalPopup()
-                    end)
+            local EditBtn = Create("TextButton", {Parent = Row, Text = "Edit", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = TextColor, BackgroundColor3 = Color3.fromRGB(150, 100, 45), Size = UDim2.new(0, 30, 0, 20), Position = UDim2.new(1, -40, 0.5, -10), AutoButtonColor = false})
+            Create("UICorner", {Parent = EditBtn, CornerRadius = UDim.new(0, 4)})
+            AddBounce(EditBtn)
 
-                    P_No.MouseButton1Click:Connect(function()
-                        HideInternalPopup()
-                    end)
+            -- SelectionMask phủ toàn bộ row (trừ 3 nút phải), ZIndex thấp hơn nút
+            local SelectionMask = Create("TextButton", {Parent = Row, Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, -110, 1, 0), ZIndex = 1})
 
-                    CancelActionBtn.MouseButton1Click:Connect(function()
-                        editMode = false
-                        deleteMode = false
-                        DeleteTogBtn.Text = "Delete Mode: OFF"
-                        DeleteTogBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-                        ActionArea.Visible = false
-                        CreateBtn.Visible = true
-                        DeleteTogBtn.Visible = true
-                        NameBox.Text = ""
-                        RefreshMonitor()
-                    end)
-
-                    ManagerSearch:GetPropertyChangedSignal("Text"):Connect(function()
-                        local q = ManagerSearch.Text:lower()
-                        for _, v in ipairs(Monitor:GetChildren()) do
-                            if v:IsA("Frame") then
-                                local lbl = v:FindFirstChildOfClass("TextLabel")
-                                if lbl then v.Visible = (q == "" or string.find(lbl.Text:lower(), q) ~= nil) end
-                            end
-                        end
-                    end)
-
-                    RefreshMonitor()
+            SelectionMask.MouseButton1Click:Connect(function()
+                if not deleteMode then return end
+                if selectedForDelete[filepath] then
+                    selectedForDelete[filepath] = nil
+                    Tween(Row, {BackgroundColor3 = BackgroundColor}, 0.2)
+                else
+                    selectedForDelete[filepath] = true
+                    Tween(Row, {BackgroundColor3 = Color3.fromRGB(180, 50, 50)}, 0.2)
                 end
+            end)
+
+            StarBtn.MouseButton1Click:Connect(function()
+                if deleteMode or editMode then return end
+                local data = ReadAutoloadData()
+                if isAutoload then
+                    data.Path = nil
+                    WriteAutoloadData(data)
+                    Library:Notify({Title = "Autoload Target Cleared", Description = displayFName .. " is no longer the remembered Auto Load config."})
+                else
+                    data.Path = filepath
+                    WriteAutoloadData(data)
+                    Library:Notify({Title = "Autoload Target Set", Description = displayFName .. " will be used when Auto Load is enabled."})
+                end
+                RefreshMonitor()
+            end)
+
+            LoadBtn.MouseButton1Click:Connect(function()
+                if deleteMode or editMode then return end
+                local s, data = pcall(function() return HttpService:JSONDecode(_readfile(filepath)) end)
+                if s and type(data) == "table" then
+                    for k, v in pairs(data) do
+                        if Window.ConfigElements[k] and Window.ConfigElements[k].Set then
+                            local setOk, setErr = pcall(function() Window.ConfigElements[k].Set(v) end)
+                            if not setOk then
+                                warn("[Saves Loader] Skipped key '" .. tostring(k) .. "': " .. tostring(setErr))
+                            end
+                        end
+                    end
+                    Library:Notify({Title = "Saves Loader", Description = "Successfully loaded " .. displayFName})
+                else
+                    Library:Notify({Title = "Saves Loader", Description = "Failed to read " .. filepath})
+                end
+            end)
+
+            EditBtn.MouseButton1Click:Connect(function()
+                if deleteMode then return end
+                editMode = true
+                editTargetFile = filepath
+                NameBox.Text = displayFName
+                CreateBtn.Visible = false
+                DeleteTogBtn.Visible = false
+                ActionArea.Visible = true
+                ConfirmActionBtn.Text = "Save Edit"
+                ConfirmActionBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 200)
+            end)
+        end
+    end
+
+    -- ✅ FIX: ExecuteSave dùng đúng folderName, và nếu trùng tên thì vẫn thêm timestamp
+    local function ExecuteSave(saveName)
+        local payload = {}
+        for k, el in pairs(Window.ConfigElements) do
+            if el.Get then payload[k] = el.Get() end
+        end
+        local encoded = HttpService:JSONEncode(payload)
+        local uniqueKey = tostring(math.floor(tick()))
+        local finalPath = folderName .. "/" .. saveName .. "_" .. uniqueKey .. ".json"
+        _writefile(finalPath, encoded)
+        RefreshMonitor()
+        Library:Notify({Title = "Saved Successfully", Description = "Config [" .. saveName .. "] secured."})
+        return finalPath
+    end
+
+    CreateBtn.MouseButton1Click:Connect(function()
+        if NameBox.Text ~= "" then ExecuteSave(NameBox.Text) end
+    end)
+
+    DeleteTogBtn.MouseButton1Click:Connect(function()
+        if editMode then return end
+        deleteMode = not deleteMode
+        DeleteTogBtn.Text = deleteMode and "Delete Mode: ON" or "Delete Mode: OFF"
+        Tween(DeleteTogBtn, {BackgroundColor3 = deleteMode and Color3.fromRGB(180, 50, 50) or Color3.fromRGB(45, 45, 50)}, 0.2)
+
+        ActionArea.Visible = deleteMode
+        CreateBtn.Visible = not deleteMode
+        if deleteMode then
+            ConfirmActionBtn.Text = "Delete Selected"
+            ConfirmActionBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        else
+            RefreshMonitor()
+        end
+    end)
+
+    ConfirmActionBtn.MouseButton1Click:Connect(function()
+        if deleteMode then
+            InternalConfirmPopup.Visible = true
+            Tween(InternalConfirmPopup, {BackgroundTransparency = 0.1}, 0.3)
+            Tween(InternalConfirmPopup:FindFirstChild("UIStroke"), {Transparency = 0.5}, 0.3)
+            Tween(P_Title, {TextTransparency = 0}, 0.3)
+            Tween(P_Desc, {TextTransparency = 0}, 0.3)
+            Tween(P_Yes, {BackgroundTransparency = 0, TextTransparency = 0}, 0.3)
+            Tween(P_No, {BackgroundTransparency = 0, TextTransparency = 0}, 0.3)
+        elseif editMode then
+            local newName = NameBox.Text
+            if newName ~= "" then
+                -- ✅ FIX: xóa file cũ đúng path, rồi save tên mới
+                pcall(function() _delfile(editTargetFile) end)
+                ExecuteSave(newName)
+            end
+            editMode = false
+            ActionArea.Visible = false
+            CreateBtn.Visible = true
+            DeleteTogBtn.Visible = true
+            RefreshMonitor()
+        end
+    end)
+
+    -- ✅ FIX: Xóa file đúng path + cập nhật autoload nếu file bị xóa
+    P_Yes.MouseButton1Click:Connect(function()
+        local autoData = ReadAutoloadData()
+        local autoCleared = false
+        local deletedCount = 0
+
+        for filepath, _ in pairs(selectedForDelete) do
+            -- Kiểm tra file tồn tại trước khi xóa
+            local exists = false
+            for _, fp in ipairs(_listfiles(folderName)) do
+                if fp == filepath then exists = true break end
+            end
+            if exists then
+                local ok = pcall(function() _delfile(filepath) end)
+                if ok then deletedCount = deletedCount + 1 end
+                if autoData.Path == filepath then
+                    autoData.Path = nil
+                    autoData.Enabled = false
+                    autoCleared = true
+                end
+            end
+        end
+
+        if autoCleared then
+            WriteAutoloadData(autoData)
+            autoloadState = false
+            Tween(AutoloadLever, {BackgroundColor3 = Color3.fromRGB(45, 45, 50)}, 0.3)
+            Tween(AutoloadKnob, {Position = UDim2.new(0, 2, 0.5, -7)}, 0.3)
+        end
+
+        deleteMode = false
+        DeleteTogBtn.Text = "Delete Mode: OFF"
+        DeleteTogBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+        ActionArea.Visible = false
+        CreateBtn.Visible = true
+        RefreshMonitor()
+        Library:Notify({Title = "Deletions Complete", Description = ("Erased %d file(s)."):format(deletedCount)})
+        HideInternalPopup()
+    end)
+
+    P_No.MouseButton1Click:Connect(function() HideInternalPopup() end)
+
+    CancelActionBtn.MouseButton1Click:Connect(function()
+        editMode = false
+        deleteMode = false
+        DeleteTogBtn.Text = "Delete Mode: OFF"
+        DeleteTogBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+        ActionArea.Visible = false
+        CreateBtn.Visible = true
+        DeleteTogBtn.Visible = true
+        NameBox.Text = ""
+        RefreshMonitor()
+    end)
+
+    ManagerSearch:GetPropertyChangedSignal("Text"):Connect(function()
+        local q = ManagerSearch.Text:lower()
+        for _, v in ipairs(Monitor:GetChildren()) do
+            if v:IsA("Frame") then
+                local lbl = v:FindFirstChildOfClass("TextLabel")
+                if lbl then v.Visible = (q == "" or string.find(lbl.Text:lower(), q) ~= nil) end
+            end
+        end
+    end)
+
+    RefreshMonitor()
+end
 
                 local function BuildInfo(config)
                     if config.Desc then
