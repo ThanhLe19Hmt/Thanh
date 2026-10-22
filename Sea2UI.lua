@@ -196,6 +196,20 @@ function SaveManager:SetAutoloadData(data)
     if ok then _writefile(self.Folder .. "/autoload.json", encoded) end
 end
 
+function SaveManager:BuildConfigTab(tab, folderName)
+    if not tab or not tab.CreatePage then
+        warn("SaveManager:BuildConfigTab expects a Tab object")
+        return
+    end
+    if folderName and folderName ~= "" then
+        self:SetFolder(folderName)
+    end
+
+    local ConfigPage = tab:CreatePage("Config")
+    local SaveSection = ConfigPage:CreateSection("💾 Save Manager", "Right")
+    SaveSection:AddConfigManager(self.Folder)
+end
+
 function SaveManager:LoadAutoloadConfig()
     if not self.Window then return false end
     local candidates = { self.Folder, self.BaseFolder }
