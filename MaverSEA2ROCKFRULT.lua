@@ -1,10 +1,5 @@
--- ============================================================
---  MarvenRiz Hub — Sea2 Full (Final)
---  Rock Fruit • MapId: 132854526011923
--- ============================================================
-
 if game.PlaceId ~= 132854526011923 then
-    warn(("[MarvenRiz] Sai map: %d — script chỉ chạy trên Sea2"):format(game.PlaceId))
+    warn(("[MarvenRiz] Incorrect map: %d — script only runs on Sea2"):format(game.PlaceId))
     return
 end
 
@@ -17,9 +12,6 @@ local RunService        = game:GetService("RunService")
 local VirtualUser       = game:GetService("VirtualUser")
 local LocalPlayer       = Players.LocalPlayer
 
--- ============================================================
---  LOAD LIB (Config ổn định)
--- ============================================================
 local Library = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Sea2UI.lua"
 ))()
@@ -95,9 +87,6 @@ local function ApplyMenuScale(scale)
     end
 end
 
--- ============================================================
---  LOAD MODULES
--- ============================================================
 local Npc_Quest = workspace:WaitForChild("NpcQuest", 5)
 local Itemdrops = workspace:WaitForChild("Itemdrops", 5)
 
@@ -111,9 +100,6 @@ pcall(function() Quest_ModuleData = require(Quest_Module) end)
 pcall(function() ItemListData = require(ItemList) end)
 pcall(function() PointItemMData = require(PointItemM) end)
 
--- ============================================================
---  BUILD DATA
--- ============================================================
 local TypeTool = {"Melee", "Sword", "Special", "DevilFruit"}
 local RandomChestValue = {"x5", "x10", "x15"}
 
@@ -126,17 +112,8 @@ local CachedInventory = {}
 local LastInventory = 0
 local MethodFarm = CFrame.new(0, 5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 
-local SpawnList = {
-    ["Thief"]      = "Bacon Thief",
-    ["Piccolo"]    = "Piccolo",
-    ["Duck"]       = "Duck Monster",
-    ["Devil Boat"] = "DevilBoat",
-    ["Kraken"]     = "Kraken",
-}
+local SpawnList = {["Thief"]="Bacon Thief",}
 
--- ============================================================
---  GLOBAL STATE
--- ============================================================
 _G.MainWeapon = "Melee"
 _G.WeaponList = {}
 _G.Select_EquipWeapon = {}
@@ -157,8 +134,6 @@ _G.Auto_RandomChest = false
 _G.Select_Guarantee = nil
 _G.Auto_Guarantee = false
 _G.VFXDisabled = false
-
--- State
 _G._lastMaterialSpawn     = nil
 _G._lastMaterialSpawnTime = 0
 _G._lastThiefSpawn        = nil
@@ -169,9 +144,6 @@ _G._questPromptTime       = 0
 _G._farmLevelWaitPos      = nil
 _G._npcBayStart           = nil
 
--- ============================================================
---  BUILD QUEST LIST
--- ============================================================
 if Quest_ModuleData and Npc_Quest then
     pcall(function()
         table.sort(Quest_ModuleData, function(a, b) return a.Level < b.Level end)
@@ -184,9 +156,6 @@ if Quest_ModuleData and Npc_Quest then
     end)
 end
 
--- ============================================================
---  BUILD ITEM DROP
--- ============================================================
 if Itemdrops then
     pcall(function()
         for _, Mob in ipairs(Itemdrops:GetChildren()) do
@@ -216,9 +185,6 @@ if ItemListData then
     table.sort(ItemAll)
 end
 
--- ============================================================
---  BUILD GUARANTEE LIST
--- ============================================================
 if PointItemMData then
     for Item, Price in pairs(PointItemMData) do
         table.insert(Poitem, {Name = Item, Price = Price})
@@ -229,9 +195,6 @@ if PointItemMData then
     end
 end
 
--- ============================================================
---  HELPERS
--- ============================================================
 local function GetQuest_Level(My_level)
     My_level = tonumber(My_level) or 0
     local Quest
@@ -261,9 +224,6 @@ local function GetItemAmount(ItemName)
     return (Inv[ItemName] and Inv[ItemName].amount) or 0
 end
 
--- ============================================================
---  AUTO SKILL
--- ============================================================
 local function AutoSkill()
     local Character = LocalPlayer.Character
     if not Character then return end
@@ -278,14 +238,12 @@ local function AutoSkill()
 
     local Skill = Skills[math.random(#Skills)]
 
-    -- Fire skill cho tool đang cầm
     for _, Tool in ipairs(Character:GetChildren()) do
         if Tool:IsA("Tool") then
             pcall(function() ReplicatedStorage.Remotes.Action:FireServer(Tool.Name, Skill) end)
         end
     end
 
-    -- Fire skill cho tool trong Backpack thuộc _G.WeaponList
     local bp = LocalPlayer:FindFirstChild("Backpack")
     if bp then
         local wanted = {}
@@ -301,9 +259,6 @@ local function AutoSkill()
     end
 end
 
--- ============================================================
---  EQUIP WEAPON (Multi)
--- ============================================================
 local function EquipWeapon()
     local char = LocalPlayer.Character
     if not char then return end
@@ -319,15 +274,13 @@ local function EquipWeapon()
 
     local mainWeapon = _G.WeaponList[1] or _G.MainWeapon
 
-    -- Bỏ tool không cần
     for _, v in pairs(char:GetChildren()) do
         if v:IsA("Tool") then
             local wt = v:GetAttribute("Type")
             if not wanted[wt] then v.Parent = bp end
         end
     end
-
-    -- Equip main
+	
     if mainWeapon then
         for _, v in pairs(bp:GetChildren()) do
             if v:IsA("Tool") and v:GetAttribute("Type") == mainWeapon then
@@ -337,7 +290,6 @@ local function EquipWeapon()
         end
     end
 
-    -- Support vào char (không equip)
     for _, v in pairs(bp:GetChildren()) do
         if v:IsA("Tool") then
             local wt = v:GetAttribute("Type")
@@ -348,9 +300,6 @@ local function EquipWeapon()
     end
 end
 
--- ============================================================
---  ATTACK
--- ============================================================
 local function Attack()
     local Character = LocalPlayer.Character
     if not Character then return end
@@ -376,9 +325,6 @@ local function Attack()
     end
 end
 
--- ============================================================
---  ✅ ATTACH SYSTEM
--- ============================================================
 local _attachAlign = nil
 local _attachGyro  = nil
 
@@ -487,9 +433,6 @@ local function AttachToMob(myHrp, tHrp)
     gyro.CFrame = CFrame.lookAt(targetPos, tHrp.Position)
 end
 
--- ============================================================
---  NOCLIP
--- ============================================================
 local _savedCollide = {}
 
 local function SetNoclip(enabled)
@@ -530,17 +473,11 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  IDLE
--- ============================================================
 LocalPlayer.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- ============================================================
---  CREATE WINDOW
--- ============================================================
 local Window = Library:CreateWindow({
     Title        = "MarvenRiz Hub",
     Subtitle     = "Rock Fruit • Sea 2",
@@ -555,9 +492,6 @@ local Window = Library:CreateWindow({
     SaveFolder   = "MarvenRizSave_Sea2",
 })
 
--- ============================================================
---  TAB SETTINGS
--- ============================================================
 local Tab1     = Window:CreateTab("Settings", true)
 local Page1    = Tab1:CreatePage("Settings")
 
@@ -569,7 +503,7 @@ local VFXSec    = Page1:CreateSection("✨ VFX", "Right")
 
 WeaponSec:Dropdown({
     Title = "Select Weapons (First = Main)",
-    Desc  = "Vũ khí đầu tiên = vũ khí chính (tấn công). Các vũ khí sau là phụ (vẫn tấn công).",
+    Desc  = "First weapon = main (attacks). Others are support (also attack).",
     Options = TypeTool,
     Multi = true,
     Callback = function(v)
@@ -597,7 +531,7 @@ WeaponSec:Dropdown({
 
 SkillSec:Dropdown({
     Title = "Select Skills (Z/X/C/V/F)",
-    Desc  = "Chọn skill sẽ tự động dùng khi farm.",
+    Desc  = "Select skills to auto-use while farming.",
     Options = {"Z", "X", "C", "V", "F"},
     Multi = true,
     Callback = function(v)
@@ -644,26 +578,26 @@ MethodSec:Dropdown({
     Callback = function(v) _G.Select_Method = v end,
 })
 MethodSec:Slider({
-    Title = "Distance Farm",
+    Title = "Farm Distance",
+    Desc  = "Distance from mob when attacking.",
     Min = 0, Max = 30, Value = 5,
     Callback = function(v) _G.Distance_Farm = v end,
 })
 
 HakiSec:Toggle({
     Title = "Auto Haki",
+    Desc  = "Automatically enable Haki (Busoshoku).",
     Value = false,
     Callback = function(v) _G.Auto_Haki = v end,
 })
 
 VFXSec:Toggle({
     Title = "Disable VFX",
+    Desc  = "Disable all Particle/Light/Trail effects to reduce lag.",
     Value = false,
     Callback = function(v) _G.VFXDisabled = v end,
 })
 
--- ============================================================
---  TAB FARM
--- ============================================================
 local Tab2     = Window:CreateTab("Farm", false)
 local FarmPage = Tab2:CreatePage("Farm")
 
@@ -671,10 +605,11 @@ local AutoFarmSec = FarmPage:CreateSection("🌾 Auto Farm", "Left")
 local MaterialSec = FarmPage:CreateSection("⛏️ Material", "Left")
 local StatusSec   = FarmPage:CreateSection("📊 Status", "Right")
 
-local Spawn_Status = StatusSec:Paragraph({Title = "Spawn Status", Content = "N/A"})
+local Spawn_Status = StatusSec:Paragraph({Title = "Spawn Status", Content = "Loading..."})
 
 AutoFarmSec:Toggle({
     Title = "Auto Level Farm",
+    Desc  = "Automatically cancel old quest, accept new quest, and farm the target mob.",
     Value = false,
     Callback = function(v)
         _G.Auto_Farm_Level = v
@@ -697,6 +632,7 @@ AutoFarmSec:Toggle({
 
 AutoFarmSec:Toggle({
     Title = "💸 Auto Farm Bacon Thief",
+    Desc  = "Find Bacon Thief near ChestRef, attack, and open chest when dead.",
     Value = false,
     Callback = function(v)
         _G.Auto_BaconThief = v
@@ -710,7 +646,7 @@ AutoFarmSec:Toggle({
 
 MaterialSec:Dropdown({
     Title = "Select Farm Material",
-    Desc  = "Chọn nguyên liệu cần farm.",
+    Desc  = "Select materials to farm. Can choose multiple.",
     Options = ItemAll,
     Multi = true,
     Callback = function(v)
@@ -732,6 +668,7 @@ MaterialSec:Dropdown({
 })
 MaterialSec:Toggle({
     Title = "⛏️ Auto Farm Material",
+    Desc  = "Find mobs that drop selected materials and farm them.",
     Value = false,
     Callback = function(v)
         _G.Auto_Farm_Material = v
@@ -743,9 +680,6 @@ MaterialSec:Toggle({
     end,
 })
 
--- ============================================================
---  TAB OTHER (Random Item + Shop Item + Auto Train)
--- ============================================================
 local Tab3      = Window:CreateTab("Other", false)
 local RandPage  = Tab3:CreatePage("Random / Shop")
 local TrainPage = Tab3:CreatePage("Auto Train")
@@ -753,17 +687,18 @@ local TrainPage = Tab3:CreatePage("Auto Train")
 local DiamondChest     = RandPage:CreateSection("💎 Random Diamond", "Left")
 local GuaranteeDiamond = RandPage:CreateSection("🎖️ Shop Item", "Right")
 
-DiamondChest:Paragraph({Title = "📖 Info", Content = "Mở chest random item (tốn Diamond)."})
+DiamondChest:Paragraph({Title = "📖 Info", Content = "Open chest to roll random items (costs Diamonds)."})
 
 DiamondChest:Dropdown({
     Title = "Select Random Diamond Chest",
+    Desc  = "Amount of Diamonds to spend per roll.",
     Options = RandomChestValue,
     Multi = false,
     Value = "x5",
     Callback = function(v) if type(v) == "string" then _G.Select_Random = v end end,
 })
 DiamondChest:Button({
-    Title = "🎲 Open once",
+    Title = "🎲 Open Once",
     Callback = function()
         ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer(
             "fire", nil, "RandomItem", _G.Select_Random or "x5"
@@ -772,21 +707,23 @@ DiamondChest:Button({
 })
 DiamondChest:Toggle({
     Title = "Auto Random Diamond Chest",
+    Desc  = "Automatically open chest repeatedly.",
     Value = false,
     Callback = function(v) _G.Auto_RandomChest = v end,
 })
 
 local ShopPointInfo = GuaranteeDiamond:Paragraph({
     Title = "💎 PointItem: ---",
-    Content = "📊 Đang tải..."
+    Content = "📊 Loading..."
 })
 local ShopSelectedInfo = GuaranteeDiamond:Paragraph({
     Title = "🎯 Selected: ---",
-    Content = "Giá: --- | Trạng thái: ---"
+    Content = "Price: --- | Status: ---"
 })
 
 GuaranteeDiamond:Dropdown({
     Title = "Select Guarantee Item",
+    Desc  = "Pick an item to buy with PointItem.",
     Options = Poitem,
     Multi = false,
     Callback = function(v)
@@ -795,27 +732,28 @@ GuaranteeDiamond:Dropdown({
     end,
 })
 GuaranteeDiamond:Button({
-    Title = "💎 BUY once",
+    Title = "💎 Buy Once",
     Callback = function()
         local Point = tonumber(LocalPlayer:GetAttribute("PointItem")) or 0
         local Price = PointItemMData and PointItemMData[_G.Select_Guarantee] or 0
         if not _G.Select_Guarantee then
-            Library:Notify({Title = "❌ No item", Description = "Chọn item trước!", Duration = 3}); return
+            Library:Notify({Title = "❌ No item selected", Description = "Please select an item first!", Duration = 3}); return
         end
         if Price <= 0 then
-            Library:Notify({Title = "❌ Not found", Description = _G.Select_Guarantee, Duration = 3}); return
+            Library:Notify({Title = "❌ Item not found", Description = _G.Select_Guarantee, Duration = 3}); return
         end
         if Point < Price then
-            Library:Notify({Title = "❌ Không đủ PointItem", Description = ("Cần %d — có %d"):format(Price, Point), Duration = 3}); return
+            Library:Notify({Title = "❌ Not enough PointItem", Description = ("Need %d — have %d"):format(Price, Point), Duration = 3}); return
         end
         ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer(
             "fire", nil, "BuyGaranteeRandomItem", _G.Select_Guarantee
         )
-        Library:Notify({Title = "✅ Đã mua", Description = _G.Select_Guarantee .. " (-" .. Price .. ")", Duration = 3})
+        Library:Notify({Title = "✅ Purchased", Description = _G.Select_Guarantee .. " (-" .. Price .. ")", Duration = 3})
     end,
 })
 GuaranteeDiamond:Toggle({
     Title = "Auto Buy Guarantee Item",
+    Desc  = "Automatically buy selected item when you have enough PointItem.",
     Value = false,
     Callback = function(v) _G.Auto_Guarantee = v end,
 })
@@ -825,51 +763,48 @@ task.spawn(function()
         pcall(function()
             local pointItem = tonumber(LocalPlayer:GetAttribute("PointItem")) or 0
             ShopPointInfo:SetTitle("💎 PointItem: " .. string.format("%d", pointItem))
-            ShopPointInfo:SetContent("📊 Dùng để đổi item trong shop")
+            ShopPointInfo:SetContent("📊 Used to buy items in shop")
 
             if _G.Select_Guarantee and _G.Select_Guarantee ~= "" then
                 local price = (PointItemMData and PointItemMData[_G.Select_Guarantee]) or 0
                 local canBuy = pointItem >= price and price > 0
-                local status = canBuy and "✅ Có thể mua" or ("❌ Cần thêm " .. math.max(0, price - pointItem))
+                local status = canBuy and "✅ Can buy" or ("❌ Need " .. math.max(0, price - pointItem) .. " more")
                 ShopSelectedInfo:SetTitle("🎯 " .. _G.Select_Guarantee)
-                ShopSelectedInfo:SetContent(("Giá: %d | PointItem: %d | %s"):format(price, pointItem, status))
+                ShopSelectedInfo:SetContent(("Price: %d | PointItem: %d | %s"):format(price, pointItem, status))
             else
                 ShopSelectedInfo:SetTitle("🎯 Selected: ---")
-                ShopSelectedInfo:SetContent("Chọn item trong dropdown")
+                ShopSelectedInfo:SetContent("Select item from dropdown")
             end
         end)
     end
 end)
 
--- ============================================================
---  TAB CONFIG (ổn định)
--- ============================================================
 local ConfigTab  = Window:CreateTab("Config", false)
 local ConfigPage = ConfigTab:CreatePage("Config")
 
 local AppearanceSection = ConfigPage:CreateSection("Menu Appearance", "Left")
 AppearanceSection:ColorPicker({
-    Title = "Menu Accent", Desc = "Màu chủ đạo.",
+    Title = "Menu Accent", Desc = "Main accent color.",
     Value = "#7850FF",
     Callback = function(color) ApplyAccent(color) end,
 })
 AppearanceSection:ColorPicker({
-    Title = "Menu Background", Desc = "Màu nền.",
+    Title = "Menu Background", Desc = "Main background color.",
     Value = "#121214",
     Callback = function(color) ApplyBackground(color) end,
 })
 AppearanceSection:Dropdown({
     Title = "Menu Icon Mode",
-    Desc  = "Điện thoại: icon nổi. PC: ẩn.",
-    Options = { "Điện thoại", "PC" },
-    Value = "Điện thoại",
+    Desc  = "Phone: floating icon. PC: hidden (open via keybind).",
+    Options = { "Phone", "PC" },
+    Value = "Phone",
     Callback = function(selected)
         Library:SetMenuIconMode(selected == "PC" and "pc" or "phone")
     end,
 })
 AppearanceSection:Button({
     Title = "🎲 Random Accent + Background",
-    Desc  = "Random 2 màu khác nhau.",
+    Desc  = "Randomize both accent and background colors.",
     Callback = function()
         local newAccent, newBg
         for _ = 1, 20 do
@@ -887,7 +822,7 @@ AppearanceSection:Button({
 
 local SizeSection = ConfigPage:CreateSection("Menu Size", "Left")
 SizeSection:Slider({
-    Title = "Menu Scale", Desc = "Độ to menu (60-140%).",
+    Title = "Menu Scale", Desc = "Menu size percentage (60-140%).",
     Min = 60, Max = 140, Value = 100,
     Callback = function(percent)
         local scale = percent / 100
@@ -896,13 +831,13 @@ SizeSection:Slider({
     end,
 })
 SizeSection:Toggle({
-    Title = "Transparency", Desc = "Độ mờ 0.2.",
+    Title = "Transparency", Desc = "Reduce menu background opacity (0.2).",
     Value = false,
     Callback = function(state) Window:SetTransparency(state and 0.2 or 0) end,
 })
 SizeSection:Keybind({
     Title = "Menu Keybind",
-    Desc  = "Nhấn phím này để ẩn/mở menu.",
+    Desc  = "Press this key to toggle the menu (Esc to cancel, Backspace to reset).",
     Value = Enum.KeyCode.T,
     Callback = function(newKey)
         if newKey and newKey.Name then Window:SetMenuKeybind(newKey) end
@@ -912,9 +847,6 @@ SizeSection:Keybind({
 local SaveSection = ConfigPage:CreateSection("Save Manager", "Right")
 SaveSection:AddConfigManager(Library.SaveManager.Folder)
 
--- ============================================================
---  AUTO LOAD
--- ============================================================
 task.wait(0.5)
 local loaded = Library.SaveManager:LoadAutoloadConfig()
 print(loaded and "[MarvenRiz] Auto Load OK." or "[MarvenRiz] No Auto Load config.")
@@ -932,9 +864,6 @@ task.delay(0.6, function()
 end)
 print("[MarvenRiz] UI ready — PlaceId:", game.PlaceId)
 
--- ============================================================
---  METHOD UPDATE LOOP
--- ============================================================
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -951,9 +880,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  SPAWN STATUS LOOP
--- ============================================================
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -967,9 +893,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  AUTO HAKI LOOP
--- ============================================================
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -982,9 +905,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  NO VFX LOOP
--- ============================================================
 local VFX_CONNECTIONS = {}
 local VFX_KILL_CLASSES = {
     ["ParticleEmitter"] = true, ["Beam"] = true, ["Trail"] = true,
@@ -1044,9 +964,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  RANDOM CHEST LOOP
--- ============================================================
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -1059,9 +976,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  GUARANTEE LOOP
--- ============================================================
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -1078,9 +992,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  AUTO FARM LEVEL LOOP
--- ============================================================
 task.spawn(function()
     while task.wait() do
         xpcall(function()
@@ -1107,7 +1018,6 @@ task.spawn(function()
             end
 
             if not Frame.Visible then
-                -- ✅ LUÔN BAY tới NPC quest (Responsiveness 250 + Noclip)
                 local npc = quest.Quest
                 if npc then
                     local npcHrp = npc:FindFirstChild("HumanoidRootPart")
@@ -1160,7 +1070,6 @@ task.spawn(function()
                 _G._questPromptTime = 0
                 _G._npcBayStart = nil
 
-                -- ✅ Farm mob
                 local target, tHrp
                 local mobFolder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
                 if mobFolder then
@@ -1211,9 +1120,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  AUTO BACON THIEF LOOP
--- ============================================================
 local CurrentSpawn = 1
 
 task.spawn(function()
@@ -1298,9 +1204,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  AUTO FARM MATERIAL LOOP
--- ============================================================
 task.spawn(function()
     while task.wait(0.05) do
         xpcall(function()
@@ -1390,18 +1293,15 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  AUTO TRAIN (Sparring + Meditation) — gộp từ script riêng
--- ============================================================
 _G.Auto_Sparring   = false
 _G.Auto_Meditation = false
 
 local SparSec  = TrainPage:CreateSection("⚔️ Sparring", "Left")
 local MedSec   = TrainPage:CreateSection("🧘 Meditation", "Right")
 
--- ✅ SPARRING TOGGLE
 SparSec:Toggle({
     Title = "Auto Sparring",
+    Desc  = "Auto-press the correct pad when the Ring is active.",
     Value = false,
     Callback = function(Value)
         _G.Auto_Sparring = Value
@@ -1409,9 +1309,9 @@ SparSec:Toggle({
     end
 })
 
--- ✅ MEDITATION TOGGLE
 MedSec:Toggle({
     Title = "Auto Meditation",
+    Desc  = "Auto-press the lit pad. Auto-retry when failing.",
     Value = false,
     Callback = function(Value)
         _G.Auto_Meditation = Value
@@ -1419,9 +1319,6 @@ MedSec:Toggle({
     end
 })
 
--- ============================================================
---  SPARRING LOOP (từ script gốc, không có UI riêng)
--- ============================================================
 task.spawn(function()
     local LocalPlayer = game.Players.LocalPlayer
 
@@ -1547,9 +1444,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
---  MEDITATION LOOP (từ script gốc, không có UI riêng)
--- ============================================================
 task.spawn(function()
     local LocalPlayer = game.Players.LocalPlayer
 
@@ -1681,7 +1575,6 @@ task.spawn(function()
         pcall(function()
             local now = tick()
 
-            -- Retry khi fail
             if IsResultOpen() then
                 if now - lastRetryTime >= RETRY_COOLDOWN then
                     local success = DoRetry()
