@@ -1,51 +1,26 @@
 --[[
-    Auto Trade - Rock Fruit v66 (Visual & Touch Sync)
+    Auto Trade - Rock Fruit v67 (Manual Calibrate)
     Game ID: 119091355492870
 
-    PHÂN TÍCH LỖI v65:
-      - Bạn calibrate được offsetY=60 -> firetouchinterest
-        bấm trúng nút Accept và popup đóng.
-      - NHƯNG Chuột Ảo (Frame đỏ) hiển thị lệch sang TRÁI ~20-30px.
-      - Bạn phải di chuyển chuột ảo sang phải 1 chút thì mới
-        khớp vị trí đỏ.
+    VẤN ĐỀ TỪ v66:
+      - Vùng đỏ hiển thị sai vị trí.
+      - Không biết offsetX, offsetY chính xác.
+      - Không có nút test từng vị trí để tìm.
 
-    TẠI SAO LỆCH:
-      - "Vùng đỏ" bạn thấy là vị trí firetouchinterest đang
-        chạm thực sự (touch event).
-      - "Con chuột" là Frame GUI hiển thị trên ScreenGui
-        với IgnoreGuiInset = true.
-      - Nếu IgnoreGuiInset = true:
-        + Toạ độ (0,0) của Frame = góc trên trái màn hình
-          VẬT LÝ (bao gồm status bar, notch).
-        + firetouchinterest dùng toạ độ viewport
-          (0,0 = góc trên trái viewport 3D, bỏ qua inset).
-      - Kết quả: Frame vẽ tại (cx, cy) nhưng touch xảy ra
-        tại (cx + insetX, cy + insetY) -> lệch.
-      - Cụ thể bạn thấy lệch sang TRÁI -> insetX của mobile
-        đang > 0.
-
-    FIX v66:
-      1. Đặt IgnoreGuiInset = false cho ScreenGui hiển thị chuột.
-      2. Hoặc: bù bằng GuiService.TopLeftInset:
-         - Nếu IgnoreGuiInset = true:
-           Frame.Position = (cx - insetX, cy - insetY)
-         - Nếu IgnoreGuiInset = false:
-           Frame.Position = (cx, cy)
-      3. Tôi sẽ dùng IgnoreGuiInset = false để Roblox tự
-         xử lý inset -> Frame khớp với viewport.
-      4. Touch vẫn dùng (cx, cy) + offsetY.
-
-    BONUS:
-      - Thêm nút "Hiển thị vùng touch" - vẽ 1 ô vuông nhỏ
-        tại đúng vị trí firetouchinterest để bạn so sánh.
+    GIẢI PHÁP v67:
+      1. Hiển thị nút Accept thật (màu xanh lá) để bạn thấy nó đâu.
+      2. Vẽ 1 Frame đỏ (vùng touch) - bạn có thể điều chỉnh.
+      3. Thêm 4 nút mũi tên (Trái/Phải/Lên/Xuống) + nút bước nhảy (1px, 5px, 10px).
+      4. Khi di chuyển, toạ độ hiển thị rõ.
+      5. Nút "TEST TOẠ ĐỘ NÀY" để firetouchinterest vào vị trí hiện tại.
+      6. Nếu popup đóng -> "LƯU TOẠ ĐỘ" -> auto dùng từ giờ.
 ]]
 
 local CONFIG = {
     GameID          = 119091355492870,
     Debug           = true,
-    SafeMarginTop   = 100,
-    SafeMarginRight = 100,
-    AcceptOffsetY   = 60,
+    SafeMarginTop   = 50,
+    SafeMarginRight = 50,
 }
 
 local Players               = game:GetService("Players")
@@ -58,16 +33,6 @@ local LocalPlayer           = Players.LocalPlayer
 local function log(...)
     if CONFIG.Debug then print("[AutoTrade]", ...) end
 end
-
--- ============================================================
--- PLATFORM
--- ============================================================
-local isTouch = UserInputService.TouchEnabled
-local isMouse = UserInputService.MouseEnabled
-local isKeyboard = UserInputService.KeyboardEnabled
-local IS_MOBILE = (isTouch and not isKeyboard and not isMouse)
-local IS_PC = (isMouse and isKeyboard and not isTouch)
-local PLATFORM = IS_MOBILE and "MOBILE" or (IS_PC and "PC" or "UNKNOWN")
 
 -- ============================================================
 -- INSET
@@ -120,152 +85,137 @@ local function isPopupOpen()
 end
 
 -- ============================================================
--- CHUỘT ẢO + VÙNG TOUCH (SYNC)
+-- BIẾN OFFSET - SẼ CHỈNH TAY
+-- ============================================================
+local offsetX = 0
+local offsetY = 0
+local currentPos = Vector2.new(0, 0)  -- toạ độ viewport sau điều chỉnh
+
+-- ============================================================
+-- VISUAL (CURSOR + TOUCH MARKER)
 -- ============================================================
 local cursorGui = nil
 local cursorFrame = nil
 local touchMarker = nil
+local acceptMarker = nil
 
 local function ensureCursorGui()
     if cursorGui and cursorGui.Parent then return end
     cursorGui = Instance.new("ScreenGui")
     cursorGui.Name = "HoangVirtualMouse"
     cursorGui.ResetOnSpawn = false
-    -- QUAN TRỌNG: IgnoreGuiInset = false
-    -- -> Frame dùng toạ độ viewport (giống firetouchinterest)
     cursorGui.IgnoreGuiInset = false
     cursorGui.Parent = CoreGui
-    
+
+    -- Frame đỏ = touch area
     cursorFrame = Instance.new("Frame")
-    cursorFrame.Name = "Cursor"
     cursorFrame.Size = UDim2.new(0, 30, 0, 30)
-    cursorFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    cursorFrame.BackgroundTransparency = 0.5
+    cursorFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    cursorFrame.BackgroundTransparency = 0.6
     cursorFrame.BorderSizePixel = 2
-    cursorFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+    cursorFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
     cursorFrame.ZIndex = 999999
     cursorFrame.Visible = false
     cursorFrame.Parent = cursorGui
-    
+
+    -- Chấm trắng ở giữa = điểm chính xác
     local dot = Instance.new("Frame")
     dot.Size = UDim2.new(0, 6, 0, 6)
     dot.Position = UDim2.new(0.5, -3, 0.5, -3)
-    dot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dot.BorderSizePixel = 0
     dot.ZIndex = 1000000
     dot.Parent = cursorFrame
-    
-    -- Vùng touch (vẽ 1 hình vuông nhỏ tại đúng vị trí firetouchinterest)
+
+    -- Touch marker xanh lá = firetouchinterest point
     touchMarker = Instance.new("Frame")
-    touchMarker.Name = "TouchMarker"
-    touchMarker.Size = UDim2.new(0, 8, 0, 8)
+    touchMarker.Size = UDim2.new(0, 10, 0, 10)
     touchMarker.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
     touchMarker.BorderSizePixel = 0
     touchMarker.ZIndex = 999998
     touchMarker.Visible = false
     touchMarker.Parent = cursorGui
+
+    -- Accept marker vàng = tâm nút Accept thật
+    acceptMarker = Instance.new("Frame")
+    acceptMarker.Size = UDim2.new(0, 14, 0, 14)
+    acceptMarker.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    acceptMarker.BackgroundTransparency = 0.3
+    acceptMarker.BorderSizePixel = 2
+    acceptMarker.BorderColor3 = Color3.fromRGB(255, 255, 0)
+    acceptMarker.ZIndex = 999997
+    acceptMarker.Visible = false
+    acceptMarker.Parent = cursorGui
 end
 
-local function showCursor(x, y)
+local function updateVisuals()
     ensureCursorGui()
-    -- Vì IgnoreGuiInset = false -> Frame.Position dùng toạ độ viewport
-    -- (cx, cy) đã là viewport -> đặt thẳng
-    cursorFrame.Position = UDim2.new(0, x - 15, 0, y - 15)
+    local btn = getAcceptButton()
+    if not btn then
+        cursorFrame.Visible = false
+        touchMarker.Visible = false
+        acceptMarker.Visible = false
+        return
+    end
+    local c = getCenter(btn)
+    if not c then return end
+    
+    -- Accept center thật
+    acceptMarker.Position = UDim2.new(0, c.X - 7, 0, c.Y - 7)
+    acceptMarker.Visible = true
+
+    -- Vị trí touch hiện tại (viewport + offset)
+    currentPos = Vector2.new(c.X + offsetX, c.Y + offsetY)
+    cursorFrame.Position = UDim2.new(0, currentPos.X - 15, 0, currentPos.Y - 15)
     cursorFrame.Visible = true
-end
-
-local function showTouchMarker(x, y)
-    ensureCursorGui()
-    -- Marker này đại diện cho ĐIỂM firetouchinterest chạm thực sự
-    touchMarker.Position = UDim2.new(0, x - 4, 0, y - 4)
+    touchMarker.Position = UDim2.new(0, currentPos.X - 5, 0, currentPos.Y - 5)
     touchMarker.Visible = true
 end
 
-local function hideCursor()
+local function hideVisuals()
     if cursorFrame then cursorFrame.Visible = false end
     if touchMarker then touchMarker.Visible = false end
+    if acceptMarker then acceptMarker.Visible = false end
 end
 
 -- ============================================================
--- CLICK MOBILE
+-- TEST TOUCH TẠI VỊ TRÍ HIỆN TẠI
 -- ============================================================
-local function tryTouchAt(btn, pos)
-    if not firetouchinterest then return false end
+local function testTouchAtCurrentPos()
+    local btn = getAcceptButton()
+    if not btn then return false, "no_popup" end
+    if not firetouchinterest then return false, "no_firetouch" end
+    local pos = currentPos
+    log(string.format("Test firetouchinterest tại (%.0f, %.0f)", pos.X, pos.Y))
     pcall(function()
         firetouchinterest(btn, pos, 0)
         task.wait(0.15)
         firetouchinterest(btn, pos, 1)
     end)
     task.wait(0.35)
-    return not isPopupOpen()
-end
-
-local function tryVIMAt(btn, pos)
-    if not VirtualInputManager then return false end
-    pcall(function()
-        VirtualInputManager:SendMouseMoveEvent(math.floor(pos.X), math.floor(pos.Y), game)
-    end)
-    task.wait(0.2)
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, true, game, 0)
-    end)
-    task.wait(0.15)
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, false, game, 0)
-    end)
-    task.wait(0.35)
-    return not isPopupOpen()
-end
-
-local function clickAcceptMobile(btn)
-    local c = getCenter(btn)
-    if not c then return false, "no_center" end
-    
-    -- Toạ độ touch = viewport + offsetY (đã calibrate = 60)
-    local touchPos = Vector2.new(c.X, c.Y + CONFIG.AcceptOffsetY)
-    
-    -- Hiển thị:
-    -- - Chuột ảo tại touchPos (vị trí sẽ chạm)
-    -- - Touch marker tại touchPos (vị trí touch thực sự)
-    showCursor(touchPos.X, touchPos.Y)
-    showTouchMarker(touchPos.X, touchPos.Y)
-    task.wait(0.3)
-    
-    log(string.format("Click tại (%.0f, %.0f)", touchPos.X, touchPos.Y))
-    
-    if tryTouchAt(btn, touchPos) then hideCursor(); return true, "touch" end
-    if tryVIMAt(btn, touchPos) then hideCursor(); return true, "vim" end
-    
-    hideCursor()
-    return false, "all_fail"
-end
-
--- ============================================================
--- CLICK PC
--- ============================================================
-local function clickAcceptPC(btn)
-    if not mousemoverel or not mouse1click then return false, "no_api" end
-    local c = getCenter(btn)
-    if not c then return false, "no_center" end
-    for i = 1, 40 do
-        local cur = UserInputService:GetMouseLocation()
-        local tgtY = c.Y + 50
-        local dx = c.X - cur.X
-        local dy = tgtY - cur.Y
-        if math.sqrt(dx*dx + dy*dy) < 3 then break end
-        pcall(function() mousemoverel(math.clamp(dx, -25, 25), math.clamp(dy, -25, 25)) end)
-        task.wait(0.03)
+    if not isPopupOpen() then
+        return true, "touch_success"
     end
-    pcall(function() mouse1click() end)
-    task.wait(0.3)
-    if not isPopupOpen() then return true, "pc_click" end
-    return false, "still_open"
-end
-
-local function acceptTrade()
-    local btn = getAcceptButton()
-    if not btn then return false, "no_popup" end
-    if IS_PC then return clickAcceptPC(btn) else return clickAcceptMobile(btn) end
+    -- Thử VIM
+    if VirtualInputManager then
+        log(string.format("Test VirtualInputManager tại (%.0f, %.0f)", pos.X, pos.Y))
+        pcall(function()
+            VirtualInputManager:SendMouseMoveEvent(math.floor(pos.X), math.floor(pos.Y), game)
+        end)
+        task.wait(0.2)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, true, game, 0)
+        end)
+        task.wait(0.15)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, false, game, 0)
+        end)
+        task.wait(0.35)
+        if not isPopupOpen() then
+            return true, "vim_success"
+        end
+    end
+    return false, "fail"
 end
 
 -- ============================================================
@@ -281,8 +231,8 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 460, 0, 420)
-    frame.Position = UDim2.new(0, 20, 0, 20)
+    frame.Size = UDim2.new(0, 480, 0, 560)
+    frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
     frame.Active = true
@@ -299,7 +249,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v66 (" .. PLATFORM .. ")"
+    title.Text = "Accept Tester v67 (Manual Calibrate)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -349,52 +299,157 @@ local function buildUI()
     body.Parent = frame
 
     local statusLbl = Instance.new("TextLabel")
-    statusLbl.Size = UDim2.new(0.9, 0, 0, 22)
-    statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
+    statusLbl.Size = UDim2.new(0.95, 0, 0, 22)
+    statusLbl.Position = UDim2.new(0.025, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Platform: " .. PLATFORM .. " | offsetY=" .. CONFIG.AcceptOffsetY
+    statusLbl.Text = "Offset: X=0 Y=0 | chưa có popup"
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
     statusLbl.Parent = body
 
-    local autoBtn = Instance.new("TextButton")
-    autoBtn.Size = UDim2.new(0.9, 0, 0, 32)
-    autoBtn.Position = UDim2.new(0.05, 0, 0, 26)
-    autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
-    autoBtn.BorderSizePixel = 0
-    autoBtn.Text = "AUTO ACCEPT: OFF"
-    autoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    autoBtn.Font = Enum.Font.GothamBold
-    autoBtn.TextSize = 11
-    autoBtn.Parent = body
+    local infoLbl = Instance.new("TextLabel")
+    infoLbl.Size = UDim2.new(0.95, 0, 0, 60)
+    infoLbl.Position = UDim2.new(0.025, 0, 0, 26)
+    infoLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    infoLbl.BorderSizePixel = 0
+    infoLbl.Text = "Accept center: ?\nTouch pos: ?"
+    infoLbl.TextColor3 = Color3.fromRGB(180, 220, 255)
+    infoLbl.Font = Enum.Font.Code
+    infoLbl.TextSize = 11
+    infoLbl.TextWrapped = true
+    infoLbl.TextXAlignment = Enum.TextXAlignment.Left
+    infoLbl.TextYAlignment = Enum.TextYAlignment.Top
+    infoLbl.Parent = body
 
+    -- Điều chỉnh step
+    local stepLabel = Instance.new("TextLabel")
+    stepLabel.Size = UDim2.new(0.3, 0, 0, 20)
+    stepLabel.Position = UDim2.new(0.025, 0, 0, 92)
+    stepLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    stepLabel.BorderSizePixel = 0
+    stepLabel.Text = "Bước (px)"
+    stepLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    stepLabel.Font = Enum.Font.Gotham
+    stepLabel.TextSize = 11
+    stepLabel.Parent = body
+
+    local stepBox = Instance.new("TextBox")
+    stepBox.Size = UDim2.new(0.2, 0, 0, 20)
+    stepBox.Position = UDim2.new(0.35, 0, 0, 92)
+    stepBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    stepBox.BorderSizePixel = 0
+    stepBox.Text = "5"
+    stepBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    stepBox.Font = Enum.Font.Gotham
+    stepBox.TextSize = 11
+    stepBox.Parent = body
+
+    -- Nút mũi tên
+    local function makeArrowBtn(text, x, y, dx, dy)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0.15, 0, 0, 40)
+        b.Position = UDim2.new(x, 0, 0, y)
+        b.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
+        b.BorderSizePixel = 0
+        b.Text = text
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 18
+        b.Parent = body
+        b.MouseButton1Click:Connect(function()
+            local step = tonumber(stepBox.Text) or 5
+            offsetX = offsetX + dx * step
+            offsetY = offsetY + dy * step
+            updateVisuals()
+            local btn = getAcceptButton()
+            if btn then
+                local c = getCenter(btn)
+                infoLbl.Text = string.format(
+                    "Accept center: (%.0f, %.0f)\nTouch pos: (%.0f, %.0f)\noffsetX=%d offsetY=%d",
+                    c.X, c.Y, c.X + offsetX, c.Y + offsetY, offsetX, offsetY)
+            end
+            statusLbl.Text = string.format("Offset: X=%d Y=%d", offsetX, offsetY)
+        end)
+        return b
+    end
+
+    makeArrowBtn("↑", 0.025, 116, 0, -1)
+    makeArrowBtn("↓", 0.025, 200, 0, 1)
+    makeArrowBtn("←", 0.20, 158, -1, 0)
+    makeArrowBtn("→", 0.65, 158, 1, 0)
+
+    -- Nút reset về tâm
+    local resetBtn = Instance.new("TextButton")
+    resetBtn.Size = UDim2.new(0.4, 0, 0, 26)
+    resetBtn.Position = UDim2.new(0.025, 0, 0, 246)
+    resetBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
+    resetBtn.BorderSizePixel = 0
+    resetBtn.Text = "Reset về tâm Accept"
+    resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    resetBtn.Font = Enum.Font.GothamBold
+    resetBtn.TextSize = 11
+    resetBtn.Parent = body
+    resetBtn.MouseButton1Click:Connect(function()
+        offsetX = 0
+        offsetY = 0
+        updateVisuals()
+        statusLbl.Text = "Offset: X=0 Y=0"
+    end)
+
+    -- Nút test
     local testBtn = Instance.new("TextButton")
-    testBtn.Size = UDim2.new(0.9, 0, 0, 26)
-    testBtn.Position = UDim2.new(0.05, 0, 0, 62)
+    testBtn.Size = UDim2.new(0.5, 0, 0, 30)
+    testBtn.Position = UDim2.new(0.025, 0, 0, 280)
     testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
     testBtn.BorderSizePixel = 0
-    testBtn.Text = "Test Accept (offsetY=60 + hiển thị chuột)"
+    testBtn.Text = "TEST TOẠ ĐỘ NÀY"
     testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     testBtn.Font = Enum.Font.GothamBold
-    testBtn.TextSize = 11
+    testBtn.TextSize = 12
     testBtn.Parent = body
 
-    local infoBtn = Instance.new("TextButton")
-    infoBtn.Size = UDim2.new(0.9, 0, 0, 24)
-    infoBtn.Position = UDim2.new(0.05, 0, 0, 94)
-    infoBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
-    infoBtn.BorderSizePixel = 0
-    infoBtn.Text = "In info (inset, accept center)"
-    infoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    infoBtn.Font = Enum.Font.GothamBold
-    infoBtn.TextSize = 11
-    infoBtn.Parent = body
+    local saveBtn = Instance.new("TextButton")
+    saveBtn.Size = UDim2.new(0.4, 0, 0, 30)
+    saveBtn.Position = UDim2.new(0.55, 0, 0, 280)
+    saveBtn.BackgroundColor3 = Color3.fromRGB(200, 130, 40)
+    saveBtn.BorderSizePixel = 0
+    saveBtn.Text = "LƯU + AUTO"
+    saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    saveBtn.Font = Enum.Font.GothamBold
+    saveBtn.TextSize = 11
+    saveBtn.Parent = body
+
+    local helpLbl = Instance.new("TextLabel")
+    helpLbl.Size = UDim2.new(0.95, 0, 0, 100)
+    helpLbl.Position = UDim2.new(0.025, 0, 0, 316)
+    helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    helpLbl.BorderSizePixel = 0
+    helpLbl.Text = [[
+QUY TRÌNH:
+1. Nhờ acc phụ mời trade -> popup hiện.
+2. Bạn sẽ thấy trên màn hình:
+   - Ô vuông vàng = tâm nút Accept thật.
+   - Ô vuông đỏ + chấm trắng = vị trí touch sẽ bấm.
+   - Chấm xanh lá = điểm firetouchinterest chạm.
+3. Dùng 4 nút mũi tên để di chuyển ô đỏ tới khớp ô vàng.
+4. Bấm "TEST TOẠ ĐỘ NÀY" để thử.
+5. Nếu popup đóng -> bấm "LƯU + AUTO" -> auto dùng từ giờ.
+6. Nếu chưa đúng -> bấm nút mũi tên chỉnh thêm, test lại.
+
+Bước mặc định = 5px. Đặt 1px để chỉnh tinh.
+]]
+    helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
+    helpLbl.Font = Enum.Font.Gotham
+    helpLbl.TextSize = 10
+    helpLbl.TextWrapped = true
+    helpLbl.TextYAlignment = Enum.TextYAlignment.Top
+    helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 240)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 124)
+    logLbl.Size = UDim2.new(0.95, 0, 0, 80)
+    logLbl.Position = UDim2.new(0.025, 0, 0, 420)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -405,68 +460,110 @@ local function buildUI()
     logLbl.TextYAlignment = Enum.TextYAlignment.Top
     logLbl.Parent = body
 
-    local function setStatus(s, c)
-        statusLbl.Text = "Platform: " .. PLATFORM .. " | offsetY=" .. CONFIG.AcceptOffsetY .. " | " .. s
-        if c then statusLbl.TextColor3 = c end
-    end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 1500 then cur = cur:sub(-1200) end
+        if #cur > 600 then cur = cur:Sub(-400) end
         logLbl.Text = cur .. "\n" .. s
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
 
-    local enabled = false
-    autoBtn.MouseButton1Click:Connect(function()
-        enabled = not enabled
-        if enabled then
-            autoBtn.Text = "AUTO ACCEPT (" .. PLATFORM .. "): ON"
-            autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
-            setStatus("chờ popup", Color3.fromRGB(120,220,120))
-        else
-            autoBtn.Text = "AUTO ACCEPT (" .. PLATFORM .. "): OFF"
-            autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
-            setStatus("đã tắt", Color3.fromRGB(200,200,120))
-        end
-    end)
+    local autoEnabled = false
+    local savedOffsetX = 0
+    local savedOffsetY = 0
 
     testBtn.MouseButton1Click:Connect(function()
         task.spawn(function()
-            local ok, r = acceptTrade()
-            appendLog(ok and ("✔ Accept OK: " .. r) or ("✘ Fail: " .. tostring(r)))
-            setStatus(ok and "OK" or "fail",
-                ok and Color3.fromRGB(120,220,120) or Color3.fromRGB(255,120,120))
+            local ok, r = testTouchAtCurrentPos()
+            if ok then
+                appendLog("✔ Test OK: " .. r)
+                statusLbl.Text = "✔ Test OK: " .. r
+                statusLbl.TextColor3 = Color3.fromRGB(120, 220, 120)
+            else
+                appendLog("✘ Test fail: " .. tostring(r))
+                statusLbl.Text = "✘ Test fail"
+                statusLbl.TextColor3 = Color3.fromRGB(255, 120, 120)
+            end
         end)
     end)
 
-    infoBtn.MouseButton1Click:Connect(function()
-        local tl = getInset()
-        local btn = getAcceptButton()
-        local c = btn and getCenter(btn)
-        print("========== INFO v66 ==========")
-        print("Platform:", PLATFORM)
-        print("TopLeftInset:", tl.X, tl.Y)
-        if c then
-            print("Accept center (viewport):", c.X, c.Y)
-            print("Touch pos (với offsetY=60):", c.X, c.Y + CONFIG.AcceptOffsetY)
-        end
-        print("=============================")
-        appendLog("info F9")
+    saveBtn.MouseButton1Click:Connect(function()
+        savedOffsetX = offsetX
+        savedOffsetY = offsetY
+        autoEnabled = true
+        appendLog(string.format("Đã lưu offsetX=%d offsetY=%d, bật auto", savedOffsetX, savedOffsetY))
+        statusLbl.Text = string.format("AUTO ON: offset X=%d Y=%d", savedOffsetX, savedOffsetY)
+        statusLbl.TextColor3 = Color3.fromRGB(120, 220, 120)
     end)
 
+    -- Loop update visuals khi có popup
+    task.spawn(function()
+        while sg.Parent do
+            local tr = getTradeRequestFrame()
+            local open = tr ~= nil and tr.Visible == true
+            if open then
+                updateVisuals()
+                local btn = getAcceptButton()
+                if btn then
+                    local c = getCenter(btn)
+                    infoLbl.Text = string.format(
+                        "Accept center: (%.0f, %.0f)\nTouch pos: (%.0f, %.0f)\noffsetX=%d offsetY=%d",
+                        c.X, c.Y, c.X + offsetX, c.Y + offsetY, offsetX, offsetY)
+                end
+            else
+                hideVisuals()
+            end
+            task.wait(0.15)
+        end
+    end)
+
+    -- Auto loop
     task.spawn(function()
         local wasOpen = false
         while sg.Parent do
-            if enabled then
+            if autoEnabled then
                 local tr = getTradeRequestFrame()
                 local nowOpen = tr ~= nil and tr.Visible == true
                 if nowOpen and not wasOpen then
-                    setStatus("popup - accept", Color3.fromRGB(200,200,120))
-                    appendLog("popup hiện")
-                    task.wait(0.2)
-                    local ok, r = acceptTrade()
-                    appendLog(ok and ("✔ " .. r) or ("✘ " .. tostring(r)))
+                    appendLog("Auto: popup hiện, click với offset đã lưu")
+                    local btn = getAcceptButton()
+                    if btn then
+                        local c = getCenter(btn)
+                        local pos = Vector2.new(c.X + savedOffsetX, c.Y + savedOffsetY)
+                        log(string.format("Auto click tại (%.0f, %.0f)", pos.X, pos.Y))
+                        if firetouchinterest then
+                            pcall(function()
+                                firetouchinterest(btn, pos, 0)
+                                task.wait(0.15)
+                                firetouchinterest(btn, pos, 1)
+                            end)
+                            task.wait(0.35)
+                            if not isPopupOpen() then
+                                appendLog("✔ Auto touch OK")
+                            else
+                                -- fallback VIM
+                                if VirtualInputManager then
+                                    pcall(function()
+                                        VirtualInputManager:SendMouseMoveEvent(math.floor(pos.X), math.floor(pos.Y), game)
+                                    end)
+                                    task.wait(0.2)
+                                    pcall(function()
+                                        VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, true, game, 0)
+                                    end)
+                                    task.wait(0.15)
+                                    pcall(function()
+                                        VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, false, game, 0)
+                                    end)
+                                    task.wait(0.35)
+                                    if not isPopupOpen() then
+                                        appendLog("✔ Auto VIM OK")
+                                    else
+                                        appendLog("✘ Auto fail")
+                                    end
+                                end
+                            end
+                        end
+                    end
                 end
                 wasOpen = nowOpen
             end
@@ -480,4 +577,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v66 sẵn sàng. Mobile offsetY=60. Chuột ảo sync với touch.")
+log("v67 sẵn sàng. Dùng 4 nút mũi tên để căn vị trí touch.")
