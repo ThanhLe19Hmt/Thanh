@@ -1,29 +1,39 @@
 --[[
-    Auto Trade - Rock Fruit v62 (Mobile Fix + Visual Cursor)
+    Auto Trade - Rock Fruit v63 (Mobile Final Attempt)
     Game ID: 119091355492870
 
-    VẤN ĐỀ:
-      - Executor trên Mobile vẫn trả về `mousemoverel` và
-        `mouse1click` (nhưng bị sandbox, gọi không có tác dụng).
-      - Tool cũ check `typeof(mousemoverel) == "function"` -> true
-        -> nhận nhầm là PC.
-      - Nhưng mousemoverel trên mobile không di chuyển con trỏ nào
-        (vì mobile không có con trỏ OS).
-      -> Tool "fail im lặng".
+    TRẠNG THÁI:
+      - Platform: MOBILE (detect đúng).
+      - firetouchinterest: function (có).
+      - VirtualInputManager: Instance (có).
+      - Nhưng click Accept vẫn fail.
 
-    FIX v62:
-      1. Detect platform ĐÚNG:
-         - Mobile = (TouchEnabled == true AND KeyboardEnabled == false).
-         - PC = (TouchEnabled == false AND MouseEnabled == true).
-         - Không dựa vào mousemoverel nữa.
-      2. Trên Mobile, tạo "con trỏ ảo HIỂN THỊ" bằng Frame GUI
-         di chuyển trên màn hình -> bạn thấy được.
-      3. Click bằng VirtualInputManager / firetouchinterest.
-      4. Trên PC, giữ nguyên mousemoverel + offsetY=50.
+    NGUYÊN NHÂN CÓ THỂ:
+      1. firetouchinterest(btn, pos, 0/1) - nhấn/nhả.
+         Nhưng nếu gọi quá nhanh (0.05s) mobile có thể không kịp
+         nhận diện là tap thật.
+      2. `btn` phải là GuiButton thật (ImageButton/TextButton),
+         không phải Frame. Trong trường hợp của bạn, nút Accept
+         là ImageButton (đúng), nhưng bên trong có thể có
+         ImageLabel con. Một số executor mobile yêu cầu
+         firetouchinterest vào ImageLabel con thay vì ImageButton.
+      3. VirtualInputManager trên mobile có thể cần
+         SendMouseMoveEvent trước SendMouseButtonEvent,
+         và delay 0.5s.
+      4. Cần thêm "GUI wrapper": tạo 1 TextButton vô hình đè lên
+         nút Accept, rồi firetouchinterest vào TextButton đó
+         (một số game/executor chỉ nhận touch trên GuiButton
+         được tạo bởi LocalScript).
 
-    LƯU Ý: "Con trỏ ảo hiển thị" chỉ là hiệu ứng visual để bạn
-    thấy tool đang nhắm vào đâu. Touch/click thật vẫn qua
-    VirtualInputManager hoặc firetouchinterest.
+    CHIẾN LƯỢC v63:
+      1. Tìm TẤT CẢ GuiButton con trong nút Accept (ImageButton
+         + ImageLabel con + Frame con nếu có).
+      2. Thử firetouchinterest trên TỪNG đối tượng, delay 0.2s
+         giữa Down và Up.
+      3. Thử VirtualInputManager với delay dài (0.3s giữa move
+         và click).
+      4. Thử tạo TextButton đè lên nút (nếu cách trên fail).
+      5. Báo log chi tiết từng bước.
 ]]
 
 local CONFIG = {
@@ -45,29 +55,15 @@ local function log(...)
 end
 
 -- ============================================================
--- DETECT PLATFORM CHÍNH XÁC
+-- PLATFORM
 -- ============================================================
 local isTouch = UserInputService.TouchEnabled
 local isMouse = UserInputService.MouseEnabled
 local isKeyboard = UserInputService.KeyboardEnabled
-local isGamepad = UserInputService.GamepadEnabled
-
 local IS_MOBILE = (isTouch and not isKeyboard and not isMouse)
 local IS_PC = (isMouse and isKeyboard and not isTouch)
 local PLATFORM = IS_MOBILE and "MOBILE" or (IS_PC and "PC" or "UNKNOWN")
-
-log("=== PLATFORM ===")
-log("TouchEnabled:", isTouch)
-log("MouseEnabled:", isMouse)
-log("KeyboardEnabled:", isKeyboard)
-log("GamepadEnabled:", isGamepad)
-log("=>", PLATFORM)
-
--- Kiểm tra API (không dựa vào để detect, chỉ để log)
-log("mousemoverel:", typeof(mousemoverel))
-log("mouse1click:", typeof(mouse1click))
-log("firetouchinterest:", typeof(firetouchinterest))
-log("VirtualInputManager:", typeof(VirtualInputManager))
+log("Platform:", PLATFORM)
 
 -- ============================================================
 -- ĐỐI TƯỢNG
@@ -86,16 +82,262 @@ local function getTradeRequestFrame()
     return main:FindFirstChild("Trade_Request")
 end
 
-local function getAcceptButton()
+local function getAcceptFolder()
     local tr = getTradeRequestFrame()
     if not tr then return nil end
     local sub = tr:FindFirstChild("Sub")
     if not sub then return nil end
     local m = sub:FindFirstChild("Main")
     if not m then return nil end
-    local acc = m:FindFirstChild("Accept")
+    return m:FindFirstChild("Accept")
+end
+
+local function getAcceptButton()
+    local acc = getAcceptFolder()
     if not acc then return nil end
     return acc:FindFirstChild("Accept")
+end
+
+-- Lấy TẤT CẢ GuiButton có thể nhận touch
+local function getAllAcceptTargets()
+    local targets = {}
+    local btn = getAcceptButton()
+    if btn then
+        table.insert(targets, btn)
+        for _, d in ipairs(btn:GetDescendants()) do
+            if d:IsA("GuiButton") or d:IsA("ImageLabel") then
+                table.insert(targets, d)
+            end
+        end
+    end
+    -- Thêm cả ImageLabel trong folder Accept
+    local folder = getAcceptFolder()
+    if folder then
+        for _, d in ipairs(folder:GetDescendants()) do
+            if d:IsA("ImageLabel") or d:IsA("GuiButton") then
+                local inTargets = false
+                for _, t in ipairs(targets) do
+                    if t == d then inTargets = true; break end
+                end
+                if not inTargets then
+                    table.insert(targets, d)
+                end
+            end
+        end
+    end
+    return targets
+end
+
+local function getCenter(btn)
+    if not btn then return nil end
+    local ap = btn.AbsolutePosition
+    local sz = btn.AbsoluteSize
+    return Vector2.new(ap.X + sz.X / 2, ap.Y + sz.Y / 2)
+end
+
+local function isPopupOpen()
+    local tr = getTradeRequestFrame()
+    return tr ~= nil and tr.Visible == true
+end
+
+-- ============================================================
+-- CLICK PC (giữ nguyên, không sửa)
+-- ============================================================
+local function clickAcceptPC(btn)
+    if not mousemoverel or not mouse1click then return false, "no_api" end
+    local c = getCenter(btn)
+    if not c then return false, "no_center" end
+    for i = 1, 40 do
+        local cur = UserInputService:GetMouseLocation()
+        local tgtY = c.Y + CONFIG.PCOffsetY
+        local dx = c.X - cur.X
+        local dy = tgtY - cur.Y
+        if math.sqrt(dx*dx + dy*dy) < 3 then break end
+        pcall(function()
+            mousemoverel(math.clamp(dx, -25, 25), math.clamp(dy, -25, 25))
+        end)
+        task.wait(0.03)
+    end
+    pcall(function() mouse1click() end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "pc_click" end
+    return false, "still_open"
+end
+
+-- ============================================================
+-- CLICK MOBILE v63 - NHIỀU CÁCH KẾT HỢP
+-- ============================================================
+local function tryTouchTarget(target, pos, label)
+    if not firetouchinterest then return false end
+    log("    Thử firetouchinterest ->", label)
+    pcall(function()
+        firetouchinterest(target, pos, 0)
+        task.wait(0.2)   -- Delay dài hơn (0.2s thay vì 0.05s)
+        firetouchinterest(target, pos, 1)
+    end)
+    task.wait(0.4)
+    if not isPopupOpen() then
+        return true
+    end
+    return false
+end
+
+local function tryVirtualInput(target, pos)
+    if not VirtualInputManager then return false end
+    log("    Thử VirtualInputManager")
+    pcall(function()
+        VirtualInputManager:SendMouseMoveEvent(math.floor(pos.X), math.floor(pos.Y), game)
+    end)
+    task.wait(0.3)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, true, game, 0)
+    end)
+    task.wait(0.2)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(math.floor(pos.X), math.floor(pos.Y), 0, false, game, 0)
+    end)
+    task.wait(0.4)
+    if not isPopupOpen() then return true end
+    return false
+end
+
+local function tryFiresignal(btn)
+    if typeof(firesignal) ~= "function" then return false end
+    log("    Thử firesignal Down/Up/Click")
+    pcall(function()
+        firesignal(btn.MouseButton1Down)
+        task.wait(0.1)
+        firesignal(btn.MouseButton1Up)
+        task.wait(0.1)
+        firesignal(btn.MouseButton1Click)
+    end)
+    task.wait(0.4)
+    if not isPopupOpen() then return true end
+    return false
+end
+
+local function tryActivate(btn)
+    pcall(function() btn:Activate() end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true end
+    return false
+end
+
+local function tryGuiWrapper(btn, pos)
+    -- Tạo TextButton vô hình đè lên, firetouchinterest vào nó
+    log("    Thử GUI Wrapper (TextButton vô hình)")
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "HoangTouchWrapper"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.Parent = CoreGui
+    local wrapper = Instance.new("TextButton")
+    wrapper.Size = UDim2.new(0, btn.AbsoluteSize.X + 10, 0, btn.AbsoluteSize.Y + 10)
+    wrapper.Position = UDim2.new(0, btn.AbsolutePosition.X - 5, 0, btn.AbsolutePosition.Y - 5)
+    wrapper.BackgroundTransparency = 1
+    wrapper.Text = ""
+    wrapper.ZIndex = 99999
+    wrapper.Parent = sg
+    local child = Instance.new("TextLabel")
+    child.Size = UDim2.new(1, 0, 1, 0)
+    child.BackgroundTransparency = 1
+    child.Text = ""
+    child.Parent = wrapper
+    task.wait(0.1)
+    if firetouchinterest then
+        pcall(function()
+            firetouchinterest(wrapper, pos, 0)
+            task.wait(0.15)
+            firetouchinterest(wrapper, pos, 1)
+        end)
+        task.wait(0.4)
+        local closed = not isPopupOpen()
+        sg:Destroy()
+        if closed then return true end
+    else
+        sg:Destroy()
+    end
+    return false
+end
+
+local function clickAcceptMobile(btn)
+    if not btn then return false, "no_btn" end
+    local c = getCenter(btn)
+    if not c then return false, "no_center" end
+    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1366, 705)
+    if c.Y < CONFIG.SafeMarginTop or c.X > vp.X - CONFIG.SafeMarginRight then
+        return false, "unsafe"
+    end
+
+    log(string.format("Mobile target: (%.0f, %.0f)", c.X, c.Y))
+
+    local targets = getAllAcceptTargets()
+    log("Có", #targets, "targets:", )
+    for i, t in ipairs(targets) do
+        log("  #" .. i, t.ClassName, t.Name)
+    end
+
+    -- Thử từng target với firetouchinterest
+    for i, target in ipairs(targets) do
+        log("--- Target #" .. i .. " (" .. target.ClassName .. ") ---")
+        local targetCenter = getCenter(target) or c
+        if tryTouchTarget(target, targetCenter, "#" .. i .. " " .. target.Name) then
+            return true, "touch_target_" .. i
+        end
+        if tryVirtualInput(target, targetCenter) then
+            return true, "vim_target_" .. i
+        end
+    end
+
+    -- Thử firesignal trên nút chính
+    if tryFiresignal(btn) then return true, "firesignal" end
+
+    -- Thử :Activate()
+    if tryActivate(btn) then return true, "activate" end
+
+    -- Thử tạo GUI wrapper
+    if tryGuiWrapper(btn, c) then return true, "gui_wrapper" end
+
+    return false, "all_fail"
+end
+
+-- ============================================================
+-- ACCEPT
+-- ============================================================
+local function acceptTrade()
+    local btn = getAcceptButton()
+    if not btn then return false, "no_popup" end
+    if IS_PC then
+        return clickAcceptPC(btn)
+    else
+        return clickAcceptMobile(btn)
+    end
+end
+
+-- ============================================================
+-- NHẬP SL + THÊM ITEM (giữ nguyên)
+-- ============================================================
+local KEY_MAP = {
+    ["0"] = Enum.KeyCode.Zero, ["1"] = Enum.KeyCode.One, ["2"] = Enum.KeyCode.Two,
+    ["3"] = Enum.KeyCode.Three, ["4"] = Enum.KeyCode.Four, ["5"] = Enum.KeyCode.Five,
+    ["6"] = Enum.KeyCode.Six, ["7"] = Enum.KeyCode.Seven, ["8"] = Enum.KeyCode.Eight,
+    ["9"] = Enum.KeyCode.Nine,
+}
+
+local function typeTextRoblox(text)
+    if not VirtualInputManager then return false end
+    for i = 1, #text do
+        local kc = KEY_MAP[text:sub(i, i)]
+        if kc then
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, kc, false, game)
+                task.wait(0.02)
+                VirtualInputManager:SendKeyEvent(false, kc, false, game)
+            end)
+            task.wait(0.03)
+        end
+    end
+    return true
 end
 
 local function getTradeInventory()
@@ -150,217 +392,6 @@ local function getReadyButton()
     return ft:FindFirstChild("Ready")
 end
 
-local function getCenter(btn)
-    if not btn then return nil end
-    local ap = btn.AbsolutePosition
-    local sz = btn.AbsoluteSize
-    return Vector2.new(ap.X + sz.X / 2, ap.Y + sz.Y / 2)
-end
-
--- ============================================================
--- CON TRỎ ẢO HIỂN THỊ (Visual Cursor)
--- ============================================================
-local visualCursor = nil
-
-local function ensureVisualCursor()
-    if visualCursor and visualCursor.Parent then return visualCursor end
-    local sg = Instance.new("ScreenGui")
-    sg.Name = "HoangVisualCursor"
-    sg.ResetOnSpawn = false
-    sg.IgnoreGuiInset = true
-    sg.Parent = CoreGui
-
-    local frame = Instance.new("Frame")
-    frame.Name = "Cursor"
-    frame.Size = UDim2.new(0, 24, 0, 24)
-    frame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    frame.BackgroundTransparency = 0.3
-    frame.Visible = false
-    frame.ZIndex = 9999
-    frame.Parent = sg
-
-    local dot = Instance.new("Frame")
-    dot.Size = UDim2.new(0, 4, 0, 4)
-    dot.Position = UDim2.new(0.5, -2, 0.5, -2)
-    dot.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-    dot.BorderSizePixel = 0
-    dot.ZIndex = 10000
-    dot.Parent = frame
-
-    visualCursor = frame
-    return frame
-end
-
-local function moveVisualCursor(x, y)
-    local cur = ensureVisualCursor()
-    cur.Position = UDim2.new(0, x - 12, 0, y - 12)
-    cur.Visible = true
-end
-
-local function hideVisualCursor()
-    if visualCursor then visualCursor.Visible = false end
-end
-
--- ============================================================
--- CLICK PC (giữ nguyên)
--- ============================================================
-local function syncCursorPC(targetVp, offsetY)
-    if not mousemoverel then return false end
-    offsetY = offsetY or 0
-    for i = 1, 40 do
-        local cur = UserInputService:GetMouseLocation()
-        local tgtY = targetVp.Y + offsetY
-        local dx = targetVp.X - cur.X
-        local dy = tgtY - cur.Y
-        if math.sqrt(dx*dx + dy*dy) < 3 then return true end
-        pcall(function()
-            mousemoverel(math.clamp(dx, -25, 25), math.clamp(dy, -25, 25))
-        end)
-        task.wait(0.03)
-    end
-    return false
-end
-
-local function clickAcceptPC(btn)
-    local c = getCenter(btn)
-    if not c then return false, "no_center" end
-    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1366, 705)
-    if c.Y < CONFIG.SafeMarginTop or c.X > vp.X - CONFIG.SafeMarginRight then
-        return false, "unsafe"
-    end
-    if not syncCursorPC(c, CONFIG.PCOffsetY) then
-        return false, "sync_fail"
-    end
-    pcall(function() mouse1click() end)
-    task.wait(0.3)
-    local tr = getTradeRequestFrame()
-    if not tr or not tr.Visible then return true, "pc_click" end
-    return false, "still_open"
-end
-
--- ============================================================
--- CLICK MOBILE (VIM + FireTouch + Visual Cursor)
--- ============================================================
-local function clickAcceptMobile(btn)
-    local c = getCenter(btn)
-    if not c then return false, "no_center" end
-    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1366, 705)
-    if c.Y < CONFIG.SafeMarginTop or c.X > vp.X - CONFIG.SafeMarginRight then
-        return false, "unsafe"
-    end
-
-    log(string.format("Mobile target: (%.0f, %.0f)", c.X, c.Y))
-    
-    -- Hiển thị con trỏ ảo tới vị trí click
-    moveVisualCursor(c.X, c.Y)
-    task.wait(0.2)
-
-    -- Cách 1: VirtualInputManager Move + Button
-    if VirtualInputManager then
-        log("  [1] VirtualInputManager")
-        pcall(function()
-            VirtualInputManager:SendMouseMoveEvent(math.floor(c.X), math.floor(c.Y), game)
-        end)
-        task.wait(0.2)
-        
-        -- Kiểm tra state
-        local state = UserInputService:GetMouseLocation()
-        log(string.format("  State sau move: (%.0f, %.0f)", state.X, state.Y))
-        
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(math.floor(c.X), math.floor(c.Y), 0, true, game, 0)
-        end)
-        task.wait(0.1)
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(math.floor(c.X), math.floor(c.Y), 0, false, game, 0)
-        end)
-        task.wait(0.4)
-        local tr = getTradeRequestFrame()
-        if not tr or not tr.Visible then
-            hideVisualCursor()
-            return true, "vim_mobile"
-        end
-    end
-
-    -- Cách 2: firetouchinterest
-    if firetouchinterest then
-        log("  [2] firetouchinterest")
-        pcall(function()
-            firetouchinterest(btn, c, 0)
-            task.wait(0.1)
-            firetouchinterest(btn, c, 1)
-        end)
-        task.wait(0.4)
-        local tr = getTradeRequestFrame()
-        if not tr or not tr.Visible then
-            hideVisualCursor()
-            return true, "firetouch"
-        end
-    end
-
-    -- Cách 3: firesignal
-    if typeof(firesignal) == "function" then
-        log("  [3] firesignal Down/Up/Click")
-        pcall(function()
-            firesignal(btn.MouseButton1Down)
-            task.wait(0.05)
-            firesignal(btn.MouseButton1Up)
-            task.wait(0.05)
-            firesignal(btn.MouseButton1Click)
-        end)
-        task.wait(0.4)
-        local tr = getTradeRequestFrame()
-        if not tr or not tr.Visible then
-            hideVisualCursor()
-            return true, "firesignal"
-        end
-    end
-
-    hideVisualCursor()
-    return false, "all_mobile_fail"
-end
-
--- ============================================================
--- ACCEPT TỔNG HỢP
--- ============================================================
-local function acceptTrade()
-    local btn = getAcceptButton()
-    if not btn then return false, "no_popup" end
-    if IS_PC then
-        return clickAcceptPC(btn)
-    else
-        return clickAcceptMobile(btn)
-    end
-end
-
--- ============================================================
--- NHẬP SL
--- ============================================================
-local KEY_MAP = {
-    ["0"] = Enum.KeyCode.Zero, ["1"] = Enum.KeyCode.One, ["2"] = Enum.KeyCode.Two,
-    ["3"] = Enum.KeyCode.Three, ["4"] = Enum.KeyCode.Four, ["5"] = Enum.KeyCode.Five,
-    ["6"] = Enum.KeyCode.Six, ["7"] = Enum.KeyCode.Seven, ["8"] = Enum.KeyCode.Eight,
-    ["9"] = Enum.KeyCode.Nine,
-}
-
-local function typeTextRoblox(text)
-    if not VirtualInputManager then return false end
-    for i = 1, #text do
-        local kc = KEY_MAP[text:sub(i, i)]
-        if kc then
-            pcall(function()
-                VirtualInputManager:SendKeyEvent(true, kc, false, game)
-                task.wait(0.02)
-                VirtualInputManager:SendKeyEvent(false, kc, false, game)
-            end)
-            task.wait(0.03)
-        end
-    end
-    return true
-end
-
 local function setAmount(qty)
     local tb = getAmountTextBox()
     if not tb then return false end
@@ -385,9 +416,6 @@ local function setAmount(qty)
     return true
 end
 
--- ============================================================
--- SAFE CLICK
--- ============================================================
 local function safeClick(btn, name)
     if not btn then return false end
     if name then log("Click:", name) end
@@ -475,7 +503,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v62 (" .. PLATFORM .. ")"
+    title.Text = "Auto Trade v63 (" .. PLATFORM .. ")"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -586,7 +614,7 @@ local function buildUI()
     infoBtn.Position = UDim2.new(0.05, 0, 0, 126)
     infoBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     infoBtn.BorderSizePixel = 0
-    infoBtn.Text = "In info platform + API"
+    infoBtn.Text = "In info + log targets"
     infoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     infoBtn.Font = Enum.Font.GothamBold
     infoBtn.TextSize = 11
@@ -598,15 +626,15 @@ local function buildUI()
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-v62 FIX:
-- Detect platform bằng TouchEnabled + MouseEnabled
-  (không dùng mousemoverel nữa, vì mobile cũng
-  trả về hàm này nhưng sandbox không hoạt động).
-- Mobile: vẽ "con trỏ ảo đỏ" lên màn hình để bạn
-  thấy tool đang nhắm vào đâu.
-- Click qua VirtualInputManager + firetouchinterest.
+v63 MOBILE:
+- Tìm TẤT CẢ GuiButton trong nút Accept.
+- Thử firetouchinterest trên từng cái,
+  delay 0.2s giữa down/up.
+- Thử VirtualInputManager với delay dài.
+- Thử firesignal, Activate, GUI wrapper.
 
-Nếu vẫn fail: bấm "In info" gửi log F9.
+Khi Test: xem log F9 ghi target nào
+làm popup đóng.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -664,18 +692,22 @@ Nếu vẫn fail: bấm "In info" gửi log F9.
     end)
 
     infoBtn.MouseButton1Click:Connect(function()
-        print("========== INFO v62 ==========")
+        print("========== INFO v63 ==========")
+        print("Platform:", PLATFORM)
         print("TouchEnabled:", tostring(isTouch))
         print("MouseEnabled:", tostring(isMouse))
         print("KeyboardEnabled:", tostring(isKeyboard))
-        print("GamepadEnabled:", tostring(isGamepad))
-        print("Platform:", PLATFORM)
         print("mousemoverel:", typeof(mousemoverel))
         print("mouse1click:", typeof(mouse1click))
         print("firetouchinterest:", typeof(firetouchinterest))
         print("VirtualInputManager:", typeof(VirtualInputManager))
         print("firesignal:", typeof(firesignal))
-        print("===============================")
+        local targets = getAllAcceptTargets()
+        print("--- Targets in Accept ---")
+        for i, t in ipairs(targets) do
+            print("  #" .. i, t.ClassName, t.Name, tostring(t.AbsolutePosition))
+        end
+        print("=============================")
         appendLog("info ở F9")
     end)
 
@@ -721,4 +753,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v62 sẵn sàng. Platform:", PLATFORM)
+log("v63 sẵn sàng. Mobile: thử nhiều target + GUI wrapper.")
