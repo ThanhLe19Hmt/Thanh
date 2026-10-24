@@ -1,30 +1,29 @@
 --[[
-    Auto Trade - Rock Fruit v61 (Mobile Virtual Cursor)
+    Auto Trade - Rock Fruit v62 (Mobile Fix + Visual Cursor)
     Game ID: 119091355492870
 
-    TRẢ LỜI CÂU HỎI:
-      "Có cách tạo con chuột ảo trên mobile giống PC không?"
+    VẤN ĐỀ:
+      - Executor trên Mobile vẫn trả về `mousemoverel` và
+        `mouse1click` (nhưng bị sandbox, gọi không có tác dụng).
+      - Tool cũ check `typeof(mousemoverel) == "function"` -> true
+        -> nhận nhầm là PC.
+      - Nhưng mousemoverel trên mobile không di chuyển con trỏ nào
+        (vì mobile không có con trỏ OS).
+      -> Tool "fail im lặng".
 
-    TRẢ LỜI NGẮN:
-      CÓ, nhưng không giống 100%. PC dùng mousemoverel (Windows
-      API điều khiển con trỏ OS thật). Mobile không có "con trỏ
-      OS" - chỉ có touch. Do đó phải dùng:
-        1. VirtualInputManager:SendMouseMoveEvent (chuột ảo
-           Roblox - có trên mobile nhưng executor có hỗ trợ
-           thật không còn tùy).
-        2. firetouchinterest (touch thật - chuẩn nhất mobile).
-        3. VirtualInputManager:SendMouseButtonEvent (mô phỏng
-           click chuột ảo trên mobile).
+    FIX v62:
+      1. Detect platform ĐÚNG:
+         - Mobile = (TouchEnabled == true AND KeyboardEnabled == false).
+         - PC = (TouchEnabled == false AND MouseEnabled == true).
+         - Không dựa vào mousemoverel nữa.
+      2. Trên Mobile, tạo "con trỏ ảo HIỂN THỊ" bằng Frame GUI
+         di chuyển trên màn hình -> bạn thấy được.
+      3. Click bằng VirtualInputManager / firetouchinterest.
+      4. Trên PC, giữ nguyên mousemoverel + offsetY=50.
 
-    CHIẾN LƯỢC v61:
-      1. Mobile: tạo "con trỏ ảo" bằng VirtualInputManager - set
-         vị trí qua SendMouseMoveEvent + click qua SendMouseButtonEvent.
-      2. Kiểm tra state GetMouseLocation sau move - nếu khớp
-         target -> chuột ảo đang hoạt động.
-      3. Nếu không khớp -> fallback firetouchinterest (touch).
-      4. Cuối cùng nếu fail -> firesignal.
-      5. Trên PC: giữ flow cũ (mousemoverel + mouse1click +
-         offsetY=50).
+    LƯU Ý: "Con trỏ ảo hiển thị" chỉ là hiệu ứng visual để bạn
+    thấy tool đang nhắm vào đâu. Touch/click thật vẫn qua
+    VirtualInputManager hoặc firetouchinterest.
 ]]
 
 local CONFIG = {
@@ -46,17 +45,29 @@ local function log(...)
 end
 
 -- ============================================================
--- PLATFORM DETECT
+-- DETECT PLATFORM CHÍNH XÁC
 -- ============================================================
-local IS_PC = (typeof(mousemoverel) == "function" and typeof(mouse1click) == "function")
-local IS_MOBILE = (UserInputService.TouchEnabled and not UserInputService.MouseEnabled)
-local PLATFORM = IS_PC and "PC" or (IS_MOBILE and "MOBILE" or "UNKNOWN")
+local isTouch = UserInputService.TouchEnabled
+local isMouse = UserInputService.MouseEnabled
+local isKeyboard = UserInputService.KeyboardEnabled
+local isGamepad = UserInputService.GamepadEnabled
 
-log("Platform:", PLATFORM)
-log("  mousemoverel:", tostring(mousemoverel))
-log("  mouse1click:", tostring(mouse1click))
-log("  firetouchinterest:", tostring(firetouchinterest))
-log("  VirtualInputManager:", tostring(VirtualInputManager))
+local IS_MOBILE = (isTouch and not isKeyboard and not isMouse)
+local IS_PC = (isMouse and isKeyboard and not isTouch)
+local PLATFORM = IS_MOBILE and "MOBILE" or (IS_PC and "PC" or "UNKNOWN")
+
+log("=== PLATFORM ===")
+log("TouchEnabled:", isTouch)
+log("MouseEnabled:", isMouse)
+log("KeyboardEnabled:", isKeyboard)
+log("GamepadEnabled:", isGamepad)
+log("=>", PLATFORM)
+
+-- Kiểm tra API (không dựa vào để detect, chỉ để log)
+log("mousemoverel:", typeof(mousemoverel))
+log("mouse1click:", typeof(mouse1click))
+log("firetouchinterest:", typeof(firetouchinterest))
+log("VirtualInputManager:", typeof(VirtualInputManager))
 
 -- ============================================================
 -- ĐỐI TƯỢNG
@@ -147,9 +158,55 @@ local function getCenter(btn)
 end
 
 -- ============================================================
--- PC: mousemoverel + mouse1click
+-- CON TRỎ ẢO HIỂN THỊ (Visual Cursor)
 -- ============================================================
-local function syncCursorToPC(targetVp, offsetY)
+local visualCursor = nil
+
+local function ensureVisualCursor()
+    if visualCursor and visualCursor.Parent then return visualCursor end
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "HoangVisualCursor"
+    sg.ResetOnSpawn = false
+    sg.IgnoreGuiInset = true
+    sg.Parent = CoreGui
+
+    local frame = Instance.new("Frame")
+    frame.Name = "Cursor"
+    frame.Size = UDim2.new(0, 24, 0, 24)
+    frame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    frame.BackgroundTransparency = 0.3
+    frame.Visible = false
+    frame.ZIndex = 9999
+    frame.Parent = sg
+
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0, 4, 0, 4)
+    dot.Position = UDim2.new(0.5, -2, 0.5, -2)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 10000
+    dot.Parent = frame
+
+    visualCursor = frame
+    return frame
+end
+
+local function moveVisualCursor(x, y)
+    local cur = ensureVisualCursor()
+    cur.Position = UDim2.new(0, x - 12, 0, y - 12)
+    cur.Visible = true
+end
+
+local function hideVisualCursor()
+    if visualCursor then visualCursor.Visible = false end
+end
+
+-- ============================================================
+-- CLICK PC (giữ nguyên)
+-- ============================================================
+local function syncCursorPC(targetVp, offsetY)
     if not mousemoverel then return false end
     offsetY = offsetY or 0
     for i = 1, 40 do
@@ -173,7 +230,7 @@ local function clickAcceptPC(btn)
     if c.Y < CONFIG.SafeMarginTop or c.X > vp.X - CONFIG.SafeMarginRight then
         return false, "unsafe"
     end
-    if not syncCursorToPC(c, CONFIG.PCOffsetY) then
+    if not syncCursorPC(c, CONFIG.PCOffsetY) then
         return false, "sync_fail"
     end
     pcall(function() mouse1click() end)
@@ -184,62 +241,8 @@ local function clickAcceptPC(btn)
 end
 
 -- ============================================================
--- MOBILE: CHUỘT ẢO + TOUCH
+-- CLICK MOBILE (VIM + FireTouch + Visual Cursor)
 -- ============================================================
-local function createVirtualCursorMobile(targetVp)
-    if not VirtualInputManager then return false, "no_vim" end
-    log(string.format("  Move cursor ảo tới (%.0f, %.0f)", targetVp.X, targetVp.Y))
-    pcall(function()
-        VirtualInputManager:SendMouseMoveEvent(
-            math.floor(targetVp.X),
-            math.floor(targetVp.Y),
-            game
-        )
-    end)
-    task.wait(0.2)
-    -- Verify state
-    local loc = UserInputService:GetMouseLocation()
-    log(string.format("  Verify: (%.0f, %.0f)", loc.X, loc.Y))
-    local dx = targetVp.X - loc.X
-    local dy = targetVp.Y - loc.Y
-    if math.sqrt(dx*dx + dy*dy) < 10 then
-        return true, "state_ok"
-    end
-    return false, "state_mismatch"
-end
-
-local function clickVirtualCursorMobile(targetVp)
-    if not VirtualInputManager then return false, "no_vim" end
-    log("  Click chuột ảo (SendMouseButtonEvent)")
-    local ix = math.floor(targetVp.X)
-    local iy = math.floor(targetVp.Y)
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
-    end)
-    task.wait(0.1)
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
-    end)
-    task.wait(0.3)
-    local tr = getTradeRequestFrame()
-    if not tr or not tr.Visible then return true, "vim_click" end
-    return false, "vim_still_open"
-end
-
-local function tryFireTouch(btn, targetVp)
-    if not firetouchinterest then return false, "no_firetouch" end
-    log("  Thử firetouchinterest (touch thật)")
-    pcall(function()
-        firetouchinterest(btn, targetVp, 0)
-        task.wait(0.05)
-        firetouchinterest(btn, targetVp, 1)
-    end)
-    task.wait(0.3)
-    local tr = getTradeRequestFrame()
-    if not tr or not tr.Visible then return true, "firetouch" end
-    return false, "firetouch_fail"
-end
-
 local function clickAcceptMobile(btn)
     local c = getCenter(btn)
     if not c then return false, "no_center" end
@@ -249,25 +252,57 @@ local function clickAcceptMobile(btn)
     end
 
     log(string.format("Mobile target: (%.0f, %.0f)", c.X, c.Y))
+    
+    -- Hiển thị con trỏ ảo tới vị trí click
+    moveVisualCursor(c.X, c.Y)
+    task.wait(0.2)
 
-    -- Bước 1: tạo chuột ảo di chuyển tới nút
-    local moved, moveReason = createVirtualCursorMobile(c)
-    log("  Chuột ảo:", tostring(moved), tostring(moveReason))
-
-    -- Bước 2: nếu chuột ảo đã ở đúng vị trí -> click chuột ảo
-    if moved then
-        local ok, r = clickVirtualCursorMobile(c)
-        if ok then return true, r end
-        log("  Chuột ảo click fail:", r)
+    -- Cách 1: VirtualInputManager Move + Button
+    if VirtualInputManager then
+        log("  [1] VirtualInputManager")
+        pcall(function()
+            VirtualInputManager:SendMouseMoveEvent(math.floor(c.X), math.floor(c.Y), game)
+        end)
+        task.wait(0.2)
+        
+        -- Kiểm tra state
+        local state = UserInputService:GetMouseLocation()
+        log(string.format("  State sau move: (%.0f, %.0f)", state.X, state.Y))
+        
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(math.floor(c.X), math.floor(c.Y), 0, true, game, 0)
+        end)
+        task.wait(0.1)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(math.floor(c.X), math.floor(c.Y), 0, false, game, 0)
+        end)
+        task.wait(0.4)
+        local tr = getTradeRequestFrame()
+        if not tr or not tr.Visible then
+            hideVisualCursor()
+            return true, "vim_mobile"
+        end
     end
 
-    -- Bước 3: fallback firetouchinterest
-    local ok2, r2 = tryFireTouch(btn, c)
-    if ok2 then return true, r2 end
+    -- Cách 2: firetouchinterest
+    if firetouchinterest then
+        log("  [2] firetouchinterest")
+        pcall(function()
+            firetouchinterest(btn, c, 0)
+            task.wait(0.1)
+            firetouchinterest(btn, c, 1)
+        end)
+        task.wait(0.4)
+        local tr = getTradeRequestFrame()
+        if not tr or not tr.Visible then
+            hideVisualCursor()
+            return true, "firetouch"
+        end
+    end
 
-    -- Bước 4: fallback firesignal
+    -- Cách 3: firesignal
     if typeof(firesignal) == "function" then
-        log("  Thử firesignal Down/Up")
+        log("  [3] firesignal Down/Up/Click")
         pcall(function()
             firesignal(btn.MouseButton1Down)
             task.wait(0.05)
@@ -275,11 +310,15 @@ local function clickAcceptMobile(btn)
             task.wait(0.05)
             firesignal(btn.MouseButton1Click)
         end)
-        task.wait(0.3)
+        task.wait(0.4)
         local tr = getTradeRequestFrame()
-        if not tr or not tr.Visible then return true, "firesignal" end
+        if not tr or not tr.Visible then
+            hideVisualCursor()
+            return true, "firesignal"
+        end
     end
 
+    hideVisualCursor()
     return false, "all_mobile_fail"
 end
 
@@ -418,7 +457,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 460, 0, 440)
+    frame.Size = UDim2.new(0, 460, 0, 460)
     frame.Position = UDim2.new(0, 20, 0, 20)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -436,7 +475,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v61 (Mobile Cursor)"
+    title.Text = "Auto Trade v62 (" .. PLATFORM .. ")"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -547,28 +586,27 @@ local function buildUI()
     infoBtn.Position = UDim2.new(0.05, 0, 0, 126)
     infoBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     infoBtn.BorderSizePixel = 0
-    infoBtn.Text = "In info platform"
+    infoBtn.Text = "In info platform + API"
     infoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     infoBtn.Font = Enum.Font.GothamBold
     infoBtn.TextSize = 11
     infoBtn.Parent = body
 
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.9, 0, 0, 100)
+    helpLbl.Size = UDim2.new(0.9, 0, 0, 110)
     helpLbl.Position = UDim2.new(0.05, 0, 0, 156)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-Mobile dùng CHUỘT ẢO:
-1. VirtualInputManager:SendMouseMoveEvent
-   -> di chuyển chuột ảo Roblox tới nút Accept.
-2. VirtualInputManager:SendMouseButtonEvent
-   -> bấm chuột ảo.
-3. Fallback: firetouchinterest (touch thật).
-4. Fallback: firesignal Down/Up.
+v62 FIX:
+- Detect platform bằng TouchEnabled + MouseEnabled
+  (không dùng mousemoverel nữa, vì mobile cũng
+  trả về hàm này nhưng sandbox không hoạt động).
+- Mobile: vẽ "con trỏ ảo đỏ" lên màn hình để bạn
+  thấy tool đang nhắm vào đâu.
+- Click qua VirtualInputManager + firetouchinterest.
 
-Nếu executor mobile chặn VirtualInputManager
--> chỉ firetouchinterest mới chạy được.
+Nếu vẫn fail: bấm "In info" gửi log F9.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -578,8 +616,8 @@ Nếu executor mobile chặn VirtualInputManager
     helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 150)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 260)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 140)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 270)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -596,7 +634,7 @@ Nếu executor mobile chặn VirtualInputManager
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 1200 then cur = cur:sub(-1000) end
+        if #cur > 1100 then cur = cur:sub(-900) end
         logLbl.Text = cur .. "\n" .. s
     end
 
@@ -626,18 +664,19 @@ Nếu executor mobile chặn VirtualInputManager
     end)
 
     infoBtn.MouseButton1Click:Connect(function()
-        print("========== INFO ==========")
+        print("========== INFO v62 ==========")
+        print("TouchEnabled:", tostring(isTouch))
+        print("MouseEnabled:", tostring(isMouse))
+        print("KeyboardEnabled:", tostring(isKeyboard))
+        print("GamepadEnabled:", tostring(isGamepad))
         print("Platform:", PLATFORM)
-        print("TouchEnabled:", tostring(UserInputService.TouchEnabled))
-        print("MouseEnabled:", tostring(UserInputService.MouseEnabled))
-        print("KeyboardEnabled:", tostring(UserInputService.KeyboardEnabled))
-        print("mousemoverel:", tostring(mousemoverel))
-        print("mouse1click:", tostring(mouse1click))
-        print("firetouchinterest:", tostring(firetouchinterest))
-        print("VirtualInputManager:", tostring(VirtualInputManager))
-        print("firesignal:", tostring(firesignal))
-        print("==========================")
-        appendLog("info F9")
+        print("mousemoverel:", typeof(mousemoverel))
+        print("mouse1click:", typeof(mouse1click))
+        print("firetouchinterest:", typeof(firetouchinterest))
+        print("VirtualInputManager:", typeof(VirtualInputManager))
+        print("firesignal:", typeof(firesignal))
+        print("===============================")
+        appendLog("info ở F9")
     end)
 
     task.spawn(function()
@@ -682,4 +721,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v61 sẵn sàng (" .. PLATFORM .. "). Mobile sẽ thử chuột ảo trước.")
+log("v62 sẵn sàng. Platform:", PLATFORM)
