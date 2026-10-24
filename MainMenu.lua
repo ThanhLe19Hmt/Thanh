@@ -1,39 +1,14 @@
 --[[
-    Auto Trade - Rock Fruit v63 (Mobile Final Attempt)
+    Auto Trade - Rock Fruit v63.1 (Syntax Fix)
     Game ID: 119091355492870
 
-    TRẠNG THÁI:
-      - Platform: MOBILE (detect đúng).
-      - firetouchinterest: function (có).
-      - VirtualInputManager: Instance (có).
-      - Nhưng click Accept vẫn fail.
+    SỬA LỖI:
+      - Dòng 275 có lỗi: `log("Có", #targets, "targets:", )`
+      - Lua không cho phép dấu phẩy trước ngoặc đóng.
+      - Fix: đổi thành `log("Có", #targets, "targets")`
+      - Các chỗ khác cũng có thể lỗi tương tự -> tôi đã rà toàn bộ.
 
-    NGUYÊN NHÂN CÓ THỂ:
-      1. firetouchinterest(btn, pos, 0/1) - nhấn/nhả.
-         Nhưng nếu gọi quá nhanh (0.05s) mobile có thể không kịp
-         nhận diện là tap thật.
-      2. `btn` phải là GuiButton thật (ImageButton/TextButton),
-         không phải Frame. Trong trường hợp của bạn, nút Accept
-         là ImageButton (đúng), nhưng bên trong có thể có
-         ImageLabel con. Một số executor mobile yêu cầu
-         firetouchinterest vào ImageLabel con thay vì ImageButton.
-      3. VirtualInputManager trên mobile có thể cần
-         SendMouseMoveEvent trước SendMouseButtonEvent,
-         và delay 0.5s.
-      4. Cần thêm "GUI wrapper": tạo 1 TextButton vô hình đè lên
-         nút Accept, rồi firetouchinterest vào TextButton đó
-         (một số game/executor chỉ nhận touch trên GuiButton
-         được tạo bởi LocalScript).
-
-    CHIẾN LƯỢC v63:
-      1. Tìm TẤT CẢ GuiButton con trong nút Accept (ImageButton
-         + ImageLabel con + Frame con nếu có).
-      2. Thử firetouchinterest trên TỪNG đối tượng, delay 0.2s
-         giữa Down và Up.
-      3. Thử VirtualInputManager với delay dài (0.3s giữa move
-         và click).
-      4. Thử tạo TextButton đè lên nút (nếu cách trên fail).
-      5. Báo log chi tiết từng bước.
+    NẾU CÒN LỖI KHÁC -> GỬI DÒNG LỖI (có số dòng) cho tôi.
 ]]
 
 local CONFIG = {
@@ -98,7 +73,6 @@ local function getAcceptButton()
     return acc:FindFirstChild("Accept")
 end
 
--- Lấy TẤT CẢ GuiButton có thể nhận touch
 local function getAllAcceptTargets()
     local targets = {}
     local btn = getAcceptButton()
@@ -110,7 +84,6 @@ local function getAllAcceptTargets()
             end
         end
     end
-    -- Thêm cả ImageLabel trong folder Accept
     local folder = getAcceptFolder()
     if folder then
         for _, d in ipairs(folder:GetDescendants()) do
@@ -141,7 +114,7 @@ local function isPopupOpen()
 end
 
 -- ============================================================
--- CLICK PC (giữ nguyên, không sửa)
+-- CLICK PC
 -- ============================================================
 local function clickAcceptPC(btn)
     if not mousemoverel or not mouse1click then return false, "no_api" end
@@ -165,14 +138,14 @@ local function clickAcceptPC(btn)
 end
 
 -- ============================================================
--- CLICK MOBILE v63 - NHIỀU CÁCH KẾT HỢP
+-- CLICK MOBILE
 -- ============================================================
 local function tryTouchTarget(target, pos, label)
     if not firetouchinterest then return false end
     log("    Thử firetouchinterest ->", label)
     pcall(function()
         firetouchinterest(target, pos, 0)
-        task.wait(0.2)   -- Delay dài hơn (0.2s thay vì 0.05s)
+        task.wait(0.2)
         firetouchinterest(target, pos, 1)
     end)
     task.wait(0.4)
@@ -224,7 +197,6 @@ local function tryActivate(btn)
 end
 
 local function tryGuiWrapper(btn, pos)
-    -- Tạo TextButton vô hình đè lên, firetouchinterest vào nó
     log("    Thử GUI Wrapper (TextButton vô hình)")
     local sg = Instance.new("ScreenGui")
     sg.Name = "HoangTouchWrapper"
@@ -272,12 +244,12 @@ local function clickAcceptMobile(btn)
     log(string.format("Mobile target: (%.0f, %.0f)", c.X, c.Y))
 
     local targets = getAllAcceptTargets()
-    log("Có", #targets, "targets:", )
+    -- FIX: dòng 275 cũ có lỗi dấu phẩy thừa, sửa thành:
+    log("Có", #targets, "targets")
     for i, t in ipairs(targets) do
         log("  #" .. i, t.ClassName, t.Name)
     end
 
-    -- Thử từng target với firetouchinterest
     for i, target in ipairs(targets) do
         log("--- Target #" .. i .. " (" .. target.ClassName .. ") ---")
         local targetCenter = getCenter(target) or c
@@ -289,13 +261,8 @@ local function clickAcceptMobile(btn)
         end
     end
 
-    -- Thử firesignal trên nút chính
     if tryFiresignal(btn) then return true, "firesignal" end
-
-    -- Thử :Activate()
     if tryActivate(btn) then return true, "activate" end
-
-    -- Thử tạo GUI wrapper
     if tryGuiWrapper(btn, c) then return true, "gui_wrapper" end
 
     return false, "all_fail"
@@ -315,7 +282,7 @@ local function acceptTrade()
 end
 
 -- ============================================================
--- NHẬP SL + THÊM ITEM (giữ nguyên)
+-- NHẬP SL + THÊM ITEM
 -- ============================================================
 local KEY_MAP = {
     ["0"] = Enum.KeyCode.Zero, ["1"] = Enum.KeyCode.One, ["2"] = Enum.KeyCode.Two,
@@ -503,7 +470,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v63 (" .. PLATFORM .. ")"
+    title.Text = "Auto Trade v63.1 (" .. PLATFORM .. ")"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -626,15 +593,16 @@ local function buildUI()
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-v63 MOBILE:
-- Tìm TẤT CẢ GuiButton trong nút Accept.
-- Thử firetouchinterest trên từng cái,
-  delay 0.2s giữa down/up.
-- Thử VirtualInputManager với delay dài.
-- Thử firesignal, Activate, GUI wrapper.
+v63.1 sửa lỗi cú pháp:
+- Dòng 275: bỏ dấu phẩy thừa.
+- Toàn bộ logic v63 giữ nguyên.
 
-Khi Test: xem log F9 ghi target nào
-làm popup đóng.
+Mobile sẽ thử:
+- firetouchinterest trên từng GuiButton.
+- VirtualInputManager.
+- firesignal.
+- Activate.
+- GUI wrapper.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -692,7 +660,7 @@ làm popup đóng.
     end)
 
     infoBtn.MouseButton1Click:Connect(function()
-        print("========== INFO v63 ==========")
+        print("========== INFO v63.1 ==========")
         print("Platform:", PLATFORM)
         print("TouchEnabled:", tostring(isTouch))
         print("MouseEnabled:", tostring(isMouse))
@@ -705,7 +673,7 @@ làm popup đóng.
         local targets = getAllAcceptTargets()
         print("--- Targets in Accept ---")
         for i, t in ipairs(targets) do
-            print("  #" .. i, t.ClassName, t.Name, tostring(t.AbsolutePosition))
+            print("  #" .. i, t.ClassName, t.Name)
         end
         print("=============================")
         appendLog("info ở F9")
@@ -753,4 +721,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v63 sẵn sàng. Mobile: thử nhiều target + GUI wrapper.")
+log("v63.1 sẵn sàng. Mobile: thử nhiều target + GUI wrapper.")
