@@ -1,25 +1,36 @@
 --[[
-    Auto Trade - Rock Fruit v72 (Visual + Wrapper Fix)
+    Auto Trade - Rock Fruit v73 (Last Resort)
     Game ID: 119091355492870
 
-    NGUYÊN NHÂN KHÔNG HIỆN CHUỘT:
-      - Trong v71, con trỏ ảo (chấm đỏ) CHỈ hiển thị khi bạn kéo
-        ô đen (dragFrame). Khi tool tự bấm (auto/test), nó tạo
-        wrapper TextButton vô hình nhưng KHÔNG vẽ con trỏ tại
-        vị trí đó.
-      - Nếu baseX = nil (chưa lưu), tool báo lỗi và không làm gì.
-      - Có thể offsetX/offsetY chưa được áp dụng.
+    TRẠNG THÁI HIỆN TẠI:
+      - v72 đã hiển thị chấm đỏ đúng vị trí.
+      - Nhưng khi bấm (touchViaWrapper) -> popup KHÔNG đóng.
+      - Nghĩa là wrapper TextButton không kích hoạt được nút Accept.
 
-    GIẢI PHÁP v72:
-      1. Vẽ con trỏ ảo (chấm đỏ 10x10) tại vị trí sắp bấm
-         MỖI KHI test/auto. Bạn sẽ thấy nó nhấp nháy tại chỗ
-         tool sắp bấm.
-      2. Thêm nút "Test Visual" - chỉ hiện con trỏ, không bấm.
-         Để bạn kiểm tra vị trí.
-      3. Log rõ ràng từng bước.
-      4. Nếu chưa lưu vị trí -> tự động dùng vị trí ô đen hiện
-         tại (không cần bấm LƯU trước).
-      5. Đảm bảo wrapper luôn được tạo và cleanup đúng.
+    TẠI SAO WRAPPER FAIL:
+      - Wrapper được tạo trong ScreenGui của script.
+      - Game Rock Fruit có thể kiểm tra `GuiButton.Parent` phải
+        nằm trong `HUD.Main` mới nhận touch.
+      - Hoặc wrapper không được kế thừa quyền nhận touch của
+        nút Accept thật.
+
+    GIẢI PHÁP v73:
+      1. Thử `firetouchinterest(AcceptButton, pos)` trực tiếp
+         (không qua wrapper). Nếu executor bỏ qua pos, đây
+         vẫn fail, nhưng thử lại.
+      2. Thử `VirtualInputManager` tại toạ độ chấm đỏ.
+      3. Thử tạo wrapper là CON của nút Accept (cùng cha) -
+         wrapper.Parent = AcceptButton.Parent.
+      4. Thử tạo wrapper là CON của HUD.Main (cùng cha với
+         Trade_Request).
+      5. Thử firetouchinterest trên AcceptButton với pos
+         được tính lại = pos - AcceptButton.AbsolutePosition.
+      6. Thử dùng `firesignal` trên AcceptButton với
+         MouseButton1Down/Up (không cần toạ độ nhưng vẫn
+         trigger logic của nút nếu game dùng signal).
+      7. Nếu tất cả fail -> kết luận: executor sandbox quá
+         sâu, không thể auto accept từ Lua. Chỉ còn AHK hoặc
+         app Auto Clicker ngoài.
 ]]
 
 local CONFIG = {
@@ -58,13 +69,25 @@ local function getTradeRequestFrame()
     return main:FindFirstChild("Trade_Request")
 end
 
+local function getAcceptButton()
+    local tr = getTradeRequestFrame()
+    if not tr then return nil end
+    local sub = tr:FindFirstChild("Sub")
+    if not sub then return nil end
+    local m = sub:FindFirstChild("Main")
+    if not m then return nil end
+    local acc = m:FindFirstChild("Accept")
+    if not acc then return nil end
+    return acc:FindFirstChild("Accept")
+end
+
 local function isPopupOpen()
     local tr = getTradeRequestFrame()
     return tr ~= nil and tr.Visible == true
 end
 
 -- ============================================================
--- VISUAL CURSOR (CHẤM ĐỎ)
+-- VISUAL
 -- ============================================================
 local visualGui = nil
 local visualDot = nil
@@ -76,7 +99,6 @@ local function ensureVisual()
     visualGui.ResetOnSpawn = false
     visualGui.IgnoreGuiInset = false
     visualGui.Parent = CoreGui
-
     visualDot = Instance.new("Frame")
     visualDot.Size = UDim2.new(0, 14, 0, 14)
     visualDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
@@ -86,14 +108,6 @@ local function ensureVisual()
     visualDot.ZIndex = 999995
     visualDot.Visible = false
     visualDot.Parent = visualGui
-
-    local inner = Instance.new("Frame")
-    inner.Size = UDim2.new(0, 4, 0, 4)
-    inner.Position = UDim2.new(0.5, -2, 0.5, -2)
-    inner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    inner.BorderSizePixel = 0
-    inner.ZIndex = 999996
-    inner.Parent = visualDot
 end
 
 local function showVisual(x, y)
@@ -107,67 +121,140 @@ local function hideVisual()
 end
 
 -- ============================================================
--- TOUCH QUA WRAPPER
+-- CÁCH 1: firetouchinterest TRỰC TIẾP vào Accept
 -- ============================================================
-local function touchViaWrapper(x, y)
-    -- Hiển thị con trỏ tại vị trí sắp bấm
+local function methodDirectTouch(x, y)
+    local btn = getAcceptButton()
+    if not btn or not firetouchinterest then return false, "no_btn_or_touch" end
+    log(string.format("[1] Direct firetouchinterest(Accept, %.0f, %.0f)", x, y))
+    pcall(function()
+        firetouchinterest(btn, Vector2.new(x, y), 0)
+        task.wait(0.15)
+        firetouchinterest(btn, Vector2.new(x, y), 1)
+    end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "direct_touch" end
+    return false, "fail"
+end
+
+-- ============================================================
+-- CÁCH 2: firetouchinterest với pos tương đối
+-- ============================================================
+local function methodRelativeTouch(x, y)
+    local btn = getAcceptButton()
+    if not btn or not firetouchinterest then return false, "no_btn_or_touch" end
+    local ap = btn.AbsolutePosition
+    local relX = x - ap.X
+    local relY = y - ap.Y
+    log(string.format("[2] Relative firetouchinterest(rel %.0f, %.0f)", relX, relY))
+    pcall(function()
+        firetouchinterest(btn, Vector2.new(relX, relY), 0)
+        task.wait(0.15)
+        firetouchinterest(btn, Vector2.new(relX, relY), 1)
+    end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "relative_touch" end
+    return false, "fail"
+end
+
+-- ============================================================
+-- CÁCH 3: VirtualInputManager
+-- ============================================================
+local function methodVIM(x, y)
+    if not VirtualInputManager then return false, "no_vim" end
+    log(string.format("[3] VIM(%.0f, %.0f)", x, y))
+    local ix, iy = math.floor(x), math.floor(y)
+    pcall(function()
+        VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
+    end)
+    task.wait(0.25)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
+    end)
+    task.wait(0.15)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
+    end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "vim" end
+    return false, "fail"
+end
+
+-- ============================================================
+-- CÁCH 4: wrapper cùng cha với Accept
+-- ============================================================
+local function methodWrapperSameParent(x, y)
+    local btn = getAcceptButton()
+    if not btn or not firetouchinterest then return false, "no_btn" end
+    local parent = btn.Parent
+    log(string.format("[4] Wrapper trong parent của Accept"))
+    local wrap = Instance.new("TextButton")
+    wrap.Size = UDim2.new(0, 60, 0, 60)
+    wrap.Position = UDim2.new(0, x - 30, 0, y - 30)
+    wrap.BackgroundTransparency = 1
+    wrap.Text = ""
+    wrap.Active = true
+    wrap.ZIndex = 999992
+    wrap.Parent = parent
+    task.wait(0.1)
+    local ok, r
+    pcall(function()
+        firetouchinterest(wrap, Vector2.new(x, y), 0)
+        task.wait(0.15)
+        firetouchinterest(wrap, Vector2.new(x, y), 1)
+    end)
+    task.wait(0.3)
+    ok = not isPopupOpen()
+    pcall(function() wrap:Destroy() end)
+    if ok then return true, "wrapper_same_parent" end
+    return false, "fail"
+end
+
+-- ============================================================
+-- CÁCH 5: firesignal trên Accept (không cần pos)
+-- ============================================================
+local function methodFiresignal(x, y)
+    local btn = getAcceptButton()
+    if not btn or typeof(firesignal) ~= "function" then return false, "no_firesignal" end
+    log("[5] firesignal Accept Down/Up/Click")
+    pcall(function()
+        firesignal(btn.MouseButton1Down)
+        task.wait(0.1)
+        firesignal(btn.MouseButton1Up)
+        task.wait(0.1)
+        firesignal(btn.MouseButton1Click)
+        task.wait(0.1)
+        firesignal(btn.Activated)
+    end)
+    task.wait(0.35)
+    if not isPopupOpen() then return true, "firesignal" end
+    return false, "fail"
+end
+
+-- ============================================================
+-- TỔNG HỢP
+-- ============================================================
+local function tryAllMethods(x, y)
     showVisual(x, y)
     task.wait(0.15)
-
-    local wrapSg = Instance.new("ScreenGui")
-    wrapSg.Name = "HoangTouchWrapper"
-    wrapSg.ResetOnSpawn = false
-    wrapSg.IgnoreGuiInset = false
-    wrapSg.Parent = CoreGui
-
-    local wrapper = Instance.new("TextButton")
-    wrapper.Size = UDim2.new(0, 40, 0, 40)
-    wrapper.Position = UDim2.new(0, x - 20, 0, y - 20)
-    wrapper.BackgroundTransparency = 1
-    wrapper.Text = ""
-    wrapper.Active = true
-    wrapper.Selectable = true
-    wrapper.AutoButtonColor = false
-    wrapper.ZIndex = 999992
-    wrapper.Parent = wrapSg
-
-    task.wait(0.1)
-
-    local function cleanup()
-        task.wait(0.2)
-        pcall(function() wrapSg:Destroy() end)
-        hideVisual()
+    
+    local methods = {
+        {"direct_touch", methodDirectTouch},
+        {"relative_touch", methodRelativeTouch},
+        {"vim", methodVIM},
+        {"wrapper_same_parent", methodWrapperSameParent},
+        {"firesignal", methodFiresignal},
+    }
+    for _, m in ipairs(methods) do
+        local ok, r = m[2](x, y)
+        if ok then
+            hideVisual()
+            return true, m[1]
+        end
+        task.wait(0.1)
     end
-
-    if firetouchinterest then
-        log(string.format("  firetouchinterest wrapper @ (%.1f, %.1f)", x, y))
-        pcall(function()
-            firetouchinterest(wrapper, Vector2.new(x, y), 0)
-            task.wait(0.15)
-            firetouchinterest(wrapper, Vector2.new(x, y), 1)
-        end)
-        task.wait(0.3)
-        if not isPopupOpen() then cleanup(); return true, "touch" end
-    end
-
-    if typeof(firesignal) == "function" then
-        pcall(function()
-            firesignal(wrapper.MouseButton1Down)
-            task.wait(0.05)
-            firesignal(wrapper.MouseButton1Up)
-            task.wait(0.05)
-            firesignal(wrapper.MouseButton1Click)
-        end)
-        task.wait(0.3)
-        if not isPopupOpen() then cleanup(); return true, "firesignal" end
-    end
-
-    pcall(function() wrapper:Activate() end)
-    task.wait(0.3)
-    if not isPopupOpen() then cleanup(); return true, "activate" end
-
-    cleanup()
-    return false, "fail"
+    hideVisual()
+    return false, "all_fail"
 end
 
 -- ============================================================
@@ -195,7 +282,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 380, 0, 500)
+    frame.Size = UDim2.new(0, 380, 0, 520)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -213,7 +300,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v72 (Visual + Wrapper)"
+    title.Text = "Auto Trade v73 (All Methods)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -267,7 +354,7 @@ local function buildUI()
     statusLbl.Position = UDim2.new(0.025, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Kéo ô đen vào nút Accept. Khi test sẽ thấy chấm đỏ."
+    statusLbl.Text = "Kéo ô đen, thử lần lượt 5 cách bấm."
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
@@ -279,7 +366,7 @@ local function buildUI()
     infoLbl.Position = UDim2.new(0.025, 0, 0, 36)
     infoLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     infoLbl.BorderSizePixel = 0
-    infoLbl.Text = "Chưa lưu. Di chuyển ô đen để xem."
+    infoLbl.Text = "Chưa lưu vị trí."
     infoLbl.TextColor3 = Color3.fromRGB(180, 220, 255)
     infoLbl.Font = Enum.Font.Code
     infoLbl.TextSize = 11
@@ -354,23 +441,12 @@ local function buildUI()
     saveBtn.TextSize = 12
     saveBtn.Parent = body
 
-    local testVisualBtn = Instance.new("TextButton")
-    testVisualBtn.Size = UDim2.new(0.95, 0, 0, 26)
-    testVisualBtn.Position = UDim2.new(0.025, 0, 0, 186)
-    testVisualBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
-    testVisualBtn.BorderSizePixel = 0
-    testVisualBtn.Text = "2a) TEST VISUAL (không bấm)"
-    testVisualBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    testVisualBtn.Font = Enum.Font.GothamBold
-    testVisualBtn.TextSize = 11
-    testVisualBtn.Parent = body
-
     local testBtn = Instance.new("TextButton")
     testBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    testBtn.Position = UDim2.new(0.025, 0, 0, 216)
+    testBtn.Position = UDim2.new(0.025, 0, 0, 186)
     testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
     testBtn.BorderSizePixel = 0
-    testBtn.Text = "2b) TEST BẤM (hiện chấm đỏ + wrapper)"
+    testBtn.Text = "2) TEST (5 cách lần lượt)"
     testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     testBtn.Font = Enum.Font.GothamBold
     testBtn.TextSize = 12
@@ -378,7 +454,7 @@ local function buildUI()
 
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    autoBtn.Position = UDim2.new(0.025, 0, 0, 254)
+    autoBtn.Position = UDim2.new(0.025, 0, 0, 224)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
     autoBtn.Text = "3) AUTO ACCEPT: OFF"
@@ -389,27 +465,31 @@ local function buildUI()
 
     local resetBtn = Instance.new("TextButton")
     resetBtn.Size = UDim2.new(0.95, 0, 0, 24)
-    resetBtn.Position = UDim2.new(0.025, 0, 0, 292)
+    resetBtn.Position = UDim2.new(0.025, 0, 0, 262)
     resetBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     resetBtn.BorderSizePixel = 0
-    resetBtn.Text = "Reset ô đen về giữa"
+    resetBtn.Text = "Reset ô đen"
     resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     resetBtn.Font = Enum.Font.GothamBold
     resetBtn.TextSize = 11
     resetBtn.Parent = body
 
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.95, 0, 0, 100)
-    helpLbl.Position = UDim2.new(0.025, 0, 0, 322)
+    helpLbl.Size = UDim2.new(0.95, 0, 0, 140)
+    helpLbl.Position = UDim2.new(0.025, 0, 0, 290)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-v72 SỬA:
-- Khi test/auto, sẽ thấy CHẤM ĐỎ nhấp nháy tại
-  vị trí sắp bấm -> bạn biết tool nhắm đâu.
-- Nếu chưa lưu vị trí, tool tự dùng ô đen hiện tại.
-- Test Visual: chỉ hiện chấm đỏ, không bấm
-  (để bạn kiểm tra trước khi bấm thật).
+v73 thử 5 cách khi TEST:
+1. Direct firetouchinterest vào Accept (dùng pos).
+2. Relative firetouchinterest (pos - Accept.AbsolutePosition).
+3. VirtualInputManager tại pos.
+4. Wrapper TextButton trong parent của Accept.
+5. firesignal Down/Up/Click (không cần pos).
+
+Log F9 sẽ in rõ cách nào OK.
+Nếu tất cả fail -> executor sandbox quá sâu,
+không thể auto accept từ Lua.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -419,8 +499,8 @@ v72 SỬA:
     helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.95, 0, 0, 60)
-    logLbl.Position = UDim2.new(0.025, 0, 0, 428)
+    logLbl.Size = UDim2.new(0.95, 0, 0, 70)
+    logLbl.Position = UDim2.new(0.025, 0, 0, 438)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -437,13 +517,12 @@ v72 SỬA:
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 340 then cur = cur:sub(-260) end
+        if #cur > 460 then cur = cur:sub(-380) end
         logLbl.Text = cur .. "\n" .. s
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
 
-    -- Drag target
     local dragSg = Instance.new("ScreenGui")
     dragSg.Name = "HoangDragTarget"
     dragSg.ResetOnSpawn = false
@@ -538,23 +617,14 @@ v72 SỬA:
         baseX = vx
         baseY = vy
         appendLog(string.format("Lưu VP (%.0f,%.0f)", vx, vy))
-        setStatus("Đã lưu. Test visual để xem chấm đỏ.", Color3.fromRGB(120, 220, 120))
+        setStatus("Đã lưu. Nhập offset nếu cần. Bấm TEST.", Color3.fromRGB(120, 220, 120))
     end)
 
     applyOffsetBtn.MouseButton1Click:Connect(function()
         offsetX = tonumber(offsetXBox.Text) or 0
         offsetY = tonumber(offsetYBox.Text) or 0
         appendLog(string.format("Offset X=%d Y=%d", offsetX, offsetY))
-        setStatus(string.format("Offset: X=%d Y=%d", offsetX, offsetY), Color3.fromRGB(120, 220, 120))
-    end)
-
-    testVisualBtn.MouseButton1Click:Connect(function()
-        local bx, by = getCurrentBase()
-        local tx = bx + offsetX
-        local ty = by + offsetY
-        showVisual(tx, ty)
-        appendLog(string.format("Visual tại (%.0f,%.0f) - 2s", tx, ty))
-        task.delay(2, hideVisual)
+        setStatus(string.format("Offset X=%d Y=%d", offsetX, offsetY), Color3.fromRGB(120, 220, 120))
     end)
 
     testBtn.MouseButton1Click:Connect(function()
@@ -562,14 +632,14 @@ v72 SỬA:
         local tx = bx + offsetX
         local ty = by + offsetY
         task.spawn(function()
-            appendLog(string.format("Test bấm (%.0f,%.0f)", tx, ty))
-            local ok, r = touchViaWrapper(tx, ty)
+            appendLog(string.format("TEST tại (%.0f,%.0f)", tx, ty))
+            local ok, r = tryAllMethods(tx, ty)
             if ok then
                 appendLog("✔ OK: " .. r)
-                setStatus("✔ Test OK - bật AUTO", Color3.fromRGB(120, 220, 120))
+                setStatus("✔ OK: " .. r .. " - bật AUTO", Color3.fromRGB(120, 220, 120))
             else
-                appendLog("✘ Fail - tăng offset")
-                setStatus("✘ Fail - tinh chỉnh offset", Color3.fromRGB(255, 120, 120))
+                appendLog("✘ ALL FAIL")
+                setStatus("✘ Tất cả cách fail - executor sandbox", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
@@ -593,7 +663,7 @@ v72 SỬA:
         dragFrame.Position = UDim2.new(0.5, -30, 0.5, -30)
         baseX = nil
         baseY = nil
-        appendLog("Reset, base=nil")
+        appendLog("Reset base=nil")
     end)
 
     task.spawn(function()
@@ -607,7 +677,7 @@ v72 SỬA:
                     local bx, by = getCurrentBase()
                     local tx = bx + offsetX
                     local ty = by + offsetY
-                    local ok, r = touchViaWrapper(tx, ty)
+                    local ok, r = tryAllMethods(tx, ty)
                     appendLog(ok and ("✔ Auto OK: " .. r) or "✘ Auto fail")
                 end
                 wasOpen = nowOpen
@@ -622,4 +692,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v72 sẵn sàng. Bấm Test Visual để thấy chấm đỏ trước khi bấm.")
+log("v73 sẵn sàng. TEST sẽ thử 5 cách, log cách nào OK.")
