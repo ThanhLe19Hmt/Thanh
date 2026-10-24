@@ -1,25 +1,40 @@
 --[[
-    Auto Trade - Rock Fruit v69 (Absolute Position Fix)
+    Auto Trade - Rock Fruit v70 (Custom Touch Object)
     Game ID: 119091355492870
 
-    PHÂN TÍCH LỖI v68:
-      - Bạn kéo ô đen tới nút Accept -> hiển thị đúng.
-      - Nhưng khi bấm -> lệch đi.
-      - Nguyên nhân: `dragFrame.AbsolutePosition` trả về toạ độ
-        SCREEN (đã bao gồm inset) do ScreenGui.IgnoreGuiInset=false,
-        nhưng firetouchinterest lại nhận toạ độ VIEWPORT.
-      - Kết quả: lưu screen -> touch tại screen -> lệch đúng
-        bằng inset.Y.
+    CHẨN ĐOÁN CUỐI CÙNG:
+      - Bạn kéo ô đen đúng vị trí.
+      - Tool lưu toạ độ đúng (screen hoặc viewport).
+      - Nhưng vẫn bấm lệch -> dù thử screen hay viewport.
+      - NGUYÊN NHÂN: `firetouchinterest(btn, pos, ...)` trên
+        executor mobile có thể:
+        1. Bỏ qua `pos` và dùng tâm của `btn`.
+        2. Chỉ nhận touch khi `pos` nằm trong `btn.AbsoluteSize`.
+        3. Hoặc `pos` bị hiểu là toạ độ tương đối so với btn.
 
-    GIẢI PHÁP v69:
-      1. Lưu cả 2 toạ độ:
-         - `screenPos` = dragFrame.AbsolutePosition + size/2
-         - `viewportPos` = screenPos - GuiService.TopLeftInset
-      2. Thêm checkbox "Compensate Inset" - khi bật, tool dùng
-         viewportPos thay vì screenPos khi firetouchinterest.
-      3. Hiển thị rõ 2 toạ độ để bạn thấy chênh lệch bao nhiêu.
-      4. Test sẽ thử lần lượt cả 2 toạ độ.
-      5. Lưu chế độ hoạt động (screen hay viewport) khi tìm được.
+    GIẢI PHÁP v70:
+      - KHÔNG dùng `firetouchinterest(Accept, pos)` nữa.
+      - Tạo 1 TextButton VÔ HÌNH có:
+        + Kích thước 40x40
+        + Vị trí: đặt sao cho TÂM = toạ độ ô đen
+          (tức là Position = (targetX - 20, targetY - 20))
+        + BackgroundTransparency = 1
+        + Active = true, Selectable = true
+      - Sau đó `firetouchinterest(wrapper, center, 0)` +
+        `firetouchinterest(wrapper, center, 1)`.
+      - Vì tâm wrapper = vị trí bạn muốn bấm, nếu executor
+        bỏ qua `pos` thì nó vẫn dùng tâm wrapper -> đúng vị trí.
+      - Một số game/executor còn kích hoạt GuiButton khi touch
+        vào nó -> wrapper được click -> không làm gì (trong suốt)
+        -> nhưng touch event vẫn fire vào vị trí đó -> game
+        nhận click tại toạ độ đó (nếu game xử lý UIS InputBegan).
+
+    BONUS:
+      - Nếu wrapper không ăn, thử thêm:
+        + firesignal(wrapper.MouseButton1Click)
+        + Activate wrapper
+      - Không dùng `firesignal(Accept.MouseButton1Down)` vì
+        firesignal không truyền toạ độ.
 ]]
 
 local CONFIG = {
@@ -61,86 +76,118 @@ local function getTradeRequestFrame()
     return main:FindFirstChild("Trade_Request")
 end
 
-local function getAcceptButton()
-    local tr = getTradeRequestFrame()
-    if not tr then return nil end
-    local sub = tr:FindFirstChild("Sub")
-    if not sub then return nil end
-    local m = sub:FindFirstChild("Main")
-    if not m then return nil end
-    local acc = m:FindFirstChild("Accept")
-    if not acc then return nil end
-    return acc:FindFirstChild("Accept")
-end
-
 local function isPopupOpen()
     local tr = getTradeRequestFrame()
     return tr ~= nil and tr.Visible == true
 end
 
 -- ============================================================
--- STATE
+-- BẤM QUA WRAPPER TEXTBUTTON TẠI ĐÚNG TOẠ ĐỘ
 -- ============================================================
-local savedScreenX = nil
-local savedScreenY = nil
-local savedViewportX = nil
-local savedViewportY = nil
-local useViewport = false   -- sẽ set sau khi test
-local autoEnabled = false
+local function touchViaWrapper(x, y)
+    -- Tạo wrapper tại đúng toạ độ (tâm wrapper = (x,y))
+    local wrapSg = Instance.new("ScreenGui")
+    wrapSg.Name = "HoangTouchWrapper"
+    wrapSg.ResetOnSpawn = false
+    wrapSg.IgnoreGuiInset = false
+    wrapSg.Parent = CoreGui
+
+    local wrapper = Instance.new("TextButton")
+    wrapper.Size = UDim2.new(0, 40, 0, 40)
+    wrapper.Position = UDim2.new(0, x - 20, 0, y - 20)
+    wrapper.BackgroundTransparency = 1
+    wrapper.Text = ""
+    wrapper.Active = true
+    wrapper.Selectable = true
+    wrapper.AutoButtonColor = false
+    wrapper.ZIndex = 999992
+    wrapper.Parent = wrapSg
+
+    -- Cho GUI kịp render
+    task.wait(0.1)
+
+    local function cleanup()
+        pcall(function() wrapSg:Destroy() end)
+    end
+
+    -- Cách 1: firetouchinterest tâm wrapper
+    if firetouchinterest then
+        local center = Vector2.new(x, y)
+        log(string.format("  firetouchinterest wrapper @ (%.1f, %.1f)", x, y))
+        pcall(function()
+            firetouchinterest(wrapper, center, 0)
+            task.wait(0.15)
+            firetouchinterest(wrapper, center, 1)
+        end)
+        task.wait(0.3)
+        if not isPopupOpen() then cleanup(); return true, "touch_wrapper" end
+    end
+
+    -- Cách 2: firesignal trên wrapper
+    if typeof(firesignal) == "function" then
+        log("  firesignal wrapper")
+        pcall(function()
+            firesignal(wrapper.MouseButton1Down)
+            task.wait(0.05)
+            firesignal(wrapper.MouseButton1Up)
+            task.wait(0.05)
+            firesignal(wrapper.MouseButton1Click)
+        end)
+        task.wait(0.3)
+        if not isPopupOpen() then cleanup(); return true, "firesignal_wrapper" end
+    end
+
+    -- Cách 3: Activate wrapper
+    pcall(function() wrapper:Activate() end)
+    task.wait(0.3)
+    if not isPopupOpen() then cleanup(); return true, "activate_wrapper" end
+
+    cleanup()
+    return false, "wrapper_fail"
+end
 
 -- ============================================================
--- BẤM TẠI TOẠ ĐỘ
+-- BẤM QUA VIRTUAL INPUT MANAGER TẠI (x,y)
 -- ============================================================
-local function fireTouchAt(x, y)
-    local btn = getAcceptButton()
-    local wrapSg = nil
-    local targetBtn = btn
-    if not targetBtn then
-        wrapSg = Instance.new("ScreenGui")
-        wrapSg.Name = "HoangWrapTouch"
-        wrapSg.ResetOnSpawn = false
-        wrapSg.IgnoreGuiInset = false
-        wrapSg.Parent = CoreGui
-        targetBtn = Instance.new("TextButton")
-        targetBtn.Size = UDim2.new(0, 40, 0, 40)
-        targetBtn.Position = UDim2.new(0, x - 20, 0, y - 20)
-        targetBtn.BackgroundTransparency = 1
-        targetBtn.Text = ""
-        targetBtn.ZIndex = 999992
-        targetBtn.Parent = wrapSg
-    end
-    if firetouchinterest then
-        log(string.format("  firetouchinterest (%.1f, %.1f)", x, y))
-        pcall(function()
-            firetouchinterest(targetBtn, Vector2.new(x, y), 0)
-            task.wait(0.15)
-            firetouchinterest(targetBtn, Vector2.new(x, y), 1)
-        end)
-        task.wait(0.3)
-        local ok = not isPopupOpen()
-        if wrapSg then task.wait(0.1); wrapSg:Destroy() end
-        if ok then return true, "touch" end
-    elseif wrapSg then
-        wrapSg:Destroy()
-    end
-    if VirtualInputManager then
-        log(string.format("  VIM (%.1f, %.1f)", x, y))
-        pcall(function()
-            VirtualInputManager:SendMouseMoveEvent(math.floor(x), math.floor(y), game)
-        end)
-        task.wait(0.2)
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(math.floor(x), math.floor(y), 0, true, game, 0)
-        end)
-        task.wait(0.15)
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(math.floor(x), math.floor(y), 0, false, game, 0)
-        end)
-        task.wait(0.3)
-        if not isPopupOpen() then return true, "vim" end
-    end
-    return false, "fail"
+local function touchViaVIM(x, y)
+    if not VirtualInputManager then return false, "no_vim" end
+    log(string.format("  VIM @ (%.1f, %.1f)", x, y))
+    local ix, iy = math.floor(x), math.floor(y)
+    pcall(function()
+        VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
+    end)
+    task.wait(0.25)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
+    end)
+    task.wait(0.15)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
+    end)
+    task.wait(0.35)
+    if not isPopupOpen() then return true, "vim" end
+    return false, "vim_fail"
 end
+
+-- ============================================================
+-- THỬ TẤT CẢ CÁCH
+-- ============================================================
+local function tryClickAt(x, y)
+    local ok, r
+    ok, r = touchViaWrapper(x, y)
+    if ok then return true, r end
+    task.wait(0.1)
+    ok, r = touchViaVIM(x, y)
+    if ok then return true, r end
+    return false, "all_fail"
+end
+
+-- ============================================================
+-- STATE
+-- ============================================================
+local savedX = nil
+local savedY = nil
+local autoEnabled = false
 
 -- ============================================================
 -- UI
@@ -175,7 +222,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v69 (Inset Fix)"
+    title.Text = "Auto Trade v70 (Wrapper Touch)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -237,11 +284,11 @@ local function buildUI()
     statusLbl.Parent = body
 
     local infoLbl = Instance.new("TextLabel")
-    infoLbl.Size = UDim2.new(0.95, 0, 0, 60)
+    infoLbl.Size = UDim2.new(0.95, 0, 0, 46)
     infoLbl.Position = UDim2.new(0.025, 0, 0, 36)
     infoLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     infoLbl.BorderSizePixel = 0
-    infoLbl.Text = "Screen: ?\nViewport: ?\nInset: ?"
+    infoLbl.Text = "Screen: ?\nViewport: ?"
     infoLbl.TextColor3 = Color3.fromRGB(180, 220, 255)
     infoLbl.Font = Enum.Font.Code
     infoLbl.TextSize = 11
@@ -250,10 +297,9 @@ local function buildUI()
     infoLbl.TextYAlignment = Enum.TextYAlignment.Top
     infoLbl.Parent = body
 
-    -- Nút lưu
     local saveBtn = Instance.new("TextButton")
     saveBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    saveBtn.Position = UDim2.new(0.025, 0, 0, 100)
+    saveBtn.Position = UDim2.new(0.025, 0, 0, 86)
     saveBtn.BackgroundColor3 = Color3.fromRGB(200, 130, 40)
     saveBtn.BorderSizePixel = 0
     saveBtn.Text = "1) LƯU VỊ TRÍ ô đen"
@@ -262,34 +308,20 @@ local function buildUI()
     saveBtn.TextSize = 12
     saveBtn.Parent = body
 
-    -- Nút test screen
-    local testScreenBtn = Instance.new("TextButton")
-    testScreenBtn.Size = UDim2.new(0.47, 0, 0, 30)
-    testScreenBtn.Position = UDim2.new(0.025, 0, 0, 138)
-    testScreenBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
-    testScreenBtn.BorderSizePixel = 0
-    testScreenBtn.Text = "2a) TEST Screen"
-    testScreenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    testScreenBtn.Font = Enum.Font.GothamBold
-    testScreenBtn.TextSize = 11
-    testScreenBtn.Parent = body
+    local testBtn = Instance.new("TextButton")
+    testBtn.Size = UDim2.new(0.95, 0, 0, 32)
+    testBtn.Position = UDim2.new(0.025, 0, 0, 124)
+    testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+    testBtn.BorderSizePixel = 0
+    testBtn.Text = "2) TEST bấm tại vị trí đã lưu"
+    testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    testBtn.Font = Enum.Font.GothamBold
+    testBtn.TextSize = 12
+    testBtn.Parent = body
 
-    -- Nút test viewport
-    local testVpBtn = Instance.new("TextButton")
-    testVpBtn.Size = UDim2.new(0.47, 0, 0, 30)
-    testVpBtn.Position = UDim2.new(0.505, 0, 0, 138)
-    testVpBtn.BackgroundColor3 = Color3.fromRGB(200, 100, 60)
-    testVpBtn.BorderSizePixel = 0
-    testVpBtn.Text = "2b) TEST Viewport"
-    testVpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    testVpBtn.Font = Enum.Font.GothamBold
-    testVpBtn.TextSize = 11
-    testVpBtn.Parent = body
-
-    -- Nút auto
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    autoBtn.Position = UDim2.new(0.025, 0, 0, 174)
+    autoBtn.Position = UDim2.new(0.025, 0, 0, 162)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
     autoBtn.Text = "3) AUTO ACCEPT: OFF"
@@ -298,10 +330,9 @@ local function buildUI()
     autoBtn.TextSize = 12
     autoBtn.Parent = body
 
-    -- Nút reset
     local resetBtn = Instance.new("TextButton")
     resetBtn.Size = UDim2.new(0.95, 0, 0, 24)
-    resetBtn.Position = UDim2.new(0.025, 0, 0, 212)
+    resetBtn.Position = UDim2.new(0.025, 0, 0, 200)
     resetBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     resetBtn.BorderSizePixel = 0
     resetBtn.Text = "Reset ô đen về giữa"
@@ -312,18 +343,23 @@ local function buildUI()
 
     local helpLbl = Instance.new("TextLabel")
     helpLbl.Size = UDim2.new(0.95, 0, 0, 100)
-    helpLbl.Position = UDim2.new(0.025, 0, 0, 242)
+    helpLbl.Position = UDim2.new(0.025, 0, 0, 230)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-QUY TRÌNH:
-1. Kéo ô đen tới nút Accept (chấm đỏ = tâm).
-2. Bấm "LƯU VỊ TRÍ" - tool lưu CẢ screen + viewport.
-3. Khi popup hiện, bấm "TEST Screen" hoặc "TEST Viewport"
-   - cái nào đóng được popup thì dùng cái đó.
-4. Bấm "AUTO" - tool dùng chế độ đã test thành công.
+FIX v70:
+firetouchinterest(btn, pos) có thể bị executor bỏ qua pos
+và dùng TÂM btn -> lệch.
 
-Nếu cả 2 fail -> kéo ô đen chỉnh vài px, lưu lại.
+v70 tạo TextButton vô hình tại đúng toạ độ ô đen,
+rồi firetouchinterest vào TextButton đó.
+=> Tâm TextButton = vị trí bạn muốn -> đúng.
+
+Quy trình:
+1. Kéo ô đen vào nút Accept.
+2. LƯU VỊ TRÍ.
+3. TEST -> nếu fail, kéo ô đen chỉnh vài px, lưu lại.
+4. AUTO khi đã đúng.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -334,7 +370,7 @@ Nếu cả 2 fail -> kéo ô đen chỉnh vài px, lưu lại.
 
     local logLbl = Instance.new("TextLabel")
     logLbl.Size = UDim2.new(0.95, 0, 0, 60)
-    logLbl.Position = UDim2.new(0.025, 0, 0, 348)
+    logLbl.Position = UDim2.new(0.025, 0, 0, 336)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -422,21 +458,19 @@ Nếu cả 2 fail -> kéo ô đen chỉnh vài px, lưu lại.
         end
     end)
 
-    -- ============================================================
-    -- UPDATE INFO
-    -- ============================================================
+    -- Cập nhật info
     local function refreshInfo()
         local ap = dragFrame.AbsolutePosition
         local as = dragFrame.AbsoluteSize
-        local centerScreenX = ap.X + as.X / 2
-        local centerScreenY = ap.Y + as.Y / 2
+        local sx = ap.X + as.X / 2
+        local sy = ap.Y + as.Y / 2
         local tl = getInset()
-        local vpX = centerScreenX - tl.X
-        local vpY = centerScreenY - tl.Y
+        local vx = sx - tl.X
+        local vy = sy - tl.Y
         infoLbl.Text = string.format(
-            "Screen: (%.1f, %.1f)\nViewport: (%.1f, %.1f)\nInset: (%.1f, %.1f)",
-            centerScreenX, centerScreenY, vpX, vpY, tl.X, tl.Y)
-        return centerScreenX, centerScreenY, vpX, vpY
+            "Screen: (%.1f, %.1f)\nViewport: (%.1f, %.1f)",
+            sx, sy, vx, vy)
+        return sx, sy, vx, vy
     end
 
     task.spawn(function()
@@ -446,67 +480,46 @@ Nếu cả 2 fail -> kéo ô đen chỉnh vài px, lưu lại.
         end
     end)
 
-    -- ============================================================
-    -- EVENTS
-    -- ============================================================
+    -- Events
     saveBtn.MouseButton1Click:Connect(function()
         local sx, sy, vx, vy = refreshInfo()
-        savedScreenX = sx
-        savedScreenY = sy
-        savedViewportX = vx
-        savedViewportY = vy
-        log(string.format("Lưu Screen (%.1f, %.1f), Viewport (%.1f, %.1f)",
-            sx, sy, vx, vy))
-        setStatus(string.format("Đã lưu. Test 2a (screen) hoặc 2b (viewport)."),
+        -- Lưu viewport vì firetouchinterest dùng viewport
+        savedX = vx
+        savedY = vy
+        log(string.format("Lưu: Screen (%.0f,%.0f) Viewport (%.0f,%.0f)", sx, sy, vx, vy))
+        setStatus(string.format("Đã lưu VP (%.0f, %.0f). Test thử.", vx, vy),
             Color3.fromRGB(120, 220, 120))
-        appendLog(string.format("Lưu S(%.0f,%.0f) V(%.0f,%.0f)", sx, sy, vx, vy))
+        appendLog(string.format("Lưu VP (%.0f,%.0f)", vx, vy))
     end)
 
-    testScreenBtn.MouseButton1Click:Connect(function()
-        if not savedScreenX then appendLog("Chưa lưu"); return end
+    testBtn.MouseButton1Click:Connect(function()
+        if not savedX then appendLog("Chưa lưu"); return end
         task.spawn(function()
-            appendLog(string.format("Test Screen (%.0f,%.0f)", savedScreenX, savedScreenY))
-            local ok, r = fireTouchAt(savedScreenX, savedScreenY)
+            appendLog(string.format("Test tại (%.0f,%.0f)", savedX, savedY))
+            local ok, r = tryClickAt(savedX, savedY)
             if ok then
-                useViewport = false
-                appendLog("✔ Screen OK -> dùng Screen cho AUTO")
-                setStatus("✔ Screen OK - bật AUTO được rồi", Color3.fromRGB(120, 220, 120))
+                appendLog("✔ OK: " .. r)
+                setStatus("✔ Test OK: " .. r, Color3.fromRGB(120, 220, 120))
             else
-                appendLog("✘ Screen fail")
-                setStatus("✘ Screen fail - thử Viewport", Color3.fromRGB(255, 120, 120))
-            end
-        end)
-    end)
-
-    testVpBtn.MouseButton1Click:Connect(function()
-        if not savedViewportX then appendLog("Chưa lưu"); return end
-        task.spawn(function()
-            appendLog(string.format("Test Viewport (%.0f,%.0f)", savedViewportX, savedViewportY))
-            local ok, r = fireTouchAt(savedViewportX, savedViewportY)
-            if ok then
-                useViewport = true
-                appendLog("✔ Viewport OK -> dùng Viewport cho AUTO")
-                setStatus("✔ Viewport OK - bật AUTO được rồi", Color3.fromRGB(120, 220, 120))
-            else
-                appendLog("✘ Viewport fail")
-                setStatus("✘ Viewport fail - thử Screen", Color3.fromRGB(255, 120, 120))
+                appendLog("✘ Fail: " .. r)
+                setStatus("✘ Fail - kéo ô đen chỉnh rồi lưu lại", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
 
     autoBtn.MouseButton1Click:Connect(function()
-        if not savedScreenX then appendLog("Chưa lưu"); return end
+        if not savedX then appendLog("Chưa lưu"); return end
         autoEnabled = not autoEnabled
         if autoEnabled then
-            autoBtn.Text = "3) AUTO ACCEPT: ON (" .. (useViewport and "VP" or "S") .. ")"
+            autoBtn.Text = "3) AUTO ACCEPT: ON"
             autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
-            setStatus("AUTO ON: " .. (useViewport and "viewport" or "screen"),
-                Color3.fromRGB(120, 220, 120))
-            appendLog("Auto ON: " .. (useViewport and "VP" or "S"))
+            setStatus("Auto ON", Color3.fromRGB(120, 220, 120))
+            appendLog("Auto ON")
         else
             autoBtn.Text = "3) AUTO ACCEPT: OFF"
             autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
             setStatus("Auto OFF", Color3.fromRGB(200, 200, 120))
+            appendLog("Auto OFF")
         end
     end)
 
@@ -518,14 +531,12 @@ Nếu cả 2 fail -> kéo ô đen chỉnh vài px, lưu lại.
     task.spawn(function()
         local wasOpen = false
         while sg.Parent do
-            if autoEnabled and savedScreenX then
+            if autoEnabled and savedX then
                 local nowOpen = isPopupOpen()
                 if nowOpen and not wasOpen then
                     appendLog("Auto: popup hiện")
                     task.wait(0.2)
-                    local x = useViewport and savedViewportX or savedScreenX
-                    local y = useViewport and savedViewportY or savedScreenY
-                    local ok, r = fireTouchAt(x, y)
+                    local ok, r = tryClickAt(savedX, savedY)
                     appendLog(ok and ("✔ Auto OK: " .. r) or "✘ Auto fail")
                 end
                 wasOpen = nowOpen
@@ -540,4 +551,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v69 sẵn sàng. Lưu vị trí, test Screen hoặc Viewport, chọn cái ăn.")
+log("v70 sẵn sàng. Wrapper TextButton tại đúng toạ độ.")
