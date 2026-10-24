@@ -1,31 +1,22 @@
 --[[
-    Auto Trade - Rock Fruit v74 (Visual Fix Only)
+    Auto Trade - Rock Fruit v75 (Final Hardcode)
     Game ID: 119091355492870
 
-    TRẠNG THÁI:
-      - Bấm được nút Accept rồi! (Mừng quá)
-      - Nhưng chấm đỏ (hiển thị) lệch so với điểm bấm thực tế.
-      - Có nghĩa là logic bấm đã đúng, chỉ có GUI hiển thị bị lệch.
+    TRIẾT LÝ:
+      - Đã mất quá nhiều thời gian cho visual.
+      - Bây giờ chỉ có 1 vòng tròn. Kéo tới đâu = bấm tới đó.
+      - Lưu toạ độ hiện tại của vòng tròn.
+      - Khi auto: đọc toạ độ đã lưu, tạo wrapper tại đó, bấm.
+      - Không có offset phức tạp. Không có hiển thị lệch.
 
-    TẠI SAO LỆCH:
-      - Chấm đỏ được vẽ trong ScreenGui với IgnoreGuiInset=false.
-      - Nó tự cộng thêm GuiService.TopLeftInset vào toạ độ hiển thị.
-      - Nhưng toạ độ bấm (dùng cho wrapper) lại không cộng inset.
-      - => Hiển thị và bấm dùng 2 hệ toạ độ khác nhau.
-
-    CÁCH FIX CUỐI CÙNG:
-      - KHÔNG hiển thị chấm đỏ nữa (vì đã bấm được rồi).
-      - Hoặc hiển thị nó tại đúng toạ độ *hiển thị*, không phải
-        toạ độ bấm.
-      - Tôi sẽ dùng một ScreenGui riêng cho visual với
-        IgnoreGuiInset = true (dùng toạ độ màn hình vật lý).
-      - Và vẽ tại vị trí wrapper thực tế (đã cộng inset).
-
-    BONUS: TÍCH HỢP AUTO TRADE HOÀN CHỈNH.
-      - Auto Accept.
-      - Auto chọn item + SL.
-      - Auto Ready.
-      - Tất cả trong 1 script, dùng chung baseX/baseY + offset.
+    CÁCH LÀM:
+      1. Vòng tròn đỏ 40x40 (dễ nhìn) kéo thả tự do.
+      2. Bạn kéo nó tới đúng tâm nút Accept (nhìn bằng mắt).
+      3. Bấm "LƯU".
+      4. Bấm "TEST" - tool sẽ tạo wrapper tại toạ độ đã lưu
+         và bấm. Nếu popup đóng -> đúng.
+      5. Bấm "AUTO" - từ giờ mỗi popup hiện, tool bấm tại
+         toạ độ đã lưu.
 ]]
 
 local CONFIG = {
@@ -50,9 +41,6 @@ local function getInset()
     return tl
 end
 
--- ============================================================
--- ĐỐI TƯỢNG
--- ============================================================
 local function getHUDMain()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if not pg then return nil end
@@ -67,11 +55,6 @@ local function getTradeRequestFrame()
     return main:FindFirstChild("Trade_Request")
 end
 
-local function isPopupOpen()
-    local tr = getTradeRequestFrame()
-    return tr ~= nil and tr.Visible == true
-end
-
 local function getAcceptButton()
     local tr = getTradeRequestFrame()
     if not tr then return nil end
@@ -84,119 +67,20 @@ local function getAcceptButton()
     return acc:FindFirstChild("Accept")
 end
 
-local function getFrameTrading()
-    local main = getHUDMain()
-    if not main then return nil end
-    return main:FindFirstChild("Frame_Trading")
-end
-
-local function getTradeInventory()
-    local ft = getFrameTrading()
-    if not ft then return nil end
-    return ft:FindFirstChild("Frame_TradeInventory")
-end
-
-local function getTradeInvHandler()
-    local ti = getTradeInventory()
-    if not ti then return nil end
-    return ti:FindFirstChild("Handler")
-end
-
-local function getAddButton()
-    local ft = getFrameTrading()
-    if not ft then return nil end
-    local myOffer = ft:FindFirstChild("MyOffer")
-    if not myOffer then return nil end
-    local sf = myOffer:FindFirstChild("ScrollingFrame")
-    if not sf then return nil end
-    local add = sf:FindFirstChild("Add")
-    if not add then return nil end
-    return add:FindFirstChild("Main")
-end
-
-local function getAmountTextBox()
-    local h = getTradeInvHandler()
-    if not h then return nil end
-    local amt = h:FindFirstChild("Amount")
-    if not amt then return nil end
-    return amt:FindFirstChild("TextBox")
-end
-
-local function getInvScrollingFrame()
-    local h = getTradeInvHandler()
-    if not h then return nil end
-    local ih = h:FindFirstChild("InventoryHandler")
-    if not ih then return nil end
-    return ih:FindFirstChild("ScrollingFrame")
-end
-
-local function getReadyButton()
-    local ft = getFrameTrading()
-    if not ft then return nil end
-    return ft:FindFirstChild("Ready")
+local function isPopupOpen()
+    local tr = getTradeRequestFrame()
+    return tr ~= nil and tr.Visible == true
 end
 
 -- ============================================================
--- VISUAL CURSOR (DÙNG IgnoreGuiInset = TRUE + CỘNG INSET)
--- ============================================================
-local visualGui = nil
-local visualDot = nil
-
-local function ensureVisual()
-    if visualGui and visualGui.Parent then return end
-    visualGui = Instance.new("ScreenGui")
-    visualGui.Name = "HoangVisualCursor"
-    visualGui.ResetOnSpawn = false
-    -- TRUE: toạ độ (0,0) = góc trên trái MÀN HÌNH VẬT LÝ
-    -- => chấm đỏ phải cộng thêm GuiService.TopLeftInset để khớp
-    visualGui.IgnoreGuiInset = true
-    visualGui.Parent = CoreGui
-
-    visualDot = Instance.new("Frame")
-    visualDot.Size = UDim2.new(0, 14, 0, 14)
-    visualDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    visualDot.BackgroundTransparency = 0.2
-    visualDot.BorderSizePixel = 2
-    visualDot.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    visualDot.ZIndex = 999995
-    visualDot.Visible = false
-    visualDot.Parent = visualGui
-
-    local inner = Instance.new("Frame")
-    inner.Size = UDim2.new(0, 4, 0, 4)
-    inner.Position = UDim2.new(0.5, -2, 0.5, -2)
-    inner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    inner.BorderSizePixel = 0
-    inner.ZIndex = 999996
-    inner.Parent = visualDot
-end
-
-local function showVisual(x, y)
-    ensureVisual()
-    -- x, y là toạ độ viewport (dùng cho firetouchinterest).
-    -- Chấm đỏ hiển thị cần toạ độ screen -> cộng inset.
-    local tl = getInset()
-    visualDot.Position = UDim2.new(0, x + tl.X - 7, 0, y + tl.Y - 7)
-    visualDot.Visible = true
-end
-
-local function hideVisual()
-    if visualDot then visualDot.Visible = false end
-end
-
--- ============================================================
--- TOUCH (GIỮ NGUYÊN WRAPPER ĐÃ HOẠT ĐỘNG)
+-- BẤM QUA WRAPPER (giữ nguyên logic đã ăn)
 -- ============================================================
 local function touchViaWrapper(x, y)
-    showVisual(x, y)
-    task.wait(0.15)
-
     local wrapSg = Instance.new("ScreenGui")
     wrapSg.Name = "HoangTouchWrapper"
     wrapSg.ResetOnSpawn = false
     wrapSg.IgnoreGuiInset = false
     wrapSg.Parent = CoreGui
-
     local wrapper = Instance.new("TextButton")
     wrapper.Size = UDim2.new(0, 40, 0, 40)
     wrapper.Position = UDim2.new(0, x - 20, 0, y - 20)
@@ -208,15 +92,12 @@ local function touchViaWrapper(x, y)
     wrapper.ZIndex = 999992
     wrapper.Parent = wrapSg
     task.wait(0.1)
-
     local function cleanup()
-        task.wait(0.2)
+        task.wait(0.15)
         pcall(function() wrapSg:Destroy() end)
-        hideVisual()
     end
-
     if firetouchinterest then
-        log(string.format("  firetouchinterest wrapper @ (%.1f, %.1f)", x, y))
+        log(string.format("  firetouchinterest (%.1f, %.1f)", x, y))
         pcall(function()
             firetouchinterest(wrapper, Vector2.new(x, y), 0)
             task.wait(0.15)
@@ -225,7 +106,6 @@ local function touchViaWrapper(x, y)
         task.wait(0.3)
         if not isPopupOpen() then cleanup(); return true, "touch" end
     end
-
     if typeof(firesignal) == "function" then
         pcall(function()
             firesignal(wrapper.MouseButton1Down)
@@ -237,128 +117,18 @@ local function touchViaWrapper(x, y)
         task.wait(0.3)
         if not isPopupOpen() then cleanup(); return true, "firesignal" end
     end
-
     pcall(function() wrapper:Activate() end)
     task.wait(0.3)
     if not isPopupOpen() then cleanup(); return true, "activate" end
-
     cleanup()
     return false, "fail"
 end
 
 -- ============================================================
--- AUTO TRADE (THÊM ITEM + READY)
--- ============================================================
-local KEY_MAP = {
-    ["0"] = Enum.KeyCode.Zero, ["1"] = Enum.KeyCode.One, ["2"] = Enum.KeyCode.Two,
-    ["3"] = Enum.KeyCode.Three, ["4"] = Enum.KeyCode.Four, ["5"] = Enum.KeyCode.Five,
-    ["6"] = Enum.KeyCode.Six, ["7"] = Enum.KeyCode.Seven, ["8"] = Enum.KeyCode.Eight,
-    ["9"] = Enum.KeyCode.Nine,
-}
-
-local function typeTextRoblox(text)
-    if not VirtualInputManager then return false end
-    for i = 1, #text do
-        local kc = KEY_MAP[text:sub(i, i)]
-        if kc then
-            pcall(function()
-                VirtualInputManager:SendKeyEvent(true, kc, false, game)
-                task.wait(0.02)
-                VirtualInputManager:SendKeyEvent(false, kc, false, game)
-            end)
-            task.wait(0.03)
-        end
-    end
-    return true
-end
-
-local function setAmount(qty)
-    local tb = getAmountTextBox()
-    if not tb then return false end
-    pcall(function() tb:CaptureFocus() end)
-    task.wait(0.1)
-    pcall(function() tb.Text = "" end)
-    task.wait(0.05)
-    typeTextRoblox(tostring(qty))
-    task.wait(0.1)
-    pcall(function() tb.Text = tostring(qty) end)
-    if VirtualInputManager then
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-            task.wait(0.02)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-        end)
-    end
-    pcall(function() tb:ReleaseFocus() end)
-    task.wait(0.1)
-    pcall(function() if tb.FocusLost then tb.FocusLost:Fire() end end)
-    task.wait(0.1)
-    return true
-end
-
-local function safeClick(btn, name)
-    if not btn then return false end
-    if name then log("Click:", name) end
-    if typeof(firesignal) == "function" then
-        pcall(function()
-            firesignal(btn.MouseButton1Click)
-            firesignal(btn.MouseButton1Down)
-            firesignal(btn.MouseButton1Up)
-            firesignal(btn.Activated)
-        end)
-        task.wait(0.05)
-    end
-    pcall(function() btn:Click() end)
-    task.wait(0.03)
-    pcall(function() if btn.Activated then btn.Activated:Fire() end end)
-    task.wait(0.03)
-    pcall(function() btn.MouseButton1Click:Fire() end)
-    task.wait(0.05)
-    return true
-end
-
-local function addItemToTrade(itemName, qty)
-    log("Thêm item:", itemName, "SL:", qty)
-    local add = getAddButton()
-    if not add then return false, "no_add_btn" end
-    local ti = getTradeInventory()
-    if not (ti and ti.Visible) then
-        safeClick(add, "[+]")
-        task.wait(0.4)
-        ti = getTradeInventory()
-        if ti then pcall(function() ti.Visible = true end) end
-    end
-    if not setAmount(qty) then return false, "no_amount" end
-    task.wait(0.6)
-    local sf = getInvScrollingFrame()
-    if not sf then return false, "no_scroll" end
-    local target
-    for _, c in ipairs(sf:GetChildren()) do
-        if c:IsA("Frame") and c.Name:lower() == itemName:lower() then
-            target = c; break
-        end
-    end
-    if not target then return false, "item_not_found" end
-    local main = target:FindFirstChild("Main")
-    if not main then return false, "no_main" end
-    safeClick(main, "item " .. itemName)
-    task.wait(0.4)
-    local close = ti and ti:FindFirstChild("Close_")
-    if close then safeClick(close, "close inv") end
-    task.wait(0.2)
-    if ti and ti.Visible then pcall(function() ti.Visible = false end) end
-    local ready = getReadyButton()
-    if ready then safeClick(ready, "Ready") end
-    return true, "ok"
-end
-
--- ============================================================
 -- STATE
 -- ============================================================
-local baseX = nil
-local baseY = nil
-local offsetX = 0
-local offsetY = 0
+local savedX = nil
+local savedY = nil
 local autoEnabled = false
 local dragFrame = nil
 
@@ -377,7 +147,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 380, 0, 560)
+    frame.Size = UDim2.new(0, 340, 0, 340)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -395,7 +165,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v74 (FINAL)"
+    title.Text = "Auto Trade v75 (Simple)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -445,11 +215,11 @@ local function buildUI()
     body.Parent = frame
 
     local statusLbl = Instance.new("TextLabel")
-    statusLbl.Size = UDim2.new(0.95, 0, 0, 32)
-    statusLbl.Position = UDim2.new(0.025, 0, 0, 0)
+    statusLbl.Size = UDim2.new(0.9, 0, 0, 30)
+    statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "v74: Chấm đỏ đã khớp với điểm bấm. Auto full flow."
+    statusLbl.Text = "Kéo vòng tròn đỏ tới nút Accept, bấm LƯU."
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
@@ -457,152 +227,63 @@ local function buildUI()
     statusLbl.Parent = body
 
     local infoLbl = Instance.new("TextLabel")
-    infoLbl.Size = UDim2.new(0.95, 0, 0, 46)
-    infoLbl.Position = UDim2.new(0.025, 0, 0, 36)
+    infoLbl.Size = UDim2.new(0.9, 0, 0, 30)
+    infoLbl.Position = UDim2.new(0.05, 0, 0, 34)
     infoLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     infoLbl.BorderSizePixel = 0
-    infoLbl.Text = "Chưa lưu vị trí."
+    infoLbl.Text = "Chưa lưu"
     infoLbl.TextColor3 = Color3.fromRGB(180, 220, 255)
     infoLbl.Font = Enum.Font.Code
     infoLbl.TextSize = 11
-    infoLbl.TextWrapped = true
-    infoLbl.TextXAlignment = Enum.TextXAlignment.Left
-    infoLbl.TextYAlignment = Enum.TextYAlignment.Top
     infoLbl.Parent = body
 
-    local offsetXLabel = Instance.new("TextLabel")
-    offsetXLabel.Size = UDim2.new(0.3, 0, 0, 26)
-    offsetXLabel.Position = UDim2.new(0.025, 0, 0, 86)
-    offsetXLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    offsetXLabel.BorderSizePixel = 0
-    offsetXLabel.Text = "Offset X"
-    offsetXLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-    offsetXLabel.Font = Enum.Font.Gotham
-    offsetXLabel.TextSize = 11
-    offsetXLabel.Parent = body
-
-    local offsetXBox = Instance.new("TextBox")
-    offsetXBox.Size = UDim2.new(0.15, 0, 0, 26)
-    offsetXBox.Position = UDim2.new(0.34, 0, 0, 86)
-    offsetXBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    offsetXBox.BorderSizePixel = 0
-    offsetXBox.Text = "0"
-    offsetXBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    offsetXBox.Font = Enum.Font.Gotham
-    offsetXBox.TextSize = 12
-    offsetXBox.Parent = body
-
-    local offsetYLabel = Instance.new("TextLabel")
-    offsetYLabel.Size = UDim2.new(0.3, 0, 0, 26)
-    offsetYLabel.Position = UDim2.new(0.51, 0, 0, 86)
-    offsetYLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    offsetYLabel.BorderSizePixel = 0
-    offsetYLabel.Text = "Offset Y"
-    offsetYLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-    offsetYLabel.Font = Enum.Font.Gotham
-    offsetYLabel.TextSize = 11
-    offsetYLabel.Parent = body
-
-    local offsetYBox = Instance.new("TextBox")
-    offsetYBox.Size = UDim2.new(0.15, 0, 0, 26)
-    offsetYBox.Position = UDim2.new(0.825, 0, 0, 86)
-    offsetYBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    offsetYBox.BorderSizePixel = 0
-    offsetYBox.Text = "0"
-    offsetYBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    offsetYBox.Font = Enum.Font.Gotham
-    offsetYBox.TextSize = 12
-    offsetYBox.Parent = body
-
-    local applyOffsetBtn = Instance.new("TextButton")
-    applyOffsetBtn.Size = UDim2.new(0.95, 0, 0, 26)
-    applyOffsetBtn.Position = UDim2.new(0.025, 0, 0, 116)
-    applyOffsetBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
-    applyOffsetBtn.BorderSizePixel = 0
-    applyOffsetBtn.Text = "Áp dụng offset"
-    applyOffsetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    applyOffsetBtn.Font = Enum.Font.GothamBold
-    applyOffsetBtn.TextSize = 11
-    applyOffsetBtn.Parent = body
-
     local saveBtn = Instance.new("TextButton")
-    saveBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    saveBtn.Position = UDim2.new(0.025, 0, 0, 148)
+    saveBtn.Size = UDim2.new(0.9, 0, 0, 32)
+    saveBtn.Position = UDim2.new(0.05, 0, 0, 68)
     saveBtn.BackgroundColor3 = Color3.fromRGB(200, 130, 40)
     saveBtn.BorderSizePixel = 0
-    saveBtn.Text = "1) LƯU VỊ TRÍ ô đen"
+    saveBtn.Text = "1) LƯU VỊ TRÍ"
     saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     saveBtn.Font = Enum.Font.GothamBold
     saveBtn.TextSize = 12
     saveBtn.Parent = body
 
     local testBtn = Instance.new("TextButton")
-    testBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    testBtn.Position = UDim2.new(0.025, 0, 0, 186)
+    testBtn.Size = UDim2.new(0.9, 0, 0, 32)
+    testBtn.Position = UDim2.new(0.05, 0, 0, 104)
     testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
     testBtn.BorderSizePixel = 0
-    testBtn.Text = "2) TEST (chấm đỏ + click)"
+    testBtn.Text = "2) TEST BẤM"
     testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     testBtn.Font = Enum.Font.GothamBold
     testBtn.TextSize = 12
     testBtn.Parent = body
 
     local autoBtn = Instance.new("TextButton")
-    autoBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    autoBtn.Position = UDim2.new(0.025, 0, 0, 224)
+    autoBtn.Size = UDim2.new(0.9, 0, 0, 32)
+    autoBtn.Position = UDim2.new(0.05, 0, 0, 140)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
-    autoBtn.Text = "3) AUTO FULL (Accept+Item+Ready): OFF"
+    autoBtn.Text = "3) AUTO ACCEPT: OFF"
     autoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     autoBtn.Font = Enum.Font.GothamBold
-    autoBtn.TextSize = 11
+    autoBtn.TextSize = 12
     autoBtn.Parent = body
 
-    local nameBox = Instance.new("TextBox")
-    nameBox.Size = UDim2.new(0.55, 0, 0, 26)
-    nameBox.Position = UDim2.new(0.025, 0, 0, 262)
-    nameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    nameBox.BorderSizePixel = 0
-    nameBox.Text = "Wood"
-    nameBox.PlaceholderText = "Tên item"
-    nameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameBox.Font = Enum.Font.Gotham
-    nameBox.TextSize = 11
-    nameBox.Parent = body
-
-    local qtyBox = Instance.new("TextBox")
-    qtyBox.Size = UDim2.new(0.3, 0, 0, 26)
-    qtyBox.Position = UDim2.new(0.65, 0, 0, 262)
-    qtyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    qtyBox.BorderSizePixel = 0
-    qtyBox.Text = "10"
-    qtyBox.PlaceholderText = "SL"
-    qtyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    qtyBox.Font = Enum.Font.Gotham
-    qtyBox.TextSize = 11
-    qtyBox.Parent = body
-
-    local resetBtn = Instance.new("TextButton")
-    resetBtn.Size = UDim2.new(0.95, 0, 0, 24)
-    resetBtn.Position = UDim2.new(0.025, 0, 0, 296)
-    resetBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
-    resetBtn.BorderSizePixel = 0
-    resetBtn.Text = "Reset ô đen"
-    resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    resetBtn.Font = Enum.Font.GothamBold
-    resetBtn.TextSize = 11
-    resetBtn.Parent = body
-
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.95, 0, 0, 100)
-    helpLbl.Position = UDim2.new(0.025, 0, 0, 324)
+    helpLbl.Size = UDim2.new(0.9, 0, 0, 80)
+    helpLbl.Position = UDim2.new(0.05, 0, 0, 176)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-v74:
-- Chấm đỏ giờ khớp chính xác điểm bấm (đã cộng inset).
-- Nếu vẫn lệch nhìn thấy, dùng Offset X/Y chỉnh thêm.
-- Bật AUTO FULL -> tự accept popup + thêm item + Ready.
+QUY TRÌNH (đơn giản):
+1. Nhờ acc phụ mời trade.
+2. Kéo vòng tròn đỏ tới đúng nút Accept.
+3. LƯU -> TEST -> nếu popup đóng thì bật AUTO.
+4. Nếu popup không đóng, kéo vòng tròn sang trái/phải
+   ít một, lưu lại, test lại.
+
+Không có offset, không visual phức tạp.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -612,8 +293,8 @@ v74:
     helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.95, 0, 0, 100)
-    logLbl.Position = UDim2.new(0.025, 0, 0, 426)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 60)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 262)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -630,46 +311,46 @@ v74:
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 900 then cur = cur:sub(-800) end
+        if #cur > 280 then cur = cur:sub(-200) end
         logLbl.Text = cur .. "\n" .. s
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
 
+    -- ============================================================
+    -- DRAG TARGET (vòng tròn đỏ)
+    -- ============================================================
     local dragSg = Instance.new("ScreenGui")
     dragSg.Name = "HoangDragTarget"
     dragSg.ResetOnSpawn = false
     dragSg.IgnoreGuiInset = false
     dragSg.Parent = CoreGui
 
-    dragFrame = Instance.new("Frame")
+    local dragFrame = Instance.new("Frame")
     dragFrame.Size = UDim2.new(0, 60, 0, 60)
     dragFrame.Position = UDim2.new(0.5, -30, 0.5, -30)
-    dragFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    dragFrame.BackgroundTransparency = 0.2
-    dragFrame.BorderSizePixel = 3
-    dragFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    dragFrame.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    dragFrame.BackgroundTransparency = 0.15
+    dragFrame.BorderSizePixel = 0
     dragFrame.Active = true
     dragFrame.ZIndex = 999990
     dragFrame.Parent = dragSg
 
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)  -- TRÒN HOÀN HẢO
+    corner.Parent = dragFrame
+
     local centerDot = Instance.new("Frame")
-    centerDot.Size = UDim2.new(0, 8, 0, 8)
-    centerDot.Position = UDim2.new(0.5, -4, 0.5, -4)
-    centerDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    centerDot.Size = UDim2.new(0, 6, 0, 6)
+    centerDot.Position = UDim2.new(0.5, -3, 0.5, -3)
+    centerDot.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
     centerDot.BorderSizePixel = 0
     centerDot.ZIndex = 999991
     centerDot.Parent = dragFrame
 
-    local dragLabel = Instance.new("TextLabel")
-    dragLabel.Size = UDim2.new(1, 0, 0, 14)
-    dragLabel.Position = UDim2.new(0, 0, 1, 2)
-    dragLabel.BackgroundTransparency = 1
-    dragLabel.Text = "KÉO"
-    dragLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    dragLabel.Font = Enum.Font.GothamBold
-    dragLabel.TextSize = 10
-    dragLabel.Parent = dragFrame
+    local dotCorner = Instance.new("UICorner")
+    dotCorner.CornerRadius = UDim.new(1, 0)
+    dotCorner.Parent = centerDot
 
     local isDragging = false
     local dragStart = nil
@@ -707,108 +388,74 @@ v74:
         local vx = sx - tl.X
         local vy = sy - tl.Y
         infoLbl.Text = string.format(
-            "Screen: (%.1f, %.1f)\nViewport: (%.1f, %.1f)",
+            "Screen (%.0f, %.0f) | View (%.0f, %.0f)",
             sx, sy, vx, vy)
         return sx, sy, vx, vy
-    end
-
-    local function getCurrentBase()
-        if baseX and baseY then return baseX, baseY end
-        local _, _, vx, vy = refreshInfo()
-        return vx, vy
     end
 
     task.spawn(function()
         while sg.Parent do
             refreshInfo()
-            task.wait(0.15)
+            task.wait(0.1)
         end
     end)
 
+    -- ============================================================
+    -- EVENTS
+    -- ============================================================
     saveBtn.MouseButton1Click:Connect(function()
         local _, _, vx, vy = refreshInfo()
-        baseX = vx
-        baseY = vy
-        appendLog(string.format("Lưu VP (%.0f,%.0f)", vx, vy))
-        setStatus("Đã lưu. Test để thấy chấm đỏ khớp.", Color3.fromRGB(120, 220, 120))
-    end)
-
-    applyOffsetBtn.MouseButton1Click:Connect(function()
-        offsetX = tonumber(offsetXBox.Text) or 0
-        offsetY = tonumber(offsetYBox.Text) or 0
-        appendLog(string.format("Offset X=%d Y=%d", offsetX, offsetY))
-        setStatus(string.format("Offset X=%d Y=%d", offsetX, offsetY), Color3.fromRGB(120, 220, 120))
+        savedX = vx
+        savedY = vy
+        log(string.format("Lưu viewport (%.1f, %.1f)", vx, vy))
+        setStatus(string.format("Đã lưu (%.0f, %.0f)", vx, vy),
+            Color3.fromRGB(120, 220, 120))
+        appendLog(string.format("Lưu (%.0f,%.0f)", vx, vy))
     end)
 
     testBtn.MouseButton1Click:Connect(function()
-        local bx, by = getCurrentBase()
-        local tx = bx + offsetX
-        local ty = by + offsetY
+        if not savedX then appendLog("Chưa lưu"); return end
         task.spawn(function()
-            appendLog(string.format("TEST (%.0f,%.0f)", tx, ty))
-            local ok, r = touchViaWrapper(tx, ty)
+            appendLog(string.format("Test (%.0f,%.0f)", savedX, savedY))
+            local ok, r = touchViaWrapper(savedX, savedY)
             if ok then
                 appendLog("✔ OK: " .. r)
-                setStatus("✔ OK: " .. r, Color3.fromRGB(120, 220, 120))
+                setStatus("✔ Test OK - bật AUTO", Color3.fromRGB(120, 220, 120))
             else
-                appendLog("✘ Fail")
-                setStatus("✘ Fail - chỉnh offset", Color3.fromRGB(255, 120, 120))
+                appendLog("✘ Fail - kéo vòng tròn chỉnh, lưu lại")
+                setStatus("✘ Fail - chỉnh vị trí", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
 
     autoBtn.MouseButton1Click:Connect(function()
+        if not savedX then appendLog("Chưa lưu"); return end
         autoEnabled = not autoEnabled
         if autoEnabled then
-            autoBtn.Text = "3) AUTO FULL: ON"
+            autoBtn.Text = "3) AUTO ACCEPT: ON"
             autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
-            appendLog("AUTO FULL ON")
-            setStatus("AUTO FULL ON", Color3.fromRGB(120, 220, 120))
+            appendLog("Auto ON")
+            setStatus("Auto ON", Color3.fromRGB(120, 220, 120))
         else
-            autoBtn.Text = "3) AUTO FULL: OFF"
+            autoBtn.Text = "3) AUTO ACCEPT: OFF"
             autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
-            appendLog("AUTO FULL OFF")
-            setStatus("AUTO FULL OFF", Color3.fromRGB(200, 200, 120))
+            appendLog("Auto OFF")
+            setStatus("Auto OFF", Color3.fromRGB(200, 200, 120))
         end
     end)
 
-    resetBtn.MouseButton1Click:Connect(function()
-        dragFrame.Position = UDim2.new(0.5, -30, 0.5, -30)
-        baseX = nil
-        baseY = nil
-    end)
-
-    -- AUTO LOOP
     task.spawn(function()
-        local phase = "IDLE"
+        local wasOpen = false
         while sg.Parent do
-            if autoEnabled then
-                local popup = isPopupOpen()
-                local ft = getFrameTrading()
-                local tradeOpen = ft ~= nil and ft.Visible == true
-                local itemName = nameBox.Text
-                local qty = tonumber(qtyBox.Text) or 1
-
-                if popup and phase ~= "ACCEPTING" then
-                    phase = "ACCEPTING"
-                    appendLog("popup hiện")
+            if autoEnabled and savedX then
+                local nowOpen = isPopupOpen()
+                if nowOpen and not wasOpen then
+                    appendLog("Auto: popup hiện")
                     task.wait(0.2)
-                    local bx, by = getCurrentBase()
-                    local tx = bx + offsetX
-                    local ty = by + offsetY
-                    local ok, r = touchViaWrapper(tx, ty)
-                    appendLog(ok and ("✔ accept: " .. r) or ("✘ accept: " .. tostring(r)))
-                    phase = "IDLE"
-                elseif tradeOpen and phase ~= "TRADING" then
-                    phase = "TRADING"
-                    appendLog("bảng trade mở, thêm item")
-                    task.wait(0.5)
-                    local ok, r = addItemToTrade(itemName, qty)
-                    appendLog(ok and ("✔ " .. itemName .. " x" .. qty) or ("✘ " .. tostring(r)))
-                    phase = "IDLE"
-                elseif not popup and not tradeOpen and phase ~= "IDLE" then
-                    phase = "IDLE"
+                    local ok, r = touchViaWrapper(savedX, savedY)
+                    appendLog(ok and ("✔ Auto: " .. r) or "✘ Auto fail")
                 end
+                wasOpen = nowOpen
             end
             task.wait(0.3)
         end
@@ -820,4 +467,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v74 sẵn sàng. Chấm đỏ khớp điểm bấm. AUTO FULL tích hợp.")
+log("v75 sẵn sàng. Vòng tròn đỏ = điểm bấm. Kéo tới đâu bấm tới đó.")
