@@ -1,30 +1,43 @@
 --[[
-    Auto Trade - Rock Fruit v65 (Mobile Offset Calibration)
+    Auto Trade - Rock Fruit v66 (Visual & Touch Sync)
     Game ID: 119091355492870
 
-    TRẠNG THÁI:
-      - Chuột ảo hiển thị OK (Visual Cursor).
-      - Nhưng firetouchinterest/vim bấm sai vị trí.
-      - Nguyên nhân: mobile có inset khác PC (nav bar Android,
-        status bar, tai thỏ iPhone...).
-      - AbsolutePosition của Roblox KHÔNG tính inset hệ thống
-        của mobile -> touch bị lệch so với hiển thị thực tế.
+    PHÂN TÍCH LỖI v65:
+      - Bạn calibrate được offsetY=60 -> firetouchinterest
+        bấm trúng nút Accept và popup đóng.
+      - NHƯNG Chuột Ảo (Frame đỏ) hiển thị lệch sang TRÁI ~20-30px.
+      - Bạn phải di chuyển chuột ảo sang phải 1 chút thì mới
+        khớp vị trí đỏ.
 
-    FIX v65:
-      1. Lấy GuiService.TopLeftInset / BottomRightInset
-         (trên mobile thường = 0 hoặc khác PC).
-      2. Cộng thêm offset ước lượng của status bar / nav bar
-         Android (~24-48px).
-      3. CALIBRATE tự động: thử offsetY từ -100 đến +100 bước 5.
-         Mỗi lần: firetouchinterest tại (cx, cy+offsetY), kiểm
-         tra popup đóng chưa. Nếu đóng -> lưu offset.
-      4. Có nút hiển thị chuột ảo tại (cx, cy+offsetY) để bạn
-         thấy tool đang nhắm đâu.
+    TẠI SAO LỆCH:
+      - "Vùng đỏ" bạn thấy là vị trí firetouchinterest đang
+        chạm thực sự (touch event).
+      - "Con chuột" là Frame GUI hiển thị trên ScreenGui
+        với IgnoreGuiInset = true.
+      - Nếu IgnoreGuiInset = true:
+        + Toạ độ (0,0) của Frame = góc trên trái màn hình
+          VẬT LÝ (bao gồm status bar, notch).
+        + firetouchinterest dùng toạ độ viewport
+          (0,0 = góc trên trái viewport 3D, bỏ qua inset).
+      - Kết quả: Frame vẽ tại (cx, cy) nhưng touch xảy ra
+        tại (cx + insetX, cy + insetY) -> lệch.
+      - Cụ thể bạn thấy lệch sang TRÁI -> insetX của mobile
+        đang > 0.
 
-    NẾU CALIBRATE FAIL:
-      - Có thể firetouchinterest không nhận được touch tại
-        vị trí đó (game chặn).
-      - Cần đổi executor hoặc dùng app Auto Clicker ngoài.
+    FIX v66:
+      1. Đặt IgnoreGuiInset = false cho ScreenGui hiển thị chuột.
+      2. Hoặc: bù bằng GuiService.TopLeftInset:
+         - Nếu IgnoreGuiInset = true:
+           Frame.Position = (cx - insetX, cy - insetY)
+         - Nếu IgnoreGuiInset = false:
+           Frame.Position = (cx, cy)
+      3. Tôi sẽ dùng IgnoreGuiInset = false để Roblox tự
+         xử lý inset -> Frame khớp với viewport.
+      4. Touch vẫn dùng (cx, cy) + offsetY.
+
+    BONUS:
+      - Thêm nút "Hiển thị vùng touch" - vẽ 1 ô vuông nhỏ
+        tại đúng vị trí firetouchinterest để bạn so sánh.
 ]]
 
 local CONFIG = {
@@ -32,7 +45,7 @@ local CONFIG = {
     Debug           = true,
     SafeMarginTop   = 100,
     SafeMarginRight = 100,
-    MaxCalibrate    = 100,
+    AcceptOffsetY   = 60,
 }
 
 local Players               = game:GetService("Players")
@@ -57,15 +70,12 @@ local IS_PC = (isMouse and isKeyboard and not isTouch)
 local PLATFORM = IS_MOBILE and "MOBILE" or (IS_PC and "PC" or "UNKNOWN")
 
 -- ============================================================
--- LẤY INSET HỆ THỐNG
+-- INSET
 -- ============================================================
 local function getInset()
-    local tl, br = Vector2.new(0, 0), Vector2.new(0, 0)
-    pcall(function()
-        tl = GuiService.TopLeftInset
-        br = GuiService.BottomRightInset
-    end)
-    return tl, br
+    local tl = Vector2.new(0, 0)
+    pcall(function() tl = GuiService.TopLeftInset end)
+    return tl
 end
 
 -- ============================================================
@@ -110,44 +120,74 @@ local function isPopupOpen()
 end
 
 -- ============================================================
--- CHUỘT ẢO
+-- CHUỘT ẢO + VÙNG TOUCH (SYNC)
 -- ============================================================
-local virtualCursor = nil
+local cursorGui = nil
+local cursorFrame = nil
+local touchMarker = nil
 
-local function showVirtualMouse(x, y)
-    if not virtualCursor or not virtualCursor.Parent then
-        local sg = Instance.new("ScreenGui")
-        sg.Name = "HoangVirtualMouse"
-        sg.ResetOnSpawn = false
-        sg.IgnoreGuiInset = true
-        sg.Parent = CoreGui
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(0, 30, 0, 30)
-        frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        frame.BackgroundTransparency = 0.5
-        frame.BorderSizePixel = 2
-        frame.BorderColor3 = Color3.fromRGB(255, 0, 0)
-        frame.ZIndex = 999999
-        frame.Parent = sg
-        local dot = Instance.new("Frame")
-        dot.Size = UDim2.new(0, 6, 0, 6)
-        dot.Position = UDim2.new(0.5, -3, 0.5, -3)
-        dot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        dot.BorderSizePixel = 0
-        dot.ZIndex = 1000000
-        dot.Parent = frame
-        virtualCursor = frame
-    end
-    virtualCursor.Position = UDim2.new(0, x - 15, 0, y - 15)
-    virtualCursor.Visible = true
+local function ensureCursorGui()
+    if cursorGui and cursorGui.Parent then return end
+    cursorGui = Instance.new("ScreenGui")
+    cursorGui.Name = "HoangVirtualMouse"
+    cursorGui.ResetOnSpawn = false
+    -- QUAN TRỌNG: IgnoreGuiInset = false
+    -- -> Frame dùng toạ độ viewport (giống firetouchinterest)
+    cursorGui.IgnoreGuiInset = false
+    cursorGui.Parent = CoreGui
+    
+    cursorFrame = Instance.new("Frame")
+    cursorFrame.Name = "Cursor"
+    cursorFrame.Size = UDim2.new(0, 30, 0, 30)
+    cursorFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    cursorFrame.BackgroundTransparency = 0.5
+    cursorFrame.BorderSizePixel = 2
+    cursorFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+    cursorFrame.ZIndex = 999999
+    cursorFrame.Visible = false
+    cursorFrame.Parent = cursorGui
+    
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0, 6, 0, 6)
+    dot.Position = UDim2.new(0.5, -3, 0.5, -3)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 1000000
+    dot.Parent = cursorFrame
+    
+    -- Vùng touch (vẽ 1 hình vuông nhỏ tại đúng vị trí firetouchinterest)
+    touchMarker = Instance.new("Frame")
+    touchMarker.Name = "TouchMarker"
+    touchMarker.Size = UDim2.new(0, 8, 0, 8)
+    touchMarker.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    touchMarker.BorderSizePixel = 0
+    touchMarker.ZIndex = 999998
+    touchMarker.Visible = false
+    touchMarker.Parent = cursorGui
 end
 
-local function hideVirtualMouse()
-    if virtualCursor then virtualCursor.Visible = false end
+local function showCursor(x, y)
+    ensureCursorGui()
+    -- Vì IgnoreGuiInset = false -> Frame.Position dùng toạ độ viewport
+    -- (cx, cy) đã là viewport -> đặt thẳng
+    cursorFrame.Position = UDim2.new(0, x - 15, 0, y - 15)
+    cursorFrame.Visible = true
+end
+
+local function showTouchMarker(x, y)
+    ensureCursorGui()
+    -- Marker này đại diện cho ĐIỂM firetouchinterest chạm thực sự
+    touchMarker.Position = UDim2.new(0, x - 4, 0, y - 4)
+    touchMarker.Visible = true
+end
+
+local function hideCursor()
+    if cursorFrame then cursorFrame.Visible = false end
+    if touchMarker then touchMarker.Visible = false end
 end
 
 -- ============================================================
--- CLICK MOBILE VỚI OFFSET Y
+-- CLICK MOBILE
 -- ============================================================
 local function tryTouchAt(btn, pos)
     if not firetouchinterest then return false end
@@ -177,83 +217,31 @@ local function tryVIMAt(btn, pos)
     return not isPopupOpen()
 end
 
--- ============================================================
--- CALIBRATE OFFSET Y (thử nhiều offset)
--- ============================================================
-local calibratedOffsetY = 0
-
-local function calibrateMobileOffset()
-    local btn = getAcceptButton()
-    if not btn then return false end
-    local c = getCenter(btn)
-    if not c then return false end
-    local tl = getInset()
-    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1366, 705)
-    
-    log(string.format("=== CALIBRATE START ==="))
-    log(string.format("Accept center: (%.0f, %.0f)", c.X, c.Y))
-    log(string.format("Inset: (%.0f, %.0f)  Viewport: (%.0f, %.0f)",
-        tl.X, tl.Y, vp.X, vp.Y))
-    
-    for offsetY = -CONFIG.MaxCalibrate, CONFIG.MaxCalibrate, 5 do
-        local pos = Vector2.new(c.X, c.Y + offsetY)
-        -- Bỏ qua nếu quá gần mép trên/dưới
-        if pos.Y < CONFIG.SafeMarginTop or pos.Y > vp.Y - 50 then
-            log(string.format("  skip offsetY=%d (pos.Y=%.0f ngoài vùng an toàn)", offsetY, pos.Y))
-        else
-            showVirtualMouse(pos.X, pos.Y)
-            task.wait(0.2)
-            
-            log(string.format("--- Thử offsetY=%d tại (%.0f, %.0f) ---", offsetY, pos.X, pos.Y))
-            
-            -- Cách 1: firetouchinterest
-            if tryTouchAt(btn, pos) then
-                calibratedOffsetY = offsetY
-                hideVirtualMouse()
-                log(string.format("✔ TÌM ĐƯỢC offsetY=%d (firetouchinterest)", offsetY))
-                return true, offsetY
-            end
-            
-            -- Cách 2: VirtualInputManager
-            if tryVIMAt(btn, pos) then
-                calibratedOffsetY = offsetY
-                hideVirtualMouse()
-                log(string.format("✔ TÌM ĐƯỢC offsetY=%d (VirtualInputManager)", offsetY))
-                return true, offsetY
-            end
-            
-            task.wait(0.2)
-        end
-    end
-    
-    hideVirtualMouse()
-    log("✘ Calibrate fail - không offset nào ăn")
-    return false, nil
-end
-
--- ============================================================
--- CLICK ACCEPT DÙNG OFFSET ĐÃ CALIBRATE
--- ============================================================
 local function clickAcceptMobile(btn)
     local c = getCenter(btn)
     if not c then return false, "no_center" end
-    local pos = Vector2.new(c.X, c.Y + calibratedOffsetY)
     
-    showVirtualMouse(pos.X, pos.Y)
-    task.wait(0.25)
+    -- Toạ độ touch = viewport + offsetY (đã calibrate = 60)
+    local touchPos = Vector2.new(c.X, c.Y + CONFIG.AcceptOffsetY)
     
-    log(string.format("Click mobile với offsetY=%d tại (%.0f, %.0f)",
-        calibratedOffsetY, pos.X, pos.Y))
+    -- Hiển thị:
+    -- - Chuột ảo tại touchPos (vị trí sẽ chạm)
+    -- - Touch marker tại touchPos (vị trí touch thực sự)
+    showCursor(touchPos.X, touchPos.Y)
+    showTouchMarker(touchPos.X, touchPos.Y)
+    task.wait(0.3)
     
-    if tryTouchAt(btn, pos) then hideVirtualMouse(); return true, "touch" end
-    if tryVIMAt(btn, pos) then hideVirtualMouse(); return true, "vim" end
+    log(string.format("Click tại (%.0f, %.0f)", touchPos.X, touchPos.Y))
     
-    hideVirtualMouse()
+    if tryTouchAt(btn, touchPos) then hideCursor(); return true, "touch" end
+    if tryVIMAt(btn, touchPos) then hideCursor(); return true, "vim" end
+    
+    hideCursor()
     return false, "all_fail"
 end
 
 -- ============================================================
--- CLICK PC (giữ nguyên)
+-- CLICK PC
 -- ============================================================
 local function clickAcceptPC(btn)
     if not mousemoverel or not mouse1click then return false, "no_api" end
@@ -293,7 +281,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 460, 0, 460)
+    frame.Size = UDim2.new(0, 460, 0, 420)
     frame.Position = UDim2.new(0, 20, 0, 20)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -311,7 +299,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v65 (" .. PLATFORM .. ")"
+    title.Text = "Auto Trade v66 (" .. PLATFORM .. ")"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -365,7 +353,7 @@ local function buildUI()
     statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Platform: " .. PLATFORM
+    statusLbl.Text = "Platform: " .. PLATFORM .. " | offsetY=" .. CONFIG.AcceptOffsetY
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
@@ -382,23 +370,12 @@ local function buildUI()
     autoBtn.TextSize = 11
     autoBtn.Parent = body
 
-    local calibBtn = Instance.new("TextButton")
-    calibBtn.Size = UDim2.new(0.9, 0, 0, 28)
-    calibBtn.Position = UDim2.new(0.05, 0, 0, 62)
-    calibBtn.BackgroundColor3 = Color3.fromRGB(200, 130, 40)
-    calibBtn.BorderSizePixel = 0
-    calibBtn.Text = "1) CALIBRATE offsetY (khi popup hiện)"
-    calibBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    calibBtn.Font = Enum.Font.GothamBold
-    calibBtn.TextSize = 11
-    calibBtn.Parent = body
-
     local testBtn = Instance.new("TextButton")
     testBtn.Size = UDim2.new(0.9, 0, 0, 26)
-    testBtn.Position = UDim2.new(0.05, 0, 0, 94)
+    testBtn.Position = UDim2.new(0.05, 0, 0, 62)
     testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
     testBtn.BorderSizePixel = 0
-    testBtn.Text = "2) Test Accept với offset đã tìm"
+    testBtn.Text = "Test Accept (offsetY=60 + hiển thị chuột)"
     testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     testBtn.Font = Enum.Font.GothamBold
     testBtn.TextSize = 11
@@ -406,18 +383,18 @@ local function buildUI()
 
     local infoBtn = Instance.new("TextButton")
     infoBtn.Size = UDim2.new(0.9, 0, 0, 24)
-    infoBtn.Position = UDim2.new(0.05, 0, 0, 126)
+    infoBtn.Position = UDim2.new(0.05, 0, 0, 94)
     infoBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     infoBtn.BorderSizePixel = 0
-    infoBtn.Text = "In info (inset, viewport, accept)"
+    infoBtn.Text = "In info (inset, accept center)"
     infoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     infoBtn.Font = Enum.Font.GothamBold
     infoBtn.TextSize = 11
     infoBtn.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 200)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 156)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 240)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 124)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -429,12 +406,12 @@ local function buildUI()
     logLbl.Parent = body
 
     local function setStatus(s, c)
-        statusLbl.Text = "Platform: " .. PLATFORM .. " | " .. s
+        statusLbl.Text = "Platform: " .. PLATFORM .. " | offsetY=" .. CONFIG.AcceptOffsetY .. " | " .. s
         if c then statusLbl.TextColor3 = c end
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 1600 then cur = cur:sub(-1400) end
+        if #cur > 1500 then cur = cur:sub(-1200) end
         logLbl.Text = cur .. "\n" .. s
     end
 
@@ -454,43 +431,25 @@ local function buildUI()
         end
     end)
 
-    calibBtn.MouseButton1Click:Connect(function()
-        task.spawn(function()
-            setStatus("calibrate...", Color3.fromRGB(200,200,120))
-            appendLog("=== CALIBRATE ===")
-            local ok, off = calibrateMobileOffset()
-            if ok then
-                appendLog(string.format("✔ offsetY = %d", off))
-                setStatus("calibrate OK: " .. off, Color3.fromRGB(120,220,120))
-            else
-                appendLog("✘ Không offset nào ăn")
-                setStatus("calibrate fail", Color3.fromRGB(255,120,120))
-            end
-        end)
-    end)
-
     testBtn.MouseButton1Click:Connect(function()
         task.spawn(function()
             local ok, r = acceptTrade()
-            appendLog(ok and ("✔ Accept OK: " .. r .. " (offsetY=" .. calibratedOffsetY .. ")")
-                or ("✘ Fail: " .. tostring(r)))
-            setStatus(ok and "Accept OK" or "fail",
+            appendLog(ok and ("✔ Accept OK: " .. r) or ("✘ Fail: " .. tostring(r)))
+            setStatus(ok and "OK" or "fail",
                 ok and Color3.fromRGB(120,220,120) or Color3.fromRGB(255,120,120))
         end)
     end)
 
     infoBtn.MouseButton1Click:Connect(function()
-        local tl, br = getInset()
-        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1366, 705)
+        local tl = getInset()
         local btn = getAcceptButton()
         local c = btn and getCenter(btn)
-        print("========== INFO v65 ==========")
+        print("========== INFO v66 ==========")
         print("Platform:", PLATFORM)
         print("TopLeftInset:", tl.X, tl.Y)
-        print("BottomRightInset:", br.X, br.Y)
-        print("ViewportSize:", vp.X, vp.Y)
         if c then
-            print("Accept center:", c.X, c.Y)
+            print("Accept center (viewport):", c.X, c.Y)
+            print("Touch pos (với offsetY=60):", c.X, c.Y + CONFIG.AcceptOffsetY)
         end
         print("=============================")
         appendLog("info F9")
@@ -521,4 +480,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v65 sẵn sàng. Mobile: bấm CALIBRATE trước để tìm offsetY.")
+log("v66 sẵn sàng. Mobile offsetY=60. Chuột ảo sync với touch.")
