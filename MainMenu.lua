@@ -1,37 +1,25 @@
 --[[
-    Auto Trade - Rock Fruit v71 (Offset Compensate)
+    Auto Trade - Rock Fruit v72 (Visual + Wrapper Fix)
     Game ID: 119091355492870
 
-    TRẠNG THÁI:
-      - firetouchinterest(wrapper) đã hoạt động (popup đóng).
-      - Nhưng có SAI SỐ CỐ ĐỊNH: bạn kéo ô đen vào nút Accept
-        thì tool bấm lệch một chút. Phải kéo ô đen lệch sang
-        PHẢI và XUỐNG thì mới trúng.
+    NGUYÊN NHÂN KHÔNG HIỆN CHUỘT:
+      - Trong v71, con trỏ ảo (chấm đỏ) CHỈ hiển thị khi bạn kéo
+        ô đen (dragFrame). Khi tool tự bấm (auto/test), nó tạo
+        wrapper TextButton vô hình nhưng KHÔNG vẽ con trỏ tại
+        vị trí đó.
+      - Nếu baseX = nil (chưa lưu), tool báo lỗi và không làm gì.
+      - Có thể offsetX/offsetY chưa được áp dụng.
 
-    NGUYÊN NHÂN:
-      - Wrapper TextButton được đặt tại (x-20, y-20) với size
-        40x40 -> tâm wrapper = (x, y) -> đúng lý thuyết.
-      - Nhưng executor mobile có thể cộng thêm offset ẩn khi
-        firetouchinterest (ví dụ +insetX, +insetY).
-      - Hoặc SafeArea trên mobile (status bar, notch) làm
-        wrapper.Position bị dịch so với toạ độ tuyệt đối.
-
-    FIX v71:
-      1. Thêm 2 ô nhập "Offset X" và "Offset Y".
-      2. Khi bấm, tool dùng (savedX + offsetX, savedY + offsetY).
-      3. Bạn tinh chỉnh Offset X (dương = sang phải, âm = sang
-         trái), Offset Y (dương = xuống, âm = lên) cho đến khi
-         bấm đúng.
-      4. Lưu offset -> auto dùng offset đó mỗi lần.
-      5. Không cần kéo ô đen lệch nữa -> kéo đúng vị trí hiển
-         thị, dùng offset để bù sai số.
-
-    CÁCH DÙNG:
-      1. Kéo ô đen đúng vào tâm nút Accept (chấm đỏ = tâm).
-      2. Bấm "LƯU VỊ TRÍ".
-      3. Nhập Offset X = 5, Offset Y = 5 (gợi ý ban đầu).
-      4. Bấm "TEST" -> nếu chưa đúng, tăng/giảm offset.
-      5. Khi đúng -> bấm "AUTO" -> tool dùng offset đã lưu.
+    GIẢI PHÁP v72:
+      1. Vẽ con trỏ ảo (chấm đỏ 10x10) tại vị trí sắp bấm
+         MỖI KHI test/auto. Bạn sẽ thấy nó nhấp nháy tại chỗ
+         tool sắp bấm.
+      2. Thêm nút "Test Visual" - chỉ hiện con trỏ, không bấm.
+         Để bạn kiểm tra vị trí.
+      3. Log rõ ràng từng bước.
+      4. Nếu chưa lưu vị trí -> tự động dùng vị trí ô đen hiện
+         tại (không cần bấm LƯU trước).
+      5. Đảm bảo wrapper luôn được tạo và cleanup đúng.
 ]]
 
 local CONFIG = {
@@ -76,9 +64,56 @@ local function isPopupOpen()
 end
 
 -- ============================================================
--- BẤM QUA WRAPPER TẠI TOẠ ĐỘ (x, y)
+-- VISUAL CURSOR (CHẤM ĐỎ)
+-- ============================================================
+local visualGui = nil
+local visualDot = nil
+
+local function ensureVisual()
+    if visualGui and visualGui.Parent then return end
+    visualGui = Instance.new("ScreenGui")
+    visualGui.Name = "HoangVisualCursor"
+    visualGui.ResetOnSpawn = false
+    visualGui.IgnoreGuiInset = false
+    visualGui.Parent = CoreGui
+
+    visualDot = Instance.new("Frame")
+    visualDot.Size = UDim2.new(0, 14, 0, 14)
+    visualDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    visualDot.BackgroundTransparency = 0.2
+    visualDot.BorderSizePixel = 2
+    visualDot.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    visualDot.ZIndex = 999995
+    visualDot.Visible = false
+    visualDot.Parent = visualGui
+
+    local inner = Instance.new("Frame")
+    inner.Size = UDim2.new(0, 4, 0, 4)
+    inner.Position = UDim2.new(0.5, -2, 0.5, -2)
+    inner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    inner.BorderSizePixel = 0
+    inner.ZIndex = 999996
+    inner.Parent = visualDot
+end
+
+local function showVisual(x, y)
+    ensureVisual()
+    visualDot.Position = UDim2.new(0, x - 7, 0, y - 7)
+    visualDot.Visible = true
+end
+
+local function hideVisual()
+    if visualDot then visualDot.Visible = false end
+end
+
+-- ============================================================
+-- TOUCH QUA WRAPPER
 -- ============================================================
 local function touchViaWrapper(x, y)
+    -- Hiển thị con trỏ tại vị trí sắp bấm
+    showVisual(x, y)
+    task.wait(0.15)
+
     local wrapSg = Instance.new("ScreenGui")
     wrapSg.Name = "HoangTouchWrapper"
     wrapSg.ResetOnSpawn = false
@@ -99,7 +134,9 @@ local function touchViaWrapper(x, y)
     task.wait(0.1)
 
     local function cleanup()
+        task.wait(0.2)
         pcall(function() wrapSg:Destroy() end)
+        hideVisual()
     end
 
     if firetouchinterest then
@@ -141,6 +178,7 @@ local baseY = nil
 local offsetX = 0
 local offsetY = 0
 local autoEnabled = false
+local dragFrame = nil
 
 -- ============================================================
 -- UI
@@ -157,7 +195,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 380, 0, 480)
+    frame.Size = UDim2.new(0, 380, 0, 500)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -175,7 +213,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v71 (Offset Compensate)"
+    title.Text = "Auto Trade v72 (Visual + Wrapper)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -229,7 +267,7 @@ local function buildUI()
     statusLbl.Position = UDim2.new(0.025, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Kéo ô đen đúng vị trí, lưu, tinh chỉnh offset."
+    statusLbl.Text = "Kéo ô đen vào nút Accept. Khi test sẽ thấy chấm đỏ."
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
@@ -241,7 +279,7 @@ local function buildUI()
     infoLbl.Position = UDim2.new(0.025, 0, 0, 36)
     infoLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     infoLbl.BorderSizePixel = 0
-    infoLbl.Text = "Chưa lưu vị trí."
+    infoLbl.Text = "Chưa lưu. Di chuyển ô đen để xem."
     infoLbl.TextColor3 = Color3.fromRGB(180, 220, 255)
     infoLbl.Font = Enum.Font.Code
     infoLbl.TextSize = 11
@@ -250,7 +288,6 @@ local function buildUI()
     infoLbl.TextYAlignment = Enum.TextYAlignment.Top
     infoLbl.Parent = body
 
-    -- Offset input
     local offsetXLabel = Instance.new("TextLabel")
     offsetXLabel.Size = UDim2.new(0.3, 0, 0, 26)
     offsetXLabel.Position = UDim2.new(0.025, 0, 0, 86)
@@ -300,7 +337,7 @@ local function buildUI()
     applyOffsetBtn.Position = UDim2.new(0.025, 0, 0, 116)
     applyOffsetBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     applyOffsetBtn.BorderSizePixel = 0
-    applyOffsetBtn.Text = "Áp dụng offset (lưu)"
+    applyOffsetBtn.Text = "Áp dụng offset"
     applyOffsetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     applyOffsetBtn.Font = Enum.Font.GothamBold
     applyOffsetBtn.TextSize = 11
@@ -311,18 +348,29 @@ local function buildUI()
     saveBtn.Position = UDim2.new(0.025, 0, 0, 148)
     saveBtn.BackgroundColor3 = Color3.fromRGB(200, 130, 40)
     saveBtn.BorderSizePixel = 0
-    saveBtn.Text = "1) LƯU VỊ TRÍ ô đen (chưa offset)"
+    saveBtn.Text = "1) LƯU VỊ TRÍ ô đen"
     saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     saveBtn.Font = Enum.Font.GothamBold
     saveBtn.TextSize = 12
     saveBtn.Parent = body
 
+    local testVisualBtn = Instance.new("TextButton")
+    testVisualBtn.Size = UDim2.new(0.95, 0, 0, 26)
+    testVisualBtn.Position = UDim2.new(0.025, 0, 0, 186)
+    testVisualBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    testVisualBtn.BorderSizePixel = 0
+    testVisualBtn.Text = "2a) TEST VISUAL (không bấm)"
+    testVisualBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    testVisualBtn.Font = Enum.Font.GothamBold
+    testVisualBtn.TextSize = 11
+    testVisualBtn.Parent = body
+
     local testBtn = Instance.new("TextButton")
     testBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    testBtn.Position = UDim2.new(0.025, 0, 0, 186)
+    testBtn.Position = UDim2.new(0.025, 0, 0, 216)
     testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
     testBtn.BorderSizePixel = 0
-    testBtn.Text = "2) TEST (dùng offset hiện tại)"
+    testBtn.Text = "2b) TEST BẤM (hiện chấm đỏ + wrapper)"
     testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     testBtn.Font = Enum.Font.GothamBold
     testBtn.TextSize = 12
@@ -330,7 +378,7 @@ local function buildUI()
 
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(0.95, 0, 0, 32)
-    autoBtn.Position = UDim2.new(0.025, 0, 0, 224)
+    autoBtn.Position = UDim2.new(0.025, 0, 0, 254)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
     autoBtn.Text = "3) AUTO ACCEPT: OFF"
@@ -341,7 +389,7 @@ local function buildUI()
 
     local resetBtn = Instance.new("TextButton")
     resetBtn.Size = UDim2.new(0.95, 0, 0, 24)
-    resetBtn.Position = UDim2.new(0.025, 0, 0, 262)
+    resetBtn.Position = UDim2.new(0.025, 0, 0, 292)
     resetBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     resetBtn.BorderSizePixel = 0
     resetBtn.Text = "Reset ô đen về giữa"
@@ -351,26 +399,17 @@ local function buildUI()
     resetBtn.Parent = body
 
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.95, 0, 0, 120)
-    helpLbl.Position = UDim2.new(0.025, 0, 0, 290)
+    helpLbl.Size = UDim2.new(0.95, 0, 0, 100)
+    helpLbl.Position = UDim2.new(0.025, 0, 0, 322)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-QUY TRÌNH:
-1. Kéo ô đen ĐÚNG tâm nút Accept (chấm đỏ = tâm).
-2. LƯU VỊ TRÍ.
-3. Nhập Offset X, Y nếu bấm lệch:
-   - Lệch phải -> Offset X tăng (5, 10...)
-   - Lệch trái -> Offset X giảm (-5, -10...)
-   - Lệch xuống -> Offset Y tăng (5, 10...)
-   - Lệch lên -> Offset Y giảm (-5, -10...)
-4. Bấm "Áp dụng offset (lưu)".
-5. Bấm TEST.
-6. Nếu chưa đúng -> đổi offset, lưu, test lại.
-7. Khi đúng -> bấm AUTO.
-
-MẸO: lệch khoảng bao nhiêu thì nhập bấy nhiêu.
-Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
+v72 SỬA:
+- Khi test/auto, sẽ thấy CHẤM ĐỎ nhấp nháy tại
+  vị trí sắp bấm -> bạn biết tool nhắm đâu.
+- Nếu chưa lưu vị trí, tool tự dùng ô đen hiện tại.
+- Test Visual: chỉ hiện chấm đỏ, không bấm
+  (để bạn kiểm tra trước khi bấm thật).
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -380,8 +419,8 @@ Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
     helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.95, 0, 0, 44)
-    logLbl.Position = UDim2.new(0.025, 0, 0, 420)
+    logLbl.Size = UDim2.new(0.95, 0, 0, 60)
+    logLbl.Position = UDim2.new(0.025, 0, 0, 428)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -398,7 +437,7 @@ Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 260 then cur = cur:sub(-200) end
+        if #cur > 340 then cur = cur:sub(-260) end
         logLbl.Text = cur .. "\n" .. s
     end
 
@@ -411,7 +450,7 @@ Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
     dragSg.IgnoreGuiInset = false
     dragSg.Parent = CoreGui
 
-    local dragFrame = Instance.new("Frame")
+    dragFrame = Instance.new("Frame")
     dragFrame.Size = UDim2.new(0, 60, 0, 60)
     dragFrame.Position = UDim2.new(0.5, -30, 0.5, -30)
     dragFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -467,7 +506,6 @@ Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
         end
     end)
 
-    -- Refresh info
     local function refreshInfo()
         local ap = dragFrame.AbsolutePosition
         local as = dragFrame.AbsoluteSize
@@ -482,6 +520,12 @@ Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
         return sx, sy, vx, vy
     end
 
+    local function getCurrentBase()
+        if baseX and baseY then return baseX, baseY end
+        local _, _, vx, vy = refreshInfo()
+        return vx, vy
+    end
+
     task.spawn(function()
         while sg.Parent do
             refreshInfo()
@@ -489,43 +533,48 @@ Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
         end
     end)
 
-    -- Events
     saveBtn.MouseButton1Click:Connect(function()
-        local sx, sy, vx, vy = refreshInfo()
+        local _, _, vx, vy = refreshInfo()
         baseX = vx
         baseY = vy
-        appendLog(string.format("Lưu base VP (%.0f,%.0f)", vx, vy))
-        setStatus(string.format("Đã lưu. Nhập offset, áp dụng, test."),
-            Color3.fromRGB(120, 220, 120))
+        appendLog(string.format("Lưu VP (%.0f,%.0f)", vx, vy))
+        setStatus("Đã lưu. Test visual để xem chấm đỏ.", Color3.fromRGB(120, 220, 120))
     end)
 
     applyOffsetBtn.MouseButton1Click:Connect(function()
         offsetX = tonumber(offsetXBox.Text) or 0
         offsetY = tonumber(offsetYBox.Text) or 0
-        appendLog(string.format("Offset lưu: X=%d Y=%d", offsetX, offsetY))
-        setStatus(string.format("Offset: X=%d Y=%d", offsetX, offsetY),
-            Color3.fromRGB(120, 220, 120))
+        appendLog(string.format("Offset X=%d Y=%d", offsetX, offsetY))
+        setStatus(string.format("Offset: X=%d Y=%d", offsetX, offsetY), Color3.fromRGB(120, 220, 120))
+    end)
+
+    testVisualBtn.MouseButton1Click:Connect(function()
+        local bx, by = getCurrentBase()
+        local tx = bx + offsetX
+        local ty = by + offsetY
+        showVisual(tx, ty)
+        appendLog(string.format("Visual tại (%.0f,%.0f) - 2s", tx, ty))
+        task.delay(2, hideVisual)
     end)
 
     testBtn.MouseButton1Click:Connect(function()
-        if not baseX then appendLog("Chưa lưu"); return end
+        local bx, by = getCurrentBase()
+        local tx = bx + offsetX
+        local ty = by + offsetY
         task.spawn(function()
-            local tx = baseX + offsetX
-            local ty = baseY + offsetY
-            appendLog(string.format("Test (%.0f,%.0f) offset(%d,%d)", tx, ty, offsetX, offsetY))
+            appendLog(string.format("Test bấm (%.0f,%.0f)", tx, ty))
             local ok, r = touchViaWrapper(tx, ty)
             if ok then
                 appendLog("✔ OK: " .. r)
                 setStatus("✔ Test OK - bật AUTO", Color3.fromRGB(120, 220, 120))
             else
                 appendLog("✘ Fail - tăng offset")
-                setStatus("✘ Fail - tinh chỉnh offset X/Y", Color3.fromRGB(255, 120, 120))
+                setStatus("✘ Fail - tinh chỉnh offset", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
 
     autoBtn.MouseButton1Click:Connect(function()
-        if not baseX then appendLog("Chưa lưu"); return end
         autoEnabled = not autoEnabled
         if autoEnabled then
             autoBtn.Text = "3) AUTO ACCEPT: ON"
@@ -542,18 +591,22 @@ Ví dụ lệch sang phải ~10px, xuống ~5px -> X=10, Y=5.
 
     resetBtn.MouseButton1Click:Connect(function()
         dragFrame.Position = UDim2.new(0.5, -30, 0.5, -30)
+        baseX = nil
+        baseY = nil
+        appendLog("Reset, base=nil")
     end)
 
     task.spawn(function()
         local wasOpen = false
         while sg.Parent do
-            if autoEnabled and baseX then
+            if autoEnabled then
                 local nowOpen = isPopupOpen()
                 if nowOpen and not wasOpen then
                     appendLog("Auto: popup hiện")
                     task.wait(0.2)
-                    local tx = baseX + offsetX
-                    local ty = baseY + offsetY
+                    local bx, by = getCurrentBase()
+                    local tx = bx + offsetX
+                    local ty = by + offsetY
                     local ok, r = touchViaWrapper(tx, ty)
                     appendLog(ok and ("✔ Auto OK: " .. r) or "✘ Auto fail")
                 end
@@ -569,4 +622,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v71 sẵn sàng. Nhập offset X/Y để bù sai số.")
+log("v72 sẵn sàng. Bấm Test Visual để thấy chấm đỏ trước khi bấm.")
