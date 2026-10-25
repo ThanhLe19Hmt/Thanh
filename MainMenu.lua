@@ -1,25 +1,25 @@
 --[[
-    Auto Trade - Rock Fruit v83 (Gộp v82 + v83)
+    Auto Trade - Rock Fruit v83.1 (Full)
     Game ID: 119091355492870
 
-    GỘP:
-      - PHẦN ACCEPT: giữ NGUYÊN v82 (5 phương thức + tryAll
-        + offsetX/offsetY + visual chấm đỏ + test + auto).
-        -> Đây là phần bạn xác nhận CHẠY ĐƯỢC.
-      - PHẦN CHỌN USER/ITEM: từ v83 refactored.
-        -> Click chọn từ danh sách, không gõ tay.
-      - LOOP CHÍNH: khi auto ON, nếu có popup -> tryAll
-        (accept). Nếu trading mở -> thêm item + Ready.
-        Nếu không có gì -> mở Frame_Trade + invite user.
+    TÍNH NĂNG:
+      1. Accept popup trade: 5 phương thức (v82) + offset X/Y.
+      2. UI chọn user từ SelectBar (click).
+      3. UI chọn item:
+         - Nhập tay tên + SL -> nút + THÊM.
+         - Hoặc click từ danh sách InventoryHandler.
+      4. Mode WithItems / ReadyOnly.
+      5. Auto loop: popup -> accept; trading -> thêm item + Ready;
+         không có gì -> mở Frame_Trade + invite.
+      6. Chống spam log khi refresh danh sách.
+      7. Fallback tìm item nếu không có trong ScrollingFrame.
 
     CÁCH DÙNG:
-      1. Mở bảng Trade trong game -> SelectBar hiện user.
-      2. UI hiển thị danh sách user -> click chọn.
-      3. Mở bảng Trading (hoặc mở Inventory trade) ->
-         UI hiển thị danh sách item -> click chọn.
-      4. Bấm "TEST 5 CÁCH BẤM" để kiểm tra accept.
-      5. Tinh chỉnh X/Y nếu mobile bấm lệch.
-      6. Bấm "AUTO TRADE: ON".
+      1. Mở bảng Trade trong game -> SelectBar hiện user -> click chọn.
+      2. Nhập tên item + SL -> + THÊM (hoặc click từ danh sách).
+      3. Bấm TEST 5 CÁCH BẤM để kiểm tra accept (khi có popup).
+      4. Tinh chỉnh X/Y nếu mobile bấm lệch.
+      5. Bấm AUTO TRADE: ON.
 ]]
 
 local CONFIG = {
@@ -58,7 +58,7 @@ local function getInset()
 end
 
 -- ============================================================
--- ĐỐI TƯỢNG GAME (giữ nguyên)
+-- ĐỐI TƯỢNG GAME
 -- ============================================================
 local function getHUDMain()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
@@ -185,7 +185,7 @@ local function safeClick(btn, name)
 end
 
 -- ============================================================
--- VISUAL (v82 - giữ nguyên)
+-- VISUAL (v82)
 -- ============================================================
 local visualGui = nil
 local visualDot = nil
@@ -223,7 +223,7 @@ local function hideVisual()
 end
 
 -- ============================================================
--- 5 PHƯƠNG THỨC ACCEPT (v82 - GIỮ NGUYÊN 100%)
+-- 5 PHƯƠNG THỨC ACCEPT (v82 - giữ nguyên)
 -- ============================================================
 local function method1_directTouch(x, y)
     local btn = getAcceptButton()
@@ -495,7 +495,31 @@ local function addItemDirect(itemName, qty)
             target = c; break
         end
     end
-    if not target then return false, "item_not_found" end
+
+    if not target then
+        -- Fallback: tìm trực tiếp trong toàn bộ InventoryHandler
+        local inv = getTradeInventory()
+        if inv then
+            local h = inv:FindFirstChild("Handler")
+            if h then
+                local ihh = h:FindFirstChild("InventoryHandler")
+                if ihh then
+                    local found = ihh:FindFirstChild(itemName, true)
+                    if found and found:IsA("Frame") then
+                        local m2 = found:FindFirstChild("Main")
+                        if m2 then
+                            safeClick(m2, "item fallback " .. itemName)
+                            task.wait(0.3)
+                            log(string.format("Đã thêm (fallback) %s x%d", itemName, qty))
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+        return false, "item_not_found"
+    end
+
     local main = target:FindFirstChild("Main")
     if not main then return false, "no_main" end
     safeClick(main, "item " .. itemName)
@@ -510,9 +534,9 @@ end
 local offsetX         = DEFAULT_OFFSET_X
 local offsetY         = DEFAULT_OFFSET_Y
 local autoEnabled     = false
-local tradeMode       = "WithItems"   -- hoặc "ReadyOnly"
+local tradeMode       = "WithItems"
 local selectedUser    = nil
-local selectedItems   = {}            -- { {name=..., qty=...} }
+local selectedItems   = {}
 
 -- ============================================================
 -- UI
@@ -527,7 +551,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 480, 0, 640)
+    frame.Size = UDim2.new(0, 480, 0, 660)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -545,7 +569,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "v83 Gộp (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
+    title.Text = "v83.1 (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -674,7 +698,6 @@ local function buildUI()
     applyBtn.TextSize = 11
     applyBtn.Parent = body
 
-    -- Hàng nút X
     local xPlus1 = Instance.new("TextButton")
     xPlus1.Size = UDim2.new(0.15, 0, 0, 22)
     xPlus1.Position = UDim2.new(0.05, 0, 0, 96)
@@ -730,7 +753,7 @@ local function buildUI()
     resetBtn.TextSize = 10
     resetBtn.Parent = body
 
-    -- ===== TEST ACCEPT (v82) =====
+    -- ===== TEST ACCEPT =====
     local testBtn = Instance.new("TextButton")
     testBtn.Size = UDim2.new(0.9, 0, 0, 34)
     testBtn.Position = UDim2.new(0.05, 0, 0, 124)
@@ -781,22 +804,58 @@ local function buildUI()
     selectedUserLbl.TextXAlignment = Enum.TextXAlignment.Left
     selectedUserLbl.Parent = body
 
-    -- ===== DANH SÁCH VẬT PHẨM =====
+    -- ===== VẬT PHẨM: NHẬP TAY =====
     local itemHeader = Instance.new("TextLabel")
     itemHeader.Size = UDim2.new(0.9, 0, 0, 18)
     itemHeader.Position = UDim2.new(0.05, 0, 0, 276)
     itemHeader.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     itemHeader.BorderSizePixel = 0
-    itemHeader.Text = "VẬT PHẨM (click chọn/bỏ)"
+    itemHeader.Text = "VẬT PHẨM"
     itemHeader.TextColor3 = Color3.fromRGB(220, 220, 220)
     itemHeader.Font = Enum.Font.GothamBold
     itemHeader.TextSize = 10
     itemHeader.TextXAlignment = Enum.TextXAlignment.Left
     itemHeader.Parent = body
 
+    local itemNameBox = Instance.new("TextBox")
+    itemNameBox.Size = UDim2.new(0.55, 0, 0, 24)
+    itemNameBox.Position = UDim2.new(0.05, 0, 0, 296)
+    itemNameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    itemNameBox.BorderSizePixel = 0
+    itemNameBox.Text = ""
+    itemNameBox.PlaceholderText = "Tên item (VD: Wood)"
+    itemNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    itemNameBox.Font = Enum.Font.Gotham
+    itemNameBox.TextSize = 11
+    itemNameBox.Parent = body
+
+    local itemQtyBox = Instance.new("TextBox")
+    itemQtyBox.Size = UDim2.new(0.15, 0, 0, 24)
+    itemQtyBox.Position = UDim2.new(0.61, 0, 0, 296)
+    itemQtyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    itemQtyBox.BorderSizePixel = 0
+    itemQtyBox.Text = "1"
+    itemQtyBox.PlaceholderText = "SL"
+    itemQtyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    itemQtyBox.Font = Enum.Font.Gotham
+    itemQtyBox.TextSize = 11
+    itemQtyBox.Parent = body
+
+    local addItemBtn = Instance.new("TextButton")
+    addItemBtn.Size = UDim2.new(0.17, 0, 0, 24)
+    addItemBtn.Position = UDim2.new(0.78, 0, 0, 296)
+    addItemBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+    addItemBtn.BorderSizePixel = 0
+    addItemBtn.Text = "+ THÊM"
+    addItemBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    addItemBtn.Font = Enum.Font.GothamBold
+    addItemBtn.TextSize = 11
+    addItemBtn.Parent = body
+
+    -- ===== DANH SÁCH ITEM TỪ GAME =====
     local itemScroll = Instance.new("ScrollingFrame")
-    itemScroll.Size = UDim2.new(0.9, 0, 0, 90)
-    itemScroll.Position = UDim2.new(0.05, 0, 0, 296)
+    itemScroll.Size = UDim2.new(0.9, 0, 0, 70)
+    itemScroll.Position = UDim2.new(0.05, 0, 0, 324)
     itemScroll.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     itemScroll.BorderSizePixel = 0
     itemScroll.ScrollBarThickness = 4
@@ -810,7 +869,7 @@ local function buildUI()
 
     local selectedItemsLbl = Instance.new("TextLabel")
     selectedItemsLbl.Size = UDim2.new(0.9, 0, 0, 36)
-    selectedItemsLbl.Position = UDim2.new(0.05, 0, 0, 388)
+    selectedItemsLbl.Position = UDim2.new(0.05, 0, 0, 398)
     selectedItemsLbl.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     selectedItemsLbl.BorderSizePixel = 0
     selectedItemsLbl.Text = "Items: (chưa chọn)"
@@ -822,10 +881,9 @@ local function buildUI()
     selectedItemsLbl.TextWrapped = true
     selectedItemsLbl.Parent = body
 
-    -- ===== START (v83) =====
     local startBtn = Instance.new("TextButton")
     startBtn.Size = UDim2.new(0.9, 0, 0, 36)
-    startBtn.Position = UDim2.new(0.05, 0, 0, 428)
+    startBtn.Position = UDim2.new(0.05, 0, 0, 438)
     startBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     startBtn.BorderSizePixel = 0
     startBtn.Text = "AUTO TRADE: OFF"
@@ -835,8 +893,8 @@ local function buildUI()
     startBtn.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 140)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 468)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 130)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 478)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -857,7 +915,7 @@ local function buildUI()
         logLbl.Text = cur .. "\n" .. s
     end
     local function refreshTitle()
-        title.Text = "v83 Gộp (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
+        title.Text = "v83.1 (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
@@ -935,24 +993,61 @@ local function buildUI()
         end)
     end)
 
-    -- ===== REFRESH PLAYER/ITEM LIST =====
+    -- ===== THÊM ITEM THỦ CÔNG =====
+    addItemBtn.MouseButton1Click:Connect(function()
+        local name = itemNameBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+        local qty  = tonumber(itemQtyBox.Text) or 1
+        if name == "" then
+            appendLog("✘ Tên item trống")
+            return
+        end
+        if qty <= 0 then
+            appendLog("✘ SL phải > 0")
+            return
+        end
+        local found = nil
+        for idx, it in ipairs(selectedItems) do
+            if it.name:lower() == name:lower() then found = idx; break end
+        end
+        if found then
+            selectedItems[found].qty = selectedItems[found].qty + qty
+            appendLog(string.format("Cập nhật %s -> x%d",
+                selectedItems[found].name, selectedItems[found].qty))
+        else
+            table.insert(selectedItems, {name = name, qty = qty})
+            appendLog(string.format("Thêm %s x%d", name, qty))
+        end
+        updateSelectedItemsLbl()
+        refreshItemList()
+        itemNameBox.Text = ""
+        itemQtyBox.Text = "1"
+    end)
+
+    -- ===== REFRESH LIST (chống spam log) =====
+    local lastPlayerCount = -1
+    local lastItemCount   = -1
+
     local function refreshPlayerList()
         for _, c in ipairs(playerScroll:GetChildren()) do
             if c:IsA("TextButton") then c:Destroy() end
         end
         local list = fetchPlayerList()
         if #list == 0 then
-            local empty = Instance.new("TextLabel")
-            empty.Size = UDim2.new(1, 0, 0, 22)
-            empty.BackgroundTransparency = 1
-            empty.Text = "(Mở Frame_Trade để load)"
-            empty.TextColor3 = Color3.fromRGB(180, 180, 180)
-            empty.Font = Enum.Font.Gotham
-            empty.TextSize = 10
-            empty.Parent = playerScroll
-            playerScroll.CanvasSize = UDim2.new(0, 0, 0, 24)
+            if lastPlayerCount ~= 0 then
+                local empty = Instance.new("TextLabel")
+                empty.Size = UDim2.new(1, 0, 0, 22)
+                empty.BackgroundTransparency = 1
+                empty.Text = "(Mở Frame_Trade để load)"
+                empty.TextColor3 = Color3.fromRGB(180, 180, 180)
+                empty.Font = Enum.Font.Gotham
+                empty.TextSize = 10
+                empty.Parent = playerScroll
+                playerScroll.CanvasSize = UDim2.new(0, 0, 0, 24)
+                lastPlayerCount = 0
+            end
             return
         end
+        lastPlayerCount = #list
         for i, uname in ipairs(list) do
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1, 0, 0, 22)
@@ -995,17 +1090,21 @@ local function buildUI()
         end
         local list = fetchItemList()
         if #list == 0 then
-            local empty = Instance.new("TextLabel")
-            empty.Size = UDim2.new(1, 0, 0, 22)
-            empty.BackgroundTransparency = 1
-            empty.Text = "(Mở bảng Trading để load item)"
-            empty.TextColor3 = Color3.fromRGB(180, 180, 180)
-            empty.Font = Enum.Font.Gotham
-            empty.TextSize = 10
-            empty.Parent = itemScroll
-            itemScroll.CanvasSize = UDim2.new(0, 0, 0, 24)
+            if lastItemCount ~= 0 then
+                local empty = Instance.new("TextLabel")
+                empty.Size = UDim2.new(1, 0, 0, 22)
+                empty.BackgroundTransparency = 1
+                empty.Text = "(Mở bảng Trading để load item)"
+                empty.TextColor3 = Color3.fromRGB(180, 180, 180)
+                empty.Font = Enum.Font.Gotham
+                empty.TextSize = 10
+                empty.Parent = itemScroll
+                itemScroll.CanvasSize = UDim2.new(0, 0, 0, 24)
+                lastItemCount = 0
+            end
             return
         end
+        lastItemCount = #list
         for i, iname in ipairs(list) do
             local isSelected = false
             for _, it in ipairs(selectedItems) do
@@ -1103,13 +1202,12 @@ local function buildUI()
     end
 
     -- ============================================================
-    -- LOOP CHÍNH (gộp v82 accept + v83 trade)
+    -- LOOP CHÍNH
     -- ============================================================
     task.spawn(function()
         local wasPopupOpen = false
         while sg.Parent do
             if autoEnabled then
-                -- Ưu tiên 1: POPUP ACCEPT (dùng tryAll của v82)
                 if isPopupOpen() then
                     if not wasPopupOpen then
                         setStatus("Có popup -> accept", Color3.fromRGB(200,200,120))
@@ -1152,7 +1250,8 @@ local function buildUI()
                         appendLog("Trade xong")
                         task.wait(1)
                     else
-                        setStatus("Đang mời " .. (selectedUser or "..."), Color3.fromRGB(200,200,120))
+                        setStatus("Đang mời " .. (selectedUser or "..."),
+                            Color3.fromRGB(200,200,120))
                         doFullFlow()
                         task.wait(CONFIG.LoopDelay)
                     end
@@ -1184,4 +1283,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v83 Gộp sẵn sàng. Accept giữ nguyên v82, chọn user/item bằng click.")
+log("v83.1 Full sẵn sàng.")
