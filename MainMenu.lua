@@ -1,42 +1,34 @@
 --[[
-    Auto Trade - Rock Fruit v83 (Full Feature)
+    Auto Trade - Rock Fruit v83 (Gộp v82 + v83)
     Game ID: 119091355492870
 
-    TÍNH NĂNG:
-      1. Auto Accept popup Trade_Request (dùng X=30, Y=60 cho Mobile).
-      2. Tự động chọn user trong SelectBar (theo tên đã nhập).
-      3. Tự động bấm Invite để mời trade.
-      4. Tự động thêm 5 loại item + số lượng vào bảng trade.
-         - KHÔNG bấm nút [+], mà gọi trực tiếp logic thêm item.
-      5. Tự động bấm Ready.
-      6. Auto lặp lại khi trade xong.
-      7. Chế độ KHÔNG thêm item (chỉ Ready) cho trade số lượng lớn.
+    GỘP:
+      - PHẦN ACCEPT: giữ NGUYÊN v82 (5 phương thức + tryAll
+        + offsetX/offsetY + visual chấm đỏ + test + auto).
+        -> Đây là phần bạn xác nhận CHẠY ĐƯỢC.
+      - PHẦN CHỌN USER/ITEM: từ v83 refactored.
+        -> Click chọn từ danh sách, không gõ tay.
+      - LOOP CHÍNH: khi auto ON, nếu có popup -> tryAll
+        (accept). Nếu trading mở -> thêm item + Ready.
+        Nếu không có gì -> mở Frame_Trade + invite user.
 
-    LUỒNG HOẠT ĐỘNG:
-      B1: Mở GUI Trade -> chọn user -> Invite.
-      B2: Chờ popup Accept (nếu có) -> accept.
-      B3: Bảng Trading mở -> thêm item theo cấu hình.
-      B4: Bấm Ready.
-      B5: Chờ đối phương Ready -> trade hoàn tất.
-      B6: Quay lại B1 (auto lặp).
-
-    CẤU HÌNH:
-      - TargetUser: tên người chơi muốn trade.
-      - Slot 1-5: item + số lượng.
-      - Mode: "WithItems" hoặc "ReadyOnly".
+    CÁCH DÙNG:
+      1. Mở bảng Trade trong game -> SelectBar hiện user.
+      2. UI hiển thị danh sách user -> click chọn.
+      3. Mở bảng Trading (hoặc mở Inventory trade) ->
+         UI hiển thị danh sách item -> click chọn.
+      4. Bấm "TEST 5 CÁCH BẤM" để kiểm tra accept.
+      5. Tinh chỉnh X/Y nếu mobile bấm lệch.
+      6. Bấm "AUTO TRADE: ON".
 ]]
 
 local CONFIG = {
-    GameID         = 119091355492870,
-    Debug          = true,
-    AcceptOffsetX  = 30,
-    AcceptOffsetY  = 60,
-    AcceptTimeout  = 3,
-    InvitePoll     = 0.5,
-    InviteTimeout  = 60,
-    ItemDelay      = 0.4,
-    ReadyDelay     = 0.5,
-    LoopDelay      = 1.0,
+    GameID        = 119091355492870,
+    Debug         = true,
+    ItemDelay     = 0.4,
+    ReadyDelay    = 0.5,
+    LoopDelay     = 1.0,
+    RefreshRate   = 2.0,
 }
 
 local Players               = game:GetService("Players")
@@ -50,6 +42,15 @@ local function log(...)
     if CONFIG.Debug then print("[AutoTrade]", ...) end
 end
 
+local isTouch = UserInputService.TouchEnabled
+local isMouse = UserInputService.MouseEnabled
+local isKeyboard = UserInputService.KeyboardEnabled
+local IS_MOBILE = (isTouch and not isKeyboard and not isMouse)
+local IS_PC = (isMouse and isKeyboard and not isTouch)
+local PLATFORM = IS_MOBILE and "MOBILE" or (IS_PC and "PC" or "UNKNOWN")
+local DEFAULT_OFFSET_Y = IS_PC and 50 or 60
+local DEFAULT_OFFSET_X = 0
+
 local function getInset()
     local tl = Vector2.new(0, 0)
     pcall(function() tl = GuiService.TopLeftInset end)
@@ -57,7 +58,7 @@ local function getInset()
 end
 
 -- ============================================================
--- ĐỐI TƯỢNG
+-- ĐỐI TƯỢNG GAME (giữ nguyên)
 -- ============================================================
 local function getHUDMain()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
@@ -71,6 +72,23 @@ local function getTradeRequestFrame()
     local main = getHUDMain()
     if not main then return nil end
     return main:FindFirstChild("Trade_Request")
+end
+
+local function getAcceptButton()
+    local tr = getTradeRequestFrame()
+    if not tr then return nil end
+    local sub = tr:FindFirstChild("Sub")
+    if not sub then return nil end
+    local m = sub:FindFirstChild("Main")
+    if not m then return nil end
+    local acc = m:FindFirstChild("Accept")
+    if not acc then return nil end
+    return acc:FindFirstChild("Accept")
+end
+
+local function isPopupOpen()
+    local tr = getTradeRequestFrame()
+    return tr ~= nil and tr.Visible == true
 end
 
 local function getFrameTrading()
@@ -139,11 +157,6 @@ local function getTradeFrameUI()
     return main:FindFirstChild("Frame_Trade")
 end
 
-local function isPopupOpen()
-    local tr = getTradeRequestFrame()
-    return tr ~= nil and tr.Visible == true
-end
-
 local function isTradingOpen()
     local ft = getFrameTrading()
     return ft ~= nil and ft.Visible == true
@@ -172,73 +185,177 @@ local function safeClick(btn, name)
 end
 
 -- ============================================================
--- ACCEPT POPUP (dùng X=30, Y=60)
+-- VISUAL (v82 - giữ nguyên)
 -- ============================================================
-local function acceptPopup()
-    local tr = getTradeRequestFrame()
-    if not tr or not tr.Visible then return false end
-    local sub = tr:FindFirstChild("Sub")
-    if not sub then return false end
-    local m = sub:FindFirstChild("Main")
-    if not m then return false end
-    local accFolder = m:FindFirstChild("Accept")
-    if not accFolder then return false end
-    local btn = accFolder:FindFirstChild("Accept")
-    if not btn then return false end
+local visualGui = nil
+local visualDot = nil
 
-    local ap = btn.AbsolutePosition
-    local sz = btn.AbsoluteSize
-    local cx = ap.X + sz.X / 2 + CONFIG.AcceptOffsetX
-    local cy = ap.Y + sz.Y / 2 + CONFIG.AcceptOffsetY
+local function ensureVisual()
+    if visualGui and visualGui.Parent then return end
+    visualGui = Instance.new("ScreenGui")
+    visualGui.Name = "HoangVisualCursor"
+    visualGui.ResetOnSpawn = false
+    visualGui.IgnoreGuiInset = true
+    visualGui.Parent = CoreGui
+    visualDot = Instance.new("Frame")
+    visualDot.Size = UDim2.new(0, 12, 0, 12)
+    visualDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    visualDot.BackgroundTransparency = 0.3
+    visualDot.BorderSizePixel = 2
+    visualDot.BorderColor3 = Color3.fromRGB(255, 255, 255)
+    visualDot.ZIndex = 999995
+    visualDot.Visible = false
+    visualDot.Parent = visualGui
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = visualDot
+end
 
-    log(string.format("Accept tại (%.0f, %.0f)", cx, cy))
+local function showVisual(x, y)
+    ensureVisual()
+    local tl = getInset()
+    visualDot.Position = UDim2.new(0, x + tl.X - 6, 0, y + tl.Y - 6)
+    visualDot.Visible = true
+end
 
-    -- Cách 1: callback
-    if getconnections then
-        for _, sigName in ipairs({"MouseButton1Click", "MouseButton1Down", "MouseButton1Up", "Activated"}) do
-            local sig = btn[sigName]
-            if sig then
-                local ok, conns = pcall(getconnections, sig)
-                if ok and conns then
-                    for _, c in ipairs(conns) do
-                        if c.Enabled and c.Function then
-                            pcall(c.Function)
-                            task.wait(0.05)
-                        end
+local function hideVisual()
+    if visualDot then visualDot.Visible = false end
+end
+
+-- ============================================================
+-- 5 PHƯƠNG THỨC ACCEPT (v82 - GIỮ NGUYÊN 100%)
+-- ============================================================
+local function method1_directTouch(x, y)
+    local btn = getAcceptButton()
+    if not btn or not firetouchinterest then return false end
+    log(string.format("[1] direct touch (%.1f, %.1f)", x, y))
+    pcall(function()
+        firetouchinterest(btn, Vector2.new(x, y), 0)
+        task.wait(0.1)
+        firetouchinterest(btn, Vector2.new(x, y), 1)
+    end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "direct_touch" end
+    return false
+end
+
+local function method2_vim(x, y)
+    if not VirtualInputManager then return false end
+    log(string.format("[2] VIM (%.1f, %.1f)", x, y))
+    local ix, iy = math.floor(x), math.floor(y)
+    pcall(function()
+        VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
+    end)
+    task.wait(0.2)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
+    end)
+    task.wait(0.15)
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
+    end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "vim" end
+    return false
+end
+
+local function method3_callback(x, y)
+    local btn = getAcceptButton()
+    if not btn or not getconnections then return false end
+    log("[3] callback Accept")
+    local signals = {
+        {"MouseButton1Click", btn.MouseButton1Click},
+        {"MouseButton1Down", btn.MouseButton1Down},
+        {"MouseButton1Up", btn.MouseButton1Up},
+        {"Activated", btn.Activated},
+    }
+    for _, pair in ipairs(signals) do
+        local sigName, sig = pair[1], pair[2]
+        if sig then
+            local ok, conns = pcall(getconnections, sig)
+            if ok and conns then
+                for i, c in ipairs(conns) do
+                    if c.Enabled and c.Function then
+                        log(string.format("  %s #%d", sigName, i))
+                        pcall(c.Function)
+                        task.wait(0.05)
                     end
                 end
             end
         end
-        task.wait(0.2)
-        if not isPopupOpen() then return true end
     end
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "callback" end
+    return false
+end
 
-    -- Cách 2: wrapper touch tại (cx, cy)
+local function method4_firesignal(x, y)
+    local btn = getAcceptButton()
+    if not btn or typeof(firesignal) ~= "function" then return false end
+    log("[4] firesignal Accept")
+    pcall(function()
+        firesignal(btn.MouseButton1Down)
+        task.wait(0.1)
+        firesignal(btn.MouseButton1Up)
+        task.wait(0.1)
+        firesignal(btn.MouseButton1Click)
+        task.wait(0.1)
+        firesignal(btn.Activated)
+    end)
+    task.wait(0.3)
+    if not isPopupOpen() then return true, "firesignal" end
+    return false
+end
+
+local function method5_wrapper(x, y)
     local wrapSg = Instance.new("ScreenGui")
-    wrapSg.Name = "HoangAcceptWrap"
+    wrapSg.Name = "HoangWrap"
     wrapSg.ResetOnSpawn = false
     wrapSg.IgnoreGuiInset = false
     wrapSg.Parent = CoreGui
     local wrapper = Instance.new("TextButton")
     wrapper.Size = UDim2.new(0, 30, 0, 30)
-    wrapper.Position = UDim2.new(0, cx - 15, 0, cy - 15)
+    wrapper.Position = UDim2.new(0, x - 15, 0, y - 15)
     wrapper.BackgroundTransparency = 1
     wrapper.Text = ""
     wrapper.Active = true
     wrapper.ZIndex = 999992
     wrapper.Parent = wrapSg
     task.wait(0.1)
+    local ok = false
     if firetouchinterest then
+        log(string.format("[5] wrapper (%.1f, %.1f)", x, y))
         pcall(function()
-            firetouchinterest(wrapper, Vector2.new(cx, cy), 0)
+            firetouchinterest(wrapper, Vector2.new(x, y), 0)
             task.wait(0.1)
-            firetouchinterest(wrapper, Vector2.new(cx, cy), 1)
+            firetouchinterest(wrapper, Vector2.new(x, y), 1)
         end)
         task.wait(0.3)
+        ok = not isPopupOpen()
     end
     pcall(function() wrapSg:Destroy() end)
+    if ok then return true, "wrapper" end
+    return false
+end
 
-    return not isPopupOpen()
+local function tryAll(x, y)
+    showVisual(x, y)
+    task.wait(0.15)
+    local methods = {
+        {"direct_touch", method1_directTouch},
+        {"vim", method2_vim},
+        {"callback", method3_callback},
+        {"firesignal", method4_firesignal},
+        {"wrapper", method5_wrapper},
+    }
+    for _, m in ipairs(methods) do
+        if not isPopupOpen() then hideVisual(); return true, "already_closed" end
+        local ok, r = m[2](x, y)
+        if ok then hideVisual(); return true, m[1] end
+        task.wait(0.1)
+    end
+    hideVisual()
+    return false, "all_fail"
 end
 
 -- ============================================================
@@ -292,10 +409,70 @@ local function setAmount(qty)
 end
 
 -- ============================================================
--- THÊM 1 ITEM VÀO TRADE (không qua nút [+])
+-- FETCH DANH SÁCH
+-- ============================================================
+local function fetchPlayerList()
+    local list = {}
+    local sb = getSelectBar()
+    if not sb then return list end
+    for _, entry in ipairs(sb:GetChildren()) do
+        if entry:IsA("Frame") then
+            local main = entry:FindFirstChild("Main")
+            if main then
+                local un = main:FindFirstChild("Username")
+                if un and un:IsA("TextLabel") and un.Text ~= "" then
+                    table.insert(list, un.Text)
+                end
+            end
+        end
+    end
+    return list
+end
+
+local function fetchItemList()
+    local list = {}
+    local sf = getInvScrollingFrame()
+    if not sf then return list end
+    for _, c in ipairs(sf:GetChildren()) do
+        if c:IsA("Frame") then
+            local main = c:FindFirstChild("Main")
+            if main then
+                table.insert(list, c.Name)
+            end
+        end
+    end
+    return list
+end
+
+-- ============================================================
+-- INVITE USER
+-- ============================================================
+local function inviteUserInSelectBar(username)
+    local sb = getSelectBar()
+    if not sb then return false, "no_selectbar" end
+    local target = username:lower()
+    for _, entry in ipairs(sb:GetChildren()) do
+        if entry:IsA("Frame") then
+            local main = entry:FindFirstChild("Main")
+            if main then
+                local un = main:FindFirstChild("Username")
+                if un and un:IsA("TextLabel") and un.Text:lower() == target then
+                    local inv = main:FindFirstChild("Invite")
+                    if inv then
+                        safeClick(inv, "Invite " .. username)
+                        return true, "invited"
+                    end
+                end
+            end
+        end
+    end
+    return false, "user_not_found"
+end
+
+-- ============================================================
+-- THÊM ITEM
 -- ============================================================
 local function addItemDirect(itemName, qty)
-    -- Mở inventory trade
     local ti = getTradeInventory()
     if not (ti and ti.Visible) then
         local add = getAddButton()
@@ -328,44 +505,18 @@ local function addItemDirect(itemName, qty)
 end
 
 -- ============================================================
--- MỜI USER QUA NÚT INVITE
+-- STATE
 -- ============================================================
-local function inviteUserInSelectBar(username)
-    local sb = getSelectBar()
-    if not sb then return false, "no_selectbar" end
-    local target = username:lower()
-    for _, entry in ipairs(sb:GetChildren()) do
-        if entry:IsA("Frame") then
-            local main = entry:FindFirstChild("Main")
-            if main then
-                local un = main:FindFirstChild("Username")
-                if un and un:IsA("TextLabel") and un.Text:lower() == target then
-                    local inv = main:FindFirstChild("Invite")
-                    if inv then
-                        safeClick(inv, "Invite " .. username)
-                        return true, "invited"
-                    end
-                end
-            end
-        end
-    end
-    return false, "user_not_found"
-end
+local offsetX         = DEFAULT_OFFSET_X
+local offsetY         = DEFAULT_OFFSET_Y
+local autoEnabled     = false
+local tradeMode       = "WithItems"   -- hoặc "ReadyOnly"
+local selectedUser    = nil
+local selectedItems   = {}            -- { {name=..., qty=...} }
 
 -- ============================================================
--- UI CHÍNH
+-- UI
 -- ============================================================
-local itemSlots = {
-    {name = "Wood", qty = 40},
-    {name = "Pizza", qty = 1},
-    {name = "Nuke", qty = 2},
-    {name = "Chair", qty = 3},
-    {name = "KFC", qty = 1},
-}
-local targetUsername = ""
-local tradeMode = "WithItems"  -- hoặc "ReadyOnly"
-local autoEnabled = false
-
 local function buildUI()
     local oldUI = CoreGui:FindFirstChild("HoangAutoTradeUI")
     if oldUI then oldUI:Destroy() end
@@ -376,14 +527,13 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 420, 0, 560)
+    frame.Size = UDim2.new(0, 480, 0, 640)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
     frame.Active = true
     frame.Parent = sg
 
-    -- Title bar
     local titleBar = Instance.new("Frame")
     titleBar.Size = UDim2.new(1, 0, 0, 32)
     titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
@@ -395,7 +545,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v83 (Full)"
+    title.Text = "v83 Gộp (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -445,21 +595,21 @@ local function buildUI()
     body.Parent = frame
 
     local statusLbl = Instance.new("TextLabel")
-    statusLbl.Size = UDim2.new(0.9, 0, 0, 28)
+    statusLbl.Size = UDim2.new(0.9, 0, 0, 30)
     statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "OFF"
+    statusLbl.Text = "Sẵn sàng. Test accept trước khi AUTO."
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
     statusLbl.TextWrapped = true
     statusLbl.Parent = body
 
-    -- Mode selector
+    -- ===== MODE =====
     local modeBtn = Instance.new("TextButton")
-    modeBtn.Size = UDim2.new(0.9, 0, 0, 30)
-    modeBtn.Position = UDim2.new(0.05, 0, 0, 32)
+    modeBtn.Size = UDim2.new(0.9, 0, 0, 26)
+    modeBtn.Position = UDim2.new(0.05, 0, 0, 34)
     modeBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
     modeBtn.BorderSizePixel = 0
     modeBtn.Text = "MODE: CÓ VẬT PHẨM (bấm đổi)"
@@ -468,95 +618,225 @@ local function buildUI()
     modeBtn.TextSize = 11
     modeBtn.Parent = body
 
-    -- Target user
-    local targetLbl = Instance.new("TextLabel")
-    targetLbl.Size = UDim2.new(0.3, 0, 0, 26)
-    targetLbl.Position = UDim2.new(0.05, 0, 0, 66)
-    targetLbl.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    targetLbl.BorderSizePixel = 0
-    targetLbl.Text = "User"
-    targetLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
-    targetLbl.Font = Enum.Font.Gotham
-    targetLbl.TextSize = 11
-    targetLbl.Parent = body
+    -- ===== OFFSET X/Y (v82) =====
+    local oxLabel = Instance.new("TextLabel")
+    oxLabel.Size = UDim2.new(0.1, 0, 0, 26)
+    oxLabel.Position = UDim2.new(0.05, 0, 0, 66)
+    oxLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oxLabel.BorderSizePixel = 0
+    oxLabel.Text = "X"
+    oxLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    oxLabel.Font = Enum.Font.GothamBold
+    oxLabel.TextSize = 13
+    oxLabel.Parent = body
 
-    local targetBox = Instance.new("TextBox")
-    targetBox.Size = UDim2.new(0.55, 0, 0, 26)
-    targetBox.Position = UDim2.new(0.4, 0, 0, 66)
-    targetBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    targetBox.BorderSizePixel = 0
-    targetBox.Text = ""
-    targetBox.PlaceholderText = "Username (trong SelectBar)"
-    targetBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    targetBox.Font = Enum.Font.Gotham
-    targetBox.TextSize = 11
-    targetBox.Parent = body
+    local oxBox = Instance.new("TextBox")
+    oxBox.Size = UDim2.new(0.15, 0, 0, 26)
+    oxBox.Position = UDim2.new(0.16, 0, 0, 66)
+    oxBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oxBox.BorderSizePixel = 0
+    oxBox.Text = tostring(offsetX)
+    oxBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    oxBox.Font = Enum.Font.Gotham
+    oxBox.TextSize = 12
+    oxBox.Parent = body
 
-    -- 5 slots
-    local slotWidgets = {}
-    for i = 1, 5 do
-        local y = 100 + (i - 1) * 32
-        local nameLbl = Instance.new("TextLabel")
-        nameLbl.Size = UDim2.new(0.1, 0, 0, 26)
-        nameLbl.Position = UDim2.new(0.05, 0, 0, y)
-        nameLbl.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        nameLbl.BorderSizePixel = 0
-        nameLbl.Text = tostring(i)
-        nameLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
-        nameLbl.Font = Enum.Font.GothamBold
-        nameLbl.TextSize = 12
-        nameLbl.Parent = body
+    local oyLabel = Instance.new("TextLabel")
+    oyLabel.Size = UDim2.new(0.1, 0, 0, 26)
+    oyLabel.Position = UDim2.new(0.34, 0, 0, 66)
+    oyLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oyLabel.BorderSizePixel = 0
+    oyLabel.Text = "Y"
+    oyLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    oyLabel.Font = Enum.Font.GothamBold
+    oyLabel.TextSize = 13
+    oyLabel.Parent = body
 
-        local nameBox = Instance.new("TextBox")
-        nameBox.Size = UDim2.new(0.5, 0, 0, 26)
-        nameBox.Position = UDim2.new(0.16, 0, 0, y)
-        nameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        nameBox.BorderSizePixel = 0
-        nameBox.Text = itemSlots[i].name
-        nameBox.PlaceholderText = "Tên item"
-        nameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nameBox.Font = Enum.Font.Gotham
-        nameBox.TextSize = 11
-        nameBox.Parent = body
+    local oyBox = Instance.new("TextBox")
+    oyBox.Size = UDim2.new(0.15, 0, 0, 26)
+    oyBox.Position = UDim2.new(0.45, 0, 0, 66)
+    oyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oyBox.BorderSizePixel = 0
+    oyBox.Text = tostring(offsetY)
+    oyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    oyBox.Font = Enum.Font.Gotham
+    oyBox.TextSize = 12
+    oyBox.Parent = body
 
-        local qtyBox = Instance.new("TextBox")
-        qtyBox.Size = UDim2.new(0.25, 0, 0, 26)
-        qtyBox.Position = UDim2.new(0.68, 0, 0, y)
-        qtyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        qtyBox.BorderSizePixel = 0
-        qtyBox.Text = tostring(itemSlots[i].qty)
-        qtyBox.PlaceholderText = "SL"
-        qtyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-        qtyBox.Font = Enum.Font.Gotham
-        qtyBox.TextSize = 11
-        qtyBox.Parent = body
+    local applyBtn = Instance.new("TextButton")
+    applyBtn.Size = UDim2.new(0.25, 0, 0, 26)
+    applyBtn.Position = UDim2.new(0.7, 0, 0, 66)
+    applyBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
+    applyBtn.BorderSizePixel = 0
+    applyBtn.Text = "Áp dụng XY"
+    applyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    applyBtn.Font = Enum.Font.GothamBold
+    applyBtn.TextSize = 11
+    applyBtn.Parent = body
 
-        nameBox:GetPropertyChangedSignal("Text"):Connect(function()
-            itemSlots[i].name = nameBox.Text
-        end)
-        qtyBox:GetPropertyChangedSignal("Text"):Connect(function()
-            itemSlots[i].qty = tonumber(qtyBox.Text) or 0
-        end)
+    -- Hàng nút X
+    local xPlus1 = Instance.new("TextButton")
+    xPlus1.Size = UDim2.new(0.15, 0, 0, 22)
+    xPlus1.Position = UDim2.new(0.05, 0, 0, 96)
+    xPlus1.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xPlus1.BorderSizePixel = 0
+    xPlus1.Text = "X+1"
+    xPlus1.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xPlus1.Font = Enum.Font.GothamBold
+    xPlus1.TextSize = 10
+    xPlus1.Parent = body
 
-        table.insert(slotWidgets, {nameBox = nameBox, qtyBox = qtyBox})
-    end
+    local xMinus1 = Instance.new("TextButton")
+    xMinus1.Size = UDim2.new(0.15, 0, 0, 22)
+    xMinus1.Position = UDim2.new(0.22, 0, 0, 96)
+    xMinus1.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xMinus1.BorderSizePixel = 0
+    xMinus1.Text = "X-1"
+    xMinus1.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xMinus1.Font = Enum.Font.GothamBold
+    xMinus1.TextSize = 10
+    xMinus1.Parent = body
 
-    -- Start button
+    local xPlus5 = Instance.new("TextButton")
+    xPlus5.Size = UDim2.new(0.15, 0, 0, 22)
+    xPlus5.Position = UDim2.new(0.42, 0, 0, 96)
+    xPlus5.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xPlus5.BorderSizePixel = 0
+    xPlus5.Text = "X+5"
+    xPlus5.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xPlus5.Font = Enum.Font.GothamBold
+    xPlus5.TextSize = 10
+    xPlus5.Parent = body
+
+    local xMinus5 = Instance.new("TextButton")
+    xMinus5.Size = UDim2.new(0.15, 0, 0, 22)
+    xMinus5.Position = UDim2.new(0.62, 0, 0, 96)
+    xMinus5.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xMinus5.BorderSizePixel = 0
+    xMinus5.Text = "X-5"
+    xMinus5.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xMinus5.Font = Enum.Font.GothamBold
+    xMinus5.TextSize = 10
+    xMinus5.Parent = body
+
+    local resetBtn = Instance.new("TextButton")
+    resetBtn.Size = UDim2.new(0.15, 0, 0, 22)
+    resetBtn.Position = UDim2.new(0.82, 0, 0, 96)
+    resetBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+    resetBtn.BorderSizePixel = 0
+    resetBtn.Text = "Reset"
+    resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    resetBtn.Font = Enum.Font.GothamBold
+    resetBtn.TextSize = 10
+    resetBtn.Parent = body
+
+    -- ===== TEST ACCEPT (v82) =====
+    local testBtn = Instance.new("TextButton")
+    testBtn.Size = UDim2.new(0.9, 0, 0, 34)
+    testBtn.Position = UDim2.new(0.05, 0, 0, 124)
+    testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+    testBtn.BorderSizePixel = 0
+    testBtn.Text = "TEST 5 CÁCH BẤM ACCEPT"
+    testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    testBtn.Font = Enum.Font.GothamBold
+    testBtn.TextSize = 12
+    testBtn.Parent = body
+
+    -- ===== DANH SÁCH NGƯỜI CHƠI =====
+    local playerHeader = Instance.new("TextLabel")
+    playerHeader.Size = UDim2.new(0.9, 0, 0, 18)
+    playerHeader.Position = UDim2.new(0.05, 0, 0, 162)
+    playerHeader.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    playerHeader.BorderSizePixel = 0
+    playerHeader.Text = "NGƯỜI CHƠI (click để chọn)"
+    playerHeader.TextColor3 = Color3.fromRGB(220, 220, 220)
+    playerHeader.Font = Enum.Font.GothamBold
+    playerHeader.TextSize = 10
+    playerHeader.TextXAlignment = Enum.TextXAlignment.Left
+    playerHeader.Parent = body
+
+    local playerScroll = Instance.new("ScrollingFrame")
+    playerScroll.Size = UDim2.new(0.9, 0, 0, 70)
+    playerScroll.Position = UDim2.new(0.05, 0, 0, 182)
+    playerScroll.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    playerScroll.BorderSizePixel = 0
+    playerScroll.ScrollBarThickness = 4
+    playerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    playerScroll.Parent = body
+
+    local playerListLayout = Instance.new("UIListLayout")
+    playerListLayout.Padding = UDim.new(0, 2)
+    playerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    playerListLayout.Parent = playerScroll
+
+    local selectedUserLbl = Instance.new("TextLabel")
+    selectedUserLbl.Size = UDim2.new(0.9, 0, 0, 18)
+    selectedUserLbl.Position = UDim2.new(0.05, 0, 0, 254)
+    selectedUserLbl.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    selectedUserLbl.BorderSizePixel = 0
+    selectedUserLbl.Text = "User: (chưa chọn)"
+    selectedUserLbl.TextColor3 = Color3.fromRGB(255, 220, 120)
+    selectedUserLbl.Font = Enum.Font.Gotham
+    selectedUserLbl.TextSize = 10
+    selectedUserLbl.TextXAlignment = Enum.TextXAlignment.Left
+    selectedUserLbl.Parent = body
+
+    -- ===== DANH SÁCH VẬT PHẨM =====
+    local itemHeader = Instance.new("TextLabel")
+    itemHeader.Size = UDim2.new(0.9, 0, 0, 18)
+    itemHeader.Position = UDim2.new(0.05, 0, 0, 276)
+    itemHeader.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    itemHeader.BorderSizePixel = 0
+    itemHeader.Text = "VẬT PHẨM (click chọn/bỏ)"
+    itemHeader.TextColor3 = Color3.fromRGB(220, 220, 220)
+    itemHeader.Font = Enum.Font.GothamBold
+    itemHeader.TextSize = 10
+    itemHeader.TextXAlignment = Enum.TextXAlignment.Left
+    itemHeader.Parent = body
+
+    local itemScroll = Instance.new("ScrollingFrame")
+    itemScroll.Size = UDim2.new(0.9, 0, 0, 90)
+    itemScroll.Position = UDim2.new(0.05, 0, 0, 296)
+    itemScroll.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    itemScroll.BorderSizePixel = 0
+    itemScroll.ScrollBarThickness = 4
+    itemScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    itemScroll.Parent = body
+
+    local itemListLayout = Instance.new("UIListLayout")
+    itemListLayout.Padding = UDim.new(0, 2)
+    itemListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    itemListLayout.Parent = itemScroll
+
+    local selectedItemsLbl = Instance.new("TextLabel")
+    selectedItemsLbl.Size = UDim2.new(0.9, 0, 0, 36)
+    selectedItemsLbl.Position = UDim2.new(0.05, 0, 0, 388)
+    selectedItemsLbl.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    selectedItemsLbl.BorderSizePixel = 0
+    selectedItemsLbl.Text = "Items: (chưa chọn)"
+    selectedItemsLbl.TextColor3 = Color3.fromRGB(255, 220, 120)
+    selectedItemsLbl.Font = Enum.Font.Gotham
+    selectedItemsLbl.TextSize = 10
+    selectedItemsLbl.TextXAlignment = Enum.TextXAlignment.Left
+    selectedItemsLbl.TextYAlignment = Enum.TextYAlignment.Top
+    selectedItemsLbl.TextWrapped = true
+    selectedItemsLbl.Parent = body
+
+    -- ===== START (v83) =====
     local startBtn = Instance.new("TextButton")
-    startBtn.Size = UDim2.new(0.9, 0, 0, 40)
-    startBtn.Position = UDim2.new(0.05, 0, 0, 264)
+    startBtn.Size = UDim2.new(0.9, 0, 0, 36)
+    startBtn.Position = UDim2.new(0.05, 0, 0, 428)
     startBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     startBtn.BorderSizePixel = 0
-    startBtn.Text = "START AUTO TRADE"
+    startBtn.Text = "AUTO TRADE: OFF"
     startBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     startBtn.Font = Enum.Font.GothamBold
-    startBtn.TextSize = 14
+    startBtn.TextSize = 13
     startBtn.Parent = body
 
-    -- Log
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 150)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 310)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 140)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 468)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -573,8 +853,11 @@ local function buildUI()
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 1000 then cur = cur:sub(-900) end
+        if #cur > 1200 then cur = cur:sub(-1000) end
         logLbl.Text = cur .. "\n" .. s
+    end
+    local function refreshTitle()
+        title.Text = "v83 Gộp (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
@@ -582,7 +865,7 @@ local function buildUI()
     modeBtn.MouseButton1Click:Connect(function()
         if tradeMode == "WithItems" then
             tradeMode = "ReadyOnly"
-            modeBtn.Text = "MODE: CHỈ READY (không thêm item)"
+            modeBtn.Text = "MODE: CHỈ READY + AUTO ACCEPT"
             modeBtn.BackgroundColor3 = Color3.fromRGB(200, 130, 40)
         else
             tradeMode = "WithItems"
@@ -592,42 +875,198 @@ local function buildUI()
         appendLog("Mode: " .. tradeMode)
     end)
 
-    targetBox:GetPropertyChangedSignal("Text"):Connect(function()
-        targetUsername = targetBox.Text
+    applyBtn.MouseButton1Click:Connect(function()
+        local nx = tonumber(oxBox.Text)
+        local ny = tonumber(oyBox.Text)
+        if nx then offsetX = nx end
+        if ny then offsetY = ny end
+        refreshTitle()
+        setStatus(string.format("Đã lưu X=%d Y=%d", offsetX, offsetY),
+            Color3.fromRGB(120, 220, 120))
+        appendLog(string.format("X=%d Y=%d", offsetX, offsetY))
+    end)
+
+    xPlus1.MouseButton1Click:Connect(function()
+        offsetX = offsetX + 1
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+    end)
+    xMinus1.MouseButton1Click:Connect(function()
+        offsetX = offsetX - 1
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+    end)
+    xPlus5.MouseButton1Click:Connect(function()
+        offsetX = offsetX + 5
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+    end)
+    xMinus5.MouseButton1Click:Connect(function()
+        offsetX = offsetX - 5
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+    end)
+    resetBtn.MouseButton1Click:Connect(function()
+        offsetX = 0
+        oxBox.Text = "0"
+        refreshTitle()
+    end)
+
+    testBtn.MouseButton1Click:Connect(function()
+        local btn = getAcceptButton()
+        if not btn then appendLog("Không có popup"); return end
+        local ap = btn.AbsolutePosition
+        local sz = btn.AbsoluteSize
+        local cx = ap.X + sz.X / 2 + offsetX
+        local cy = ap.Y + sz.Y / 2 + offsetY
+        task.spawn(function()
+            setStatus(string.format("Test (%.0f, %.0f)", cx, cy),
+                Color3.fromRGB(200, 200, 120))
+            appendLog(string.format("Test (%.0f, %.0f) X=%d Y=%d",
+                cx, cy, offsetX, offsetY))
+            local ok, r = tryAll(cx, cy)
+            if ok then
+                appendLog("✔ " .. r)
+                setStatus("✔ " .. r, Color3.fromRGB(120, 220, 120))
+            else
+                appendLog("✘ ALL FAIL")
+                setStatus("✘ Fail - tinh chỉnh X", Color3.fromRGB(255, 120, 120))
+            end
+        end)
+    end)
+
+    -- ===== REFRESH PLAYER/ITEM LIST =====
+    local function refreshPlayerList()
+        for _, c in ipairs(playerScroll:GetChildren()) do
+            if c:IsA("TextButton") then c:Destroy() end
+        end
+        local list = fetchPlayerList()
+        if #list == 0 then
+            local empty = Instance.new("TextLabel")
+            empty.Size = UDim2.new(1, 0, 0, 22)
+            empty.BackgroundTransparency = 1
+            empty.Text = "(Mở Frame_Trade để load)"
+            empty.TextColor3 = Color3.fromRGB(180, 180, 180)
+            empty.Font = Enum.Font.Gotham
+            empty.TextSize = 10
+            empty.Parent = playerScroll
+            playerScroll.CanvasSize = UDim2.new(0, 0, 0, 24)
+            return
+        end
+        for i, uname in ipairs(list) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 22)
+            btn.BackgroundColor3 = (selectedUser == uname)
+                and Color3.fromRGB(80, 160, 80)
+                or Color3.fromRGB(60, 60, 60)
+            btn.BorderSizePixel = 0
+            btn.Text = uname
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Font = Enum.Font.Gotham
+            btn.TextSize = 10
+            btn.TextXAlignment = Enum.TextXAlignment.Left
+            btn.LayoutOrder = i
+            btn.Parent = playerScroll
+            btn.MouseButton1Click:Connect(function()
+                selectedUser = uname
+                selectedUserLbl.Text = "User: " .. uname
+                appendLog("Chọn user: " .. uname)
+                refreshPlayerList()
+            end)
+        end
+        playerScroll.CanvasSize = UDim2.new(0, 0, 0, #list * 24)
+    end
+
+    local function updateSelectedItemsLbl()
+        if #selectedItems == 0 then
+            selectedItemsLbl.Text = "Items: (chưa chọn)"
+            return
+        end
+        local parts = {}
+        for _, it in ipairs(selectedItems) do
+            table.insert(parts, string.format("%s x%d", it.name, it.qty))
+        end
+        selectedItemsLbl.Text = "Items: " .. table.concat(parts, ", ")
+    end
+
+    local function refreshItemList()
+        for _, c in ipairs(itemScroll:GetChildren()) do
+            if c:IsA("TextButton") then c:Destroy() end
+        end
+        local list = fetchItemList()
+        if #list == 0 then
+            local empty = Instance.new("TextLabel")
+            empty.Size = UDim2.new(1, 0, 0, 22)
+            empty.BackgroundTransparency = 1
+            empty.Text = "(Mở bảng Trading để load item)"
+            empty.TextColor3 = Color3.fromRGB(180, 180, 180)
+            empty.Font = Enum.Font.Gotham
+            empty.TextSize = 10
+            empty.Parent = itemScroll
+            itemScroll.CanvasSize = UDim2.new(0, 0, 0, 24)
+            return
+        end
+        for i, iname in ipairs(list) do
+            local isSelected = false
+            for _, it in ipairs(selectedItems) do
+                if it.name:lower() == iname:lower() then isSelected = true; break end
+            end
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 22)
+            btn.BackgroundColor3 = isSelected
+                and Color3.fromRGB(80, 160, 80)
+                or Color3.fromRGB(60, 60, 60)
+            btn.BorderSizePixel = 0
+            btn.Text = iname
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Font = Enum.Font.Gotham
+            btn.TextSize = 10
+            btn.TextXAlignment = Enum.TextXAlignment.Left
+            btn.LayoutOrder = i
+            btn.Parent = itemScroll
+            btn.MouseButton1Click:Connect(function()
+                local found = nil
+                for idx, it in ipairs(selectedItems) do
+                    if it.name:lower() == iname:lower() then found = idx; break end
+                end
+                if found then
+                    table.remove(selectedItems, found)
+                    appendLog("Bỏ: " .. iname)
+                else
+                    table.insert(selectedItems, {name = iname, qty = 1})
+                    appendLog("Chọn: " .. iname .. " x1")
+                end
+                updateSelectedItemsLbl()
+                refreshItemList()
+            end)
+        end
+        itemScroll.CanvasSize = UDim2.new(0, 0, 0, #list * 24)
+    end
+
+    task.spawn(function()
+        while sg.Parent do
+            pcall(refreshPlayerList)
+            pcall(refreshItemList)
+            task.wait(CONFIG.RefreshRate)
+        end
     end)
 
     -- ============================================================
-    -- LOOP CHÍNH
+    -- LUỒNG TRADING
     -- ============================================================
     local function doFullFlow()
-        -- B1: Mở Frame_Trade
         local tui = getTradeFrameUI()
         if tui and not tui.Visible then
             pcall(function() tui.Visible = true end)
             task.wait(0.3)
         end
-
-        -- B2: Mời user
-        if targetUsername and targetUsername ~= "" then
-            local sb = getSelectBar()
-            if sb then
-                for _, entry in ipairs(sb:GetChildren()) do
-                    if entry:IsA("Frame") then
-                        local main = entry:FindFirstChild("Main")
-                        if main then
-                            local un = main:FindFirstChild("Username")
-                            if un and un:IsA("TextLabel") and un.Text:lower() == targetUsername:lower() then
-                                local inv = main:FindFirstChild("Invite")
-                                if inv then
-                                    safeClick(inv, "Invite " .. targetUsername)
-                                    appendLog("Đã invite: " .. targetUsername)
-                                    return true
-                                end
-                            end
-                        end
-                    end
-                end
-                appendLog("User không có trong SelectBar: " .. targetUsername)
+        if selectedUser and selectedUser ~= "" then
+            local ok, reason = inviteUserInSelectBar(selectedUser)
+            if ok then
+                appendLog("Đã invite: " .. selectedUser)
+                return true
+            else
+                appendLog("Invite fail: " .. tostring(reason))
             end
         end
         return false
@@ -635,20 +1074,17 @@ local function buildUI()
 
     local function doTradingFlow()
         if tradeMode == "WithItems" then
-            -- Thêm từng item còn trống
-            for i = 1, 5 do
-                local slot = itemSlots[i]
-                if slot.name and slot.name ~= "" and slot.qty and slot.qty > 0 then
-                    local ok, reason = addItemDirect(slot.name, slot.qty)
+            for _, it in ipairs(selectedItems) do
+                if it.name and it.name ~= "" and it.qty and it.qty > 0 then
+                    local ok, reason = addItemDirect(it.name, it.qty)
                     if ok then
-                        appendLog(string.format("✔ %s x%d", slot.name, slot.qty))
+                        appendLog(string.format("✔ %s x%d", it.name, it.qty))
                     else
-                        appendLog(string.format("✘ %s: %s", slot.name, tostring(reason)))
+                        appendLog(string.format("✘ %s: %s", it.name, tostring(reason)))
                     end
                     task.wait(CONFIG.ItemDelay)
                 end
             end
-            -- Đóng Inventory
             local ti = getTradeInventory()
             if ti then
                 local close = ti:FindFirstChild("Close_")
@@ -658,60 +1094,87 @@ local function buildUI()
             end
         end
 
-        -- Bấm Ready
         task.wait(CONFIG.ReadyDelay)
         local ready = getReadyButton()
         if ready then
             safeClick(ready, "Ready")
-            appendLog("✔ Đã bấm Ready, chờ đối phương")
+            appendLog("✔ Đã bấm Ready")
         end
     end
 
+    -- ============================================================
+    -- LOOP CHÍNH (gộp v82 accept + v83 trade)
+    -- ============================================================
     task.spawn(function()
+        local wasPopupOpen = false
         while sg.Parent do
             if autoEnabled then
-                -- Ưu tiên 1: accept popup nếu có
+                -- Ưu tiên 1: POPUP ACCEPT (dùng tryAll của v82)
                 if isPopupOpen() then
-                    setStatus("Có popup, accept...", Color3.fromRGB(200,200,120))
-                    appendLog("Phát hiện popup, accept")
-                    local ok = acceptPopup()
-                    appendLog(ok and "✔ Accept OK" or "✘ Accept fail")
-                    task.wait(0.5)
-                elseif isTradingOpen() then
-                    setStatus("Trading mở, thêm item + Ready", Color3.fromRGB(200,200,120))
-                    appendLog("Bảng Trading mở")
-                    doTradingFlow()
-                    setStatus("Đã Ready, chờ đối phương", Color3.fromRGB(120,220,120))
-                    -- Chờ trade kết thúc
-                    local t0 = os.clock()
-                    while isTradingOpen() and os.clock() - t0 < 60 do
-                        task.wait(0.5)
+                    if not wasPopupOpen then
+                        setStatus("Có popup -> accept", Color3.fromRGB(200,200,120))
+                        appendLog("Phát hiện popup, accept")
+                        local btn = getAcceptButton()
+                        if btn then
+                            local ap = btn.AbsolutePosition
+                            local sz = btn.AbsoluteSize
+                            local cx = ap.X + sz.X / 2 + offsetX
+                            local cy = ap.Y + sz.Y / 2 + offsetY
+                            local ok, r = tryAll(cx, cy)
+                            appendLog(ok and ("✔ Auto accept: " .. r) or "✘ Auto accept fail")
+                            if ok then
+                                setStatus("✔ Accept OK", Color3.fromRGB(120,220,120))
+                            else
+                                setStatus("✘ Accept fail - tinh chỉnh X", Color3.fromRGB(255,120,120))
+                            end
+                        end
                     end
-                    appendLog("Trade xong")
-                    task.wait(1)
+                    wasPopupOpen = true
                 else
-                    -- Không có popup, không có trading -> thử mở + invite
-                    setStatus("Đang mời " .. (targetUsername ~= "" and targetUsername or "..."), Color3.fromRGB(200,200,120))
-                    doFullFlow()
-                    task.wait(CONFIG.LoopDelay)
+                    wasPopupOpen = false
+                    if isTradingOpen() then
+                        setStatus("Trading mở, xử lý...", Color3.fromRGB(200,200,120))
+                        appendLog("Bảng Trading mở (mode=" .. tradeMode .. ")")
+                        doTradingFlow()
+                        setStatus("Đã Ready, chờ đối phương", Color3.fromRGB(120,220,120))
+                        local t0 = os.clock()
+                        while isTradingOpen() and os.clock() - t0 < 60 do
+                            task.wait(0.5)
+                            if isPopupOpen() then
+                                local btn = getAcceptButton()
+                                if btn then
+                                    local ap = btn.AbsolutePosition
+                                    local sz = btn.AbsoluteSize
+                                    tryAll(ap.X + sz.X / 2 + offsetX, ap.Y + sz.Y / 2 + offsetY)
+                                end
+                            end
+                        end
+                        appendLog("Trade xong")
+                        task.wait(1)
+                    else
+                        setStatus("Đang mời " .. (selectedUser or "..."), Color3.fromRGB(200,200,120))
+                        doFullFlow()
+                        task.wait(CONFIG.LoopDelay)
+                    end
                 end
             end
-            task.wait(0.5)
+            task.wait(0.3)
         end
     end)
 
     startBtn.MouseButton1Click:Connect(function()
         autoEnabled = not autoEnabled
         if autoEnabled then
-            startBtn.Text = "STOP AUTO TRADE"
+            startBtn.Text = "AUTO TRADE: ON"
             startBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
             setStatus("AUTO ON", Color3.fromRGB(120,220,120))
-            appendLog("Bắt đầu auto: user=" .. (targetUsername ~= "" and targetUsername or "?"))
+            appendLog(string.format("AUTO ON X=%d Y=%d user=%s mode=%s",
+                offsetX, offsetY, tostring(selectedUser), tradeMode))
         else
-            startBtn.Text = "START AUTO TRADE"
+            startBtn.Text = "AUTO TRADE: OFF"
             startBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
-            setStatus("OFF", Color3.fromRGB(200,200,120))
-            appendLog("Dừng auto")
+            setStatus("AUTO OFF", Color3.fromRGB(200,200,120))
+            appendLog("AUTO OFF")
         end
     end)
 end
@@ -721,4 +1184,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v83 sẵn sàng. Nhập user + 5 slot item, bấm START.")
+log("v83 Gộp sẵn sàng. Accept giữ nguyên v82, chọn user/item bằng click.")
