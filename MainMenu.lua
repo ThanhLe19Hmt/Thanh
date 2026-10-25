@@ -1,26 +1,34 @@
 --[[
-    Auto Trade - Rock Fruit v77 (Grid Test)
+    Auto Trade - Rock Fruit v78 (Height Scan)
     Game ID: 119091355492870
 
-    TRIẾT LÝ:
-      - Nút Accept có kích thước ~54x29px.
-      - Bấm vào tâm có thể lệch nếu executor xử lý sai.
-      - Ta sẽ chia nút thành lưới 3x3 (9 điểm) hoặc 5x5 (25 điểm).
-      - Bấm từng điểm cho đến khi popup đóng.
-      - Lưu điểm đúng.
+    LOGIC:
+      - Vấn đề bạn mô tả: tool bấm CAO QUÁ -> hụt nút Accept.
+      - Nghĩa là toạ độ Y bị lệch xuống. Bạn phải kéo ô đen
+        xuống thấp hơn một chút mới bấm đúng.
+      - Ta sẽ quét tự động: bắt đầu từ trên nút Accept (Y - 20px)
+        rồi tăng dần Y từng 2px cho đến khi popup đóng.
+      - Mỗi bước: chấm đỏ nhảy tới điểm đó, bấm, kiểm tra.
+      - Khi popup đóng -> lưu toạ độ Y chính xác.
+
+    TẠI SAO CHỈ QUÉT CHIỀU CAO:
+      - Bạn nói lệch "cao quá" -> lỗi chỉ ở trục Y.
+      - Trục X (ngang) có vẻ đúng (bạn không phàn nàn).
+      - Do đó chỉ cần quét Y từ -30 đến +30 quanh tâm nút.
 
     CÁCH DÙNG:
       1. Nhờ acc phụ mời trade.
-      2. Khi popup hiện, bấm "TEST GRID" (hoặc bật AUTO GRID).
-      3. Tool sẽ bấm lần lượt từng điểm trong lưới.
-      4. Điểm nào làm popup đóng -> lưu lại.
-      5. Lần sau AUTO sẽ bấm đúng điểm đó.
+      2. Khi popup hiện, bấm "SCAN HEIGHT".
+      3. Tool sẽ thử Y từ tâm-30 đến tâm+30 bước 2px.
+      4. Điểm nào đóng popup -> lưu Y đó.
+      5. Từ giờ AUTO sẽ dùng X tâm + Y đã tìm.
 ]]
 
 local CONFIG = {
     GameID = 119091355492870,
     Debug  = true,
-    GridSize = 3, -- 3x3 hoặc 5x5
+    ScanRange = 30,    -- ±30px quanh tâm
+    ScanStep = 2,      -- bước nhảy 2px
 }
 
 local Players               = game:GetService("Players")
@@ -66,10 +74,11 @@ local function isPopupOpen()
 end
 
 -- ============================================================
--- VISUAL CURSOR (dùng để hiện điểm sắp bấm)
+-- VISUAL
 -- ============================================================
 local visualGui = nil
 local visualDot = nil
+local visualLine = nil
 
 local function ensureVisual()
     if visualGui and visualGui.Parent then return end
@@ -78,10 +87,19 @@ local function ensureVisual()
     visualGui.ResetOnSpawn = false
     visualGui.IgnoreGuiInset = true
     visualGui.Parent = CoreGui
+    
+    visualLine = Instance.new("Frame")
+    visualLine.Size = UDim2.new(0, 60, 0, 1)
+    visualLine.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
+    visualLine.BorderSizePixel = 0
+    visualLine.ZIndex = 999993
+    visualLine.Visible = false
+    visualLine.Parent = visualGui
+    
     visualDot = Instance.new("Frame")
-    visualDot.Size = UDim2.new(0, 12, 0, 12)
+    visualDot.Size = UDim2.new(0, 14, 0, 14)
     visualDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    visualDot.BackgroundTransparency = 0.3
+    visualDot.BackgroundTransparency = 0.2
     visualDot.BorderSizePixel = 2
     visualDot.BorderColor3 = Color3.fromRGB(255, 255, 255)
     visualDot.ZIndex = 999995
@@ -96,16 +114,19 @@ local function showVisual(x, y)
     ensureVisual()
     local tl = Vector2.new(0, 0)
     pcall(function() tl = GuiService.TopLeftInset end)
-    visualDot.Position = UDim2.new(0, x + tl.X - 6, 0, y + tl.Y - 6)
+    visualDot.Position = UDim2.new(0, x + tl.X - 7, 0, y + tl.Y - 7)
+    visualLine.Position = UDim2.new(0, x + tl.X - 30, 0, y + tl.Y)
     visualDot.Visible = true
+    visualLine.Visible = true
 end
 
 local function hideVisual()
     if visualDot then visualDot.Visible = false end
+    if visualLine then visualLine.Visible = false end
 end
 
 -- ============================================================
--- CLICK (wrapper + VIM)
+-- CLICK
 -- ============================================================
 local function tryClickAt(x, y)
     local wrapSg = Instance.new("ScreenGui")
@@ -129,7 +150,7 @@ local function tryClickAt(x, y)
             task.wait(0.1)
             firetouchinterest(wrapper, Vector2.new(x, y), 1)
         end)
-        task.wait(0.25)
+        task.wait(0.2)
         ok = not isPopupOpen()
     end
     if not ok and VirtualInputManager then
@@ -137,7 +158,7 @@ local function tryClickAt(x, y)
         pcall(function()
             VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
         end)
-        task.wait(0.15)
+        task.wait(0.1)
         pcall(function()
             VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
         end)
@@ -145,7 +166,7 @@ local function tryClickAt(x, y)
         pcall(function()
             VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
         end)
-        task.wait(0.25)
+        task.wait(0.2)
         ok = not isPopupOpen()
     end
     pcall(function() wrapSg:Destroy() end)
@@ -153,37 +174,34 @@ local function tryClickAt(x, y)
 end
 
 -- ============================================================
--- GRID SEARCH (tìm điểm bấm đúng)
+-- HEIGHT SCAN (quét chiều cao)
 -- ============================================================
-local function testGrid()
+local function scanHeight()
     local btn = getAcceptButton()
     if not btn then return false, nil end
     local ap = btn.AbsolutePosition
     local sz = btn.AbsoluteSize
-    local N = CONFIG.GridSize
-    local stepX = sz.X / N
-    local stepY = sz.Y / N
+    local centerX = ap.X + sz.X / 2
+    local centerY = ap.Y + sz.Y / 2
     
-    log(string.format("Grid %dx%d - btn size %.1fx%.1f", N, N, sz.X, sz.Y))
+    log(string.format("Nút: X=%.0f Y=%.0f Size=%.0fx%.0f", ap.X, ap.Y, sz.X, sz.Y))
+    log(string.format("Tâm: (%.0f, %.0f) - quét Y từ %.0f đến %.0f",
+        centerX, centerY, centerY - CONFIG.ScanRange, centerY + CONFIG.ScanRange))
     
-    for i = 1, N do
-        for j = 1, N do
-            -- Điểm ở giữa mỗi ô
-            local px = ap.X + (i - 0.5) * stepX
-            local py = ap.Y + (j - 0.5) * stepY
-            
-            showVisual(px, py)
-            task.wait(0.1)
-            
-            log(string.format("  Try (%d,%d): (%.0f, %.0f)", i, j, px, py))
-            local ok = tryClickAt(px, py)
-            if ok then
-                hideVisual()
-                log(string.format("✔ Found at (%d,%d) = (%.1f, %.1f)", i, j, px, py))
-                return true, {x = px, y = py, i = i, j = j}
-            end
-            task.wait(0.15)
+    -- Quét từ trên xuống (Y - range) đến dưới (Y + range)
+    for offset = -CONFIG.ScanRange, CONFIG.ScanRange, CONFIG.ScanStep do
+        local testY = centerY + offset
+        showVisual(centerX, testY)
+        task.wait(0.15)
+        
+        log(string.format("  Thử Y offset %d -> (%.0f, %.0f)", offset, centerX, testY))
+        local ok = tryClickAt(centerX, testY)
+        if ok then
+            hideVisual()
+            log(string.format("✔ Tìm được Y offset %d -> Y=%.0f", offset, testY))
+            return true, {x = centerX, y = testY, offsetY = offset}
         end
+        task.wait(0.1)
     end
     hideVisual()
     return false, nil
@@ -209,7 +227,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 340, 0, 320)
+    frame.Size = UDim2.new(0, 360, 0, 400)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -227,7 +245,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Accept Tester v77 (Grid)"
+    title.Text = "Accept Tester v78 (Scan Height)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -281,63 +299,76 @@ local function buildUI()
     statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Nhờ mời trade, popup hiện -> bấm TEST GRID"
+    statusLbl.Text = "Nút Accept cao quá -> bấm hụt. Quét Y."
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
     statusLbl.TextWrapped = true
     statusLbl.Parent = body
 
-    local gridBtn = Instance.new("TextButton")
-    gridBtn.Size = UDim2.new(0.9, 0, 0, 36)
-    gridBtn.Position = UDim2.new(0.05, 0, 0, 36)
-    gridBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
-    gridBtn.BorderSizePixel = 0
-    gridBtn.Text = "1) TEST GRID (3x3)"
-    gridBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    gridBtn.Font = Enum.Font.GothamBold
-    gridBtn.TextSize = 13
-    gridBtn.Parent = body
+    local infoLbl = Instance.new("TextLabel")
+    infoLbl.Size = UDim2.new(0.9, 0, 0, 30)
+    infoLbl.Position = UDim2.new(0.05, 0, 0, 34)
+    infoLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    infoLbl.BorderSizePixel = 0
+    infoLbl.Text = "Chưa quét."
+    infoLbl.TextColor3 = Color3.fromRGB(180, 220, 255)
+    infoLbl.Font = Enum.Font.Code
+    infoLbl.TextSize = 11
+    infoLbl.Parent = body
 
-    local grid5Btn = Instance.new("TextButton")
-    grid5Btn.Size = UDim2.new(0.9, 0, 0, 30)
-    grid5Btn.Position = UDim2.new(0.05, 0, 0, 76)
-    grid5Btn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
-    grid5Btn.BorderSizePixel = 0
-    grid5Btn.Text = "1b) TEST GRID (5x5 - chi tiết hơn)"
-    grid5Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    grid5Btn.Font = Enum.Font.GothamBold
-    grid5Btn.TextSize = 11
-    grid5Btn.Parent = body
+    local scanBtn = Instance.new("TextButton")
+    scanBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    scanBtn.Position = UDim2.new(0.05, 0, 0, 68)
+    scanBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+    scanBtn.BorderSizePixel = 0
+    scanBtn.Text = "1) SCAN HEIGHT (±30px, bước 2px)"
+    scanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    scanBtn.Font = Enum.Font.GothamBold
+    scanBtn.TextSize = 13
+    scanBtn.Parent = body
+
+    local scanWideBtn = Instance.new("TextButton")
+    scanWideBtn.Size = UDim2.new(0.9, 0, 0, 32)
+    scanWideBtn.Position = UDim2.new(0.05, 0, 0, 112)
+    scanWideBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    scanWideBtn.BorderSizePixel = 0
+    scanWideBtn.Text = "1b) SCAN WIDE (±60px, bước 3px)"
+    scanWideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    scanWideBtn.Font = Enum.Font.GothamBold
+    scanWideBtn.TextSize = 11
+    scanWideBtn.Parent = body
 
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(0.9, 0, 0, 36)
-    autoBtn.Position = UDim2.new(0.05, 0, 0, 110)
+    autoBtn.Position = UDim2.new(0.05, 0, 0, 150)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
-    autoBtn.Text = "2) AUTO ACCEPT (cần tìm điểm trước): OFF"
+    autoBtn.Text = "2) AUTO ACCEPT (cần tìm Y trước): OFF"
     autoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     autoBtn.Font = Enum.Font.GothamBold
     autoBtn.TextSize = 11
     autoBtn.Parent = body
 
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.9, 0, 0, 100)
-    helpLbl.Position = UDim2.new(0.05, 0, 0, 150)
+    helpLbl.Size = UDim2.new(0.9, 0, 0, 120)
+    helpLbl.Position = UDim2.new(0.05, 0, 0, 196)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
 QUY TRÌNH:
 1. Nhờ acc phụ mời trade -> popup hiện.
-2. Bấm "TEST GRID (3x3)".
-3. Tool sẽ bấm từng điểm trong lưới 3x3 (9 điểm),
-   chấm đỏ nhảy tới từng điểm bạn sẽ thấy.
-4. Khi popup đóng -> điểm đúng đã được tìm.
-5. Nếu 3x3 không tìm được, thử "5x5".
-6. Bấm "AUTO ACCEPT: ON" - tool dùng điểm đã tìm.
+2. Bấm "SCAN HEIGHT".
+3. Tool sẽ thử Y từ (tâm - 30) đến (tâm + 30) bước 2px:
+   - Chấm đỏ nhảy theo chiều dọc, có đường kẻ vàng
+     để bạn thấy chiều cao hiện tại.
+   - Bấm từng điểm.
+4. Khi popup đóng -> Y đúng đã được tìm.
+5. Nếu SCAN HEIGHT fail, thử SCAN WIDE (±60px).
+6. Bấm AUTO ON.
 
-LƯU Ý: nếu 3x3 fail, mở 5x5 sẽ thử 25 điểm.
-Có thể mất 5-10s.
+Chấm đỏ đi từ TRÊN xuống DƯỚI. Bạn sẽ thấy nó dừng
+ở điểm đúng.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -347,8 +378,8 @@ Có thể mất 5-10s.
     helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 34)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 254)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 50)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 322)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -356,6 +387,7 @@ Có thể mất 5-10s.
     logLbl.Font = Enum.Font.Gotham
     logLbl.TextSize = 10
     logLbl.TextWrapped = true
+    logLbl.TextYAlignment = Enum.TextYAlignment.Top
     logLbl.Parent = body
 
     local function setStatus(s, c)
@@ -364,55 +396,61 @@ Có thể mất 5-10s.
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 340 then cur = cur:sub(-260) end
+        if #cur > 380 then cur = cur:sub(-300) end
         logLbl.Text = cur .. "\n" .. s
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
 
-    gridBtn.MouseButton1Click:Connect(function()
-        CONFIG.GridSize = 3
+    scanBtn.MouseButton1Click:Connect(function()
+        CONFIG.ScanRange = 30
+        CONFIG.ScanStep = 2
         task.spawn(function()
-            setStatus("Đang test grid 3x3...", Color3.fromRGB(200, 200, 120))
-            appendLog("Grid 3x3 start")
-            local ok, result = testGrid()
+            setStatus("Đang quét Y ±30...", Color3.fromRGB(200, 200, 120))
+            appendLog("Scan Y ±30px step 2px")
+            local ok, result = scanHeight()
             if ok then
                 foundX = result.x
                 foundY = result.y
-                appendLog(string.format("✔ Found: (%.0f,%.0f) ô (%d,%d)",
-                    result.x, result.y, result.i, result.j))
-                setStatus(string.format("✔ Tìm được (%.0f,%.0f) - bật AUTO", result.x, result.y),
+                infoLbl.Text = string.format("X=%.0f Y=%.0f (offset %d)",
+                    result.x, result.y, result.offsetY)
+                appendLog(string.format("✔ Y offset %d -> (%.0f,%.0f)",
+                    result.offsetY, result.x, result.y))
+                setStatus(string.format("✔ Tìm được Y offset %d", result.offsetY),
                     Color3.fromRGB(120, 220, 120))
             else
-                appendLog("✘ 3x3 fail - thử 5x5")
-                setStatus("✘ 3x3 fail - thử 5x5", Color3.fromRGB(255, 120, 120))
+                appendLog("✘ Scan ±30 fail - thử WIDE")
+                setStatus("✘ ±30 fail - thử SCAN WIDE", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
 
-    grid5Btn.MouseButton1Click:Connect(function()
-        CONFIG.GridSize = 5
+    scanWideBtn.MouseButton1Click:Connect(function()
+        CONFIG.ScanRange = 60
+        CONFIG.ScanStep = 3
         task.spawn(function()
-            setStatus("Đang test grid 5x5...", Color3.fromRGB(200, 200, 120))
-            appendLog("Grid 5x5 start")
-            local ok, result = testGrid()
+            setStatus("Đang quét Y ±60...", Color3.fromRGB(200, 200, 120))
+            appendLog("Scan Y ±60 step 3px")
+            local ok, result = scanHeight()
             if ok then
                 foundX = result.x
                 foundY = result.y
-                appendLog(string.format("✔ Found: (%.0f,%.0f) ô (%d,%d)",
-                    result.x, result.y, result.i, result.j))
-                setStatus(string.format("✔ Tìm được (%.0f,%.0f) - bật AUTO", result.x, result.y),
+                infoLbl.Text = string.format("X=%.0f Y=%.0f (offset %d)",
+                    result.x, result.y, result.offsetY)
+                appendLog(string.format("✔ Y offset %d -> (%.0f,%.0f)",
+                    result.offsetY, result.x, result.y))
+                setStatus(string.format("✔ Tìm được Y offset %d", result.offsetY),
                     Color3.fromRGB(120, 220, 120))
             else
-                appendLog("✘ 5x5 fail - executor sandbox?")
-                setStatus("✘ 5x5 fail - thử executor khác", Color3.fromRGB(255, 120, 120))
+                appendLog("✘ ±60 fail - executor sandbox?")
+                setStatus("✘ ±60 fail", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
 
     autoBtn.MouseButton1Click:Connect(function()
-        if not foundX then
-            appendLog("Chưa tìm điểm. Bấm TEST GRID trước.")
+        if not foundY then
+            appendLog("Chưa tìm được Y. Bấm SCAN HEIGHT trước.")
             return
         end
         autoEnabled = not autoEnabled
@@ -432,7 +470,7 @@ Có thể mất 5-10s.
     task.spawn(function()
         local wasOpen = false
         while sg.Parent do
-            if autoEnabled and foundX then
+            if autoEnabled and foundY then
                 local nowOpen = isPopupOpen()
                 if nowOpen and not wasOpen then
                     appendLog("Auto: popup hiện")
@@ -454,4 +492,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v77 sẵn sàng. TEST GRID để tìm điểm bấm đúng.")
+log("v78 sẵn sàng. SCAN HEIGHT để quét chiều cao Y.")
