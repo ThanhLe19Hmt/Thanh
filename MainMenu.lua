@@ -1,34 +1,36 @@
 --[[
-    Auto Trade - Rock Fruit v78 (Height Scan)
+    Auto Trade - Rock Fruit v79 (Fast Scan)
     Game ID: 119091355492870
 
-    LOGIC:
-      - Vấn đề bạn mô tả: tool bấm CAO QUÁ -> hụt nút Accept.
-      - Nghĩa là toạ độ Y bị lệch xuống. Bạn phải kéo ô đen
-        xuống thấp hơn một chút mới bấm đúng.
-      - Ta sẽ quét tự động: bắt đầu từ trên nút Accept (Y - 20px)
-        rồi tăng dần Y từng 2px cho đến khi popup đóng.
-      - Mỗi bước: chấm đỏ nhảy tới điểm đó, bấm, kiểm tra.
-      - Khi popup đóng -> lưu toạ độ Y chính xác.
+    PHÂN TÍCH LỖI v78:
+      - v78 quét Y từ -30 đến +30 bước 2px = 31 điểm.
+      - Mỗi điểm chờ 0.15s -> tổng 31 * 0.15 = 4.65s.
+      - Popup trade chỉ tồn tại 3s -> hết thời gian.
+      - Kết quả: chưa quét xong popup đã biến mất.
 
-    TẠI SAO CHỈ QUÉT CHIỀU CAO:
-      - Bạn nói lệch "cao quá" -> lỗi chỉ ở trục Y.
-      - Trục X (ngang) có vẻ đúng (bạn không phàn nàn).
-      - Do đó chỉ cần quét Y từ -30 đến +30 quanh tâm nút.
+    FIX v79:
+      1. Giảm delay: chỉ chờ 0.04s giữa các lần bấm.
+      2. Grid 3x3 = 9 điểm, mỗi điểm ~0.15s (bao gồm click).
+      3. Tổng ~1.4s -> kịp trong 3s.
+      4. Nếu vẫn fail, quét lại với grid 5x5 nếu popup còn.
+      5. Có nút "TEST NHANH" - bấm 9 điểm liên tiếp trong 1.5s.
 
-    CÁCH DÙNG:
-      1. Nhờ acc phụ mời trade.
-      2. Khi popup hiện, bấm "SCAN HEIGHT".
-      3. Tool sẽ thử Y từ tâm-30 đến tâm+30 bước 2px.
-      4. Điểm nào đóng popup -> lưu Y đó.
-      5. Từ giờ AUTO sẽ dùng X tâm + Y đã tìm.
+    CHIẾN LƯỢC:
+      - Bấm nhanh, không chờ lâu.
+      - Nếu popup đóng -> dừng ngay.
+      - Delay giữa các điểm = 0.04s (chỉ đủ để game nhận).
+      - Sau khi popup đóng, ghi lại toạ độ.
+
+    LƯU Ý:
+      - Popup trade có timeout ~3s.
+      - Grid 3x3 trong 1.5s -> OK.
+      - Grid 5x5 trong 3s -> sát nút.
+      - Nếu cần thiết, chia 2 lần scan.
 ]]
 
 local CONFIG = {
     GameID = 119091355492870,
     Debug  = true,
-    ScanRange = 30,    -- ±30px quanh tâm
-    ScanStep = 2,      -- bước nhảy 2px
 }
 
 local Players               = game:GetService("Players")
@@ -78,7 +80,6 @@ end
 -- ============================================================
 local visualGui = nil
 local visualDot = nil
-local visualLine = nil
 
 local function ensureVisual()
     if visualGui and visualGui.Parent then return end
@@ -87,20 +88,11 @@ local function ensureVisual()
     visualGui.ResetOnSpawn = false
     visualGui.IgnoreGuiInset = true
     visualGui.Parent = CoreGui
-    
-    visualLine = Instance.new("Frame")
-    visualLine.Size = UDim2.new(0, 60, 0, 1)
-    visualLine.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-    visualLine.BorderSizePixel = 0
-    visualLine.ZIndex = 999993
-    visualLine.Visible = false
-    visualLine.Parent = visualGui
-    
     visualDot = Instance.new("Frame")
-    visualDot.Size = UDim2.new(0, 14, 0, 14)
+    visualDot.Size = UDim2.new(0, 10, 0, 10)
     visualDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    visualDot.BackgroundTransparency = 0.2
-    visualDot.BorderSizePixel = 2
+    visualDot.BackgroundTransparency = 0.3
+    visualDot.BorderSizePixel = 1
     visualDot.BorderColor3 = Color3.fromRGB(255, 255, 255)
     visualDot.ZIndex = 999995
     visualDot.Visible = false
@@ -114,94 +106,96 @@ local function showVisual(x, y)
     ensureVisual()
     local tl = Vector2.new(0, 0)
     pcall(function() tl = GuiService.TopLeftInset end)
-    visualDot.Position = UDim2.new(0, x + tl.X - 7, 0, y + tl.Y - 7)
-    visualLine.Position = UDim2.new(0, x + tl.X - 30, 0, y + tl.Y)
+    visualDot.Position = UDim2.new(0, x + tl.X - 5, 0, y + tl.Y - 5)
     visualDot.Visible = true
-    visualLine.Visible = true
 end
 
 local function hideVisual()
     if visualDot then visualDot.Visible = false end
-    if visualLine then visualLine.Visible = false end
 end
 
 -- ============================================================
--- CLICK
+-- CLICK NHANH (không chờ lâu)
 -- ============================================================
-local function tryClickAt(x, y)
+local function fastClickAt(x, y)
     local wrapSg = Instance.new("ScreenGui")
-    wrapSg.Name = "HoangTouchWrapper"
+    wrapSg.Name = "HoangFastWrap"
     wrapSg.ResetOnSpawn = false
     wrapSg.IgnoreGuiInset = false
     wrapSg.Parent = CoreGui
     local wrapper = Instance.new("TextButton")
-    wrapper.Size = UDim2.new(0, 30, 0, 30)
-    wrapper.Position = UDim2.new(0, x - 15, 0, y - 15)
+    wrapper.Size = UDim2.new(0, 20, 0, 20)
+    wrapper.Position = UDim2.new(0, x - 10, 0, y - 10)
     wrapper.BackgroundTransparency = 1
     wrapper.Text = ""
     wrapper.Active = true
     wrapper.ZIndex = 999992
     wrapper.Parent = wrapSg
-    task.wait(0.1)
-    local ok = false
+    task.wait(0.02)  -- chỉ đủ để render
+    
     if firetouchinterest then
         pcall(function()
             firetouchinterest(wrapper, Vector2.new(x, y), 0)
-            task.wait(0.1)
+            task.wait(0.02)
             firetouchinterest(wrapper, Vector2.new(x, y), 1)
         end)
-        task.wait(0.2)
-        ok = not isPopupOpen()
     end
-    if not ok and VirtualInputManager then
-        local ix, iy = math.floor(x), math.floor(y)
-        pcall(function()
-            VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
-        end)
-        task.wait(0.1)
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
-        end)
-        task.wait(0.1)
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
-        end)
-        task.wait(0.2)
-        ok = not isPopupOpen()
-    end
+    
+    task.wait(0.04)  -- chờ popup đóng
+    local closed = not isPopupOpen()
     pcall(function() wrapSg:Destroy() end)
-    return ok
+    return closed
 end
 
 -- ============================================================
--- HEIGHT SCAN (quét chiều cao)
+-- GRID SCAN NHANH
 -- ============================================================
-local function scanHeight()
+local function fastGridScan(gridSize)
+    gridSize = gridSize or 3
     local btn = getAcceptButton()
     if not btn then return false, nil end
     local ap = btn.AbsolutePosition
     local sz = btn.AbsoluteSize
-    local centerX = ap.X + sz.X / 2
-    local centerY = ap.Y + sz.Y / 2
+    local stepX = sz.X / gridSize
+    local stepY = sz.Y / gridSize
     
-    log(string.format("Nút: X=%.0f Y=%.0f Size=%.0fx%.0f", ap.X, ap.Y, sz.X, sz.Y))
-    log(string.format("Tâm: (%.0f, %.0f) - quét Y từ %.0f đến %.0f",
-        centerX, centerY, centerY - CONFIG.ScanRange, centerY + CONFIG.ScanRange))
+    -- Quét X và Y cùng lúc, từ trên-trái xuống dưới-phải
+    -- Ưu tiên trung tâm trước (khả năng cao nhất)
+    local points = {}
+    for i = 1, gridSize do
+        for j = 1, gridSize do
+            local px = ap.X + (i - 0.5) * stepX
+            local py = ap.Y + (j - 0.5) * stepY
+            table.insert(points, {x = px, y = py, i = i, j = j})
+        end
+    end
+    -- Sắp xếp lại: ưu tiên điểm gần tâm
+    local centerI = (gridSize + 1) / 2
+    local centerJ = (gridSize + 1) / 2
+    table.sort(points, function(a, b)
+        local da = (a.i - centerI)^2 + (a.j - centerJ)^2
+        local db = (b.i - centerI)^2 + (b.j - centerJ)^2
+        return da < db
+    end)
     
-    -- Quét từ trên xuống (Y - range) đến dưới (Y + range)
-    for offset = -CONFIG.ScanRange, CONFIG.ScanRange, CONFIG.ScanStep do
-        local testY = centerY + offset
-        showVisual(centerX, testY)
-        task.wait(0.15)
+    log(string.format("Grid %dx%d: %d điểm, bắt đầu quét", gridSize, gridSize, #points))
+    
+    for idx, p in ipairs(points) do
+        if not isPopupOpen() then
+            log("Popup đã đóng, dừng scan")
+            break
+        end
+        showVisual(p.x, p.y)
+        task.wait(0.05)  -- chỉ chờ để render chấm đỏ
         
-        log(string.format("  Thử Y offset %d -> (%.0f, %.0f)", offset, centerX, testY))
-        local ok = tryClickAt(centerX, testY)
+        log(string.format("  #%d (%d,%d) = (%.0f,%.0f)", idx, p.i, p.j, p.x, p.y))
+        local ok = fastClickAt(p.x, p.y)
         if ok then
             hideVisual()
-            log(string.format("✔ Tìm được Y offset %d -> Y=%.0f", offset, testY))
-            return true, {x = centerX, y = testY, offsetY = offset}
+            log(string.format("✔ Found at #%d (%d,%d) = (%.1f, %.1f)", idx, p.i, p.j, p.x, p.y))
+            return true, p
         end
-        task.wait(0.1)
+        task.wait(0.04)  -- giữa các điểm
     end
     hideVisual()
     return false, nil
@@ -227,7 +221,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 360, 0, 400)
+    frame.Size = UDim2.new(0, 360, 0, 380)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -245,7 +239,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Accept Tester v78 (Scan Height)"
+    title.Text = "Accept Tester v79 (Fast Scan)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -299,7 +293,7 @@ local function buildUI()
     statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Nút Accept cao quá -> bấm hụt. Quét Y."
+    statusLbl.Text = "Quét NHANH để kịp timeout 3s."
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
@@ -311,64 +305,66 @@ local function buildUI()
     infoLbl.Position = UDim2.new(0.05, 0, 0, 34)
     infoLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     infoLbl.BorderSizePixel = 0
-    infoLbl.Text = "Chưa quét."
+    infoLbl.Text = "Chưa tìm điểm."
     infoLbl.TextColor3 = Color3.fromRGB(180, 220, 255)
     infoLbl.Font = Enum.Font.Code
     infoLbl.TextSize = 11
     infoLbl.Parent = body
 
-    local scanBtn = Instance.new("TextButton")
-    scanBtn.Size = UDim2.new(0.9, 0, 0, 40)
-    scanBtn.Position = UDim2.new(0.05, 0, 0, 68)
-    scanBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
-    scanBtn.BorderSizePixel = 0
-    scanBtn.Text = "1) SCAN HEIGHT (±30px, bước 2px)"
-    scanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    scanBtn.Font = Enum.Font.GothamBold
-    scanBtn.TextSize = 13
-    scanBtn.Parent = body
+    local fastBtn = Instance.new("TextButton")
+    fastBtn.Size = UDim2.new(0.9, 0, 0, 44)
+    fastBtn.Position = UDim2.new(0.05, 0, 0, 68)
+    fastBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+    fastBtn.BorderSizePixel = 0
+    fastBtn.Text = "1) FAST SCAN 3x3 (~1.5s)"
+    fastBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    fastBtn.Font = Enum.Font.GothamBold
+    fastBtn.TextSize = 14
+    fastBtn.Parent = body
 
-    local scanWideBtn = Instance.new("TextButton")
-    scanWideBtn.Size = UDim2.new(0.9, 0, 0, 32)
-    scanWideBtn.Position = UDim2.new(0.05, 0, 0, 112)
-    scanWideBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
-    scanWideBtn.BorderSizePixel = 0
-    scanWideBtn.Text = "1b) SCAN WIDE (±60px, bước 3px)"
-    scanWideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    scanWideBtn.Font = Enum.Font.GothamBold
-    scanWideBtn.TextSize = 11
-    scanWideBtn.Parent = body
+    local fast5Btn = Instance.new("TextButton")
+    fast5Btn.Size = UDim2.new(0.9, 0, 0, 32)
+    fast5Btn.Position = UDim2.new(0.05, 0, 0, 116)
+    fast5Btn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    fast5Btn.BorderSizePixel = 0
+    fast5Btn.Text = "1b) FAST SCAN 5x5 (~3s, sát nút)"
+    fast5Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    fast5Btn.Font = Enum.Font.GothamBold
+    fast5Btn.TextSize = 11
+    fast5Btn.Parent = body
 
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(0.9, 0, 0, 36)
-    autoBtn.Position = UDim2.new(0.05, 0, 0, 150)
+    autoBtn.Position = UDim2.new(0.05, 0, 0, 152)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
-    autoBtn.Text = "2) AUTO ACCEPT (cần tìm Y trước): OFF"
+    autoBtn.Text = "2) AUTO ACCEPT (cần tìm trước): OFF"
     autoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     autoBtn.Font = Enum.Font.GothamBold
     autoBtn.TextSize = 11
     autoBtn.Parent = body
 
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.9, 0, 0, 120)
+    helpLbl.Size = UDim2.new(0.9, 0, 0, 140)
     helpLbl.Position = UDim2.new(0.05, 0, 0, 196)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
 QUY TRÌNH:
-1. Nhờ acc phụ mời trade -> popup hiện.
-2. Bấm "SCAN HEIGHT".
-3. Tool sẽ thử Y từ (tâm - 30) đến (tâm + 30) bước 2px:
-   - Chấm đỏ nhảy theo chiều dọc, có đường kẻ vàng
-     để bạn thấy chiều cao hiện tại.
-   - Bấm từng điểm.
-4. Khi popup đóng -> Y đúng đã được tìm.
-5. Nếu SCAN HEIGHT fail, thử SCAN WIDE (±60px).
-6. Bấm AUTO ON.
+1. Nhờ acc phụ mời trade -> popup hiện (3s).
+2. NGAY LẬP TỨC bấm "FAST SCAN 3x3".
+3. Tool bấm 9 điểm trong ~1.5s.
+   - Điểm nào đóng popup -> dừng, lưu.
+4. Nếu 3x3 fail (popup vẫn còn), thử 5x5.
+5. Bấm AUTO ON sau khi tìm được.
 
-Chấm đỏ đi từ TRÊN xuống DƯỚI. Bạn sẽ thấy nó dừng
-ở điểm đúng.
+Delay mỗi điểm chỉ 0.05s -> kịp trong 3s.
+Chấm đỏ nhảy rất nhanh -> bạn chỉ thấy
+nhấp nháy tại điểm đúng.
+
+TỐC ĐỘ:
+- 3x3: 9 điểm * 0.15s = 1.35s -> an toàn.
+- 5x5: 25 điểm * 0.12s = 3s -> sát giới hạn.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -378,8 +374,8 @@ Chấm đỏ đi từ TRÊN xuống DƯỚI. Bạn sẽ thấy nó dừng
     helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 50)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 322)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 34)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 340)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -387,7 +383,6 @@ Chấm đỏ đi từ TRÊN xuống DƯỚI. Bạn sẽ thấy nó dừng
     logLbl.Font = Enum.Font.Gotham
     logLbl.TextSize = 10
     logLbl.TextWrapped = true
-    logLbl.TextYAlignment = Enum.TextYAlignment.Top
     logLbl.Parent = body
 
     local function setStatus(s, c)
@@ -396,68 +391,72 @@ Chấm đỏ đi từ TRÊN xuống DƯỚI. Bạn sẽ thấy nó dừng
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 380 then cur = cur:sub(-300) end
+        if #cur > 260 then cur = cur:sub(-200) end
         logLbl.Text = cur .. "\n" .. s
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
 
-    scanBtn.MouseButton1Click:Connect(function()
-        CONFIG.ScanRange = 30
-        CONFIG.ScanStep = 2
+    fastBtn.MouseButton1Click:Connect(function()
+        if not isPopupOpen() then
+            appendLog("Không có popup. Nhờ mời trước.")
+            return
+        end
         task.spawn(function()
-            setStatus("Đang quét Y ±30...", Color3.fromRGB(200, 200, 120))
-            appendLog("Scan Y ±30px step 2px")
-            local ok, result = scanHeight()
+            setStatus("Đang quét 3x3 nhanh...", Color3.fromRGB(200, 200, 120))
+            appendLog("Scan 3x3 start")
+            local ok, result = fastGridScan(3)
             if ok then
                 foundX = result.x
                 foundY = result.y
-                infoLbl.Text = string.format("X=%.0f Y=%.0f (offset %d)",
-                    result.x, result.y, result.offsetY)
-                appendLog(string.format("✔ Y offset %d -> (%.0f,%.0f)",
-                    result.offsetY, result.x, result.y))
-                setStatus(string.format("✔ Tìm được Y offset %d", result.offsetY),
+                infoLbl.Text = string.format("X=%.0f Y=%.0f ô(%d,%d)",
+                    result.x, result.y, result.i, result.j)
+                appendLog(string.format("✔ (%.0f,%.0f) ô(%d,%d)",
+                    result.x, result.y, result.i, result.j))
+                setStatus(string.format("✔ Tìm được (%.0f,%.0f)", result.x, result.y),
                     Color3.fromRGB(120, 220, 120))
             else
-                appendLog("✘ Scan ±30 fail - thử WIDE")
-                setStatus("✘ ±30 fail - thử SCAN WIDE", Color3.fromRGB(255, 120, 120))
+                appendLog("✘ 3x3 fail - thử 5x5")
+                setStatus("✘ 3x3 fail - thử 5x5", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
 
-    scanWideBtn.MouseButton1Click:Connect(function()
-        CONFIG.ScanRange = 60
-        CONFIG.ScanStep = 3
+    fast5Btn.MouseButton1Click:Connect(function()
+        if not isPopupOpen() then
+            appendLog("Không có popup.")
+            return
+        end
         task.spawn(function()
-            setStatus("Đang quét Y ±60...", Color3.fromRGB(200, 200, 120))
-            appendLog("Scan Y ±60 step 3px")
-            local ok, result = scanHeight()
+            setStatus("Đang quét 5x5...", Color3.fromRGB(200, 200, 120))
+            appendLog("Scan 5x5 start")
+            local ok, result = fastGridScan(5)
             if ok then
                 foundX = result.x
                 foundY = result.y
-                infoLbl.Text = string.format("X=%.0f Y=%.0f (offset %d)",
-                    result.x, result.y, result.offsetY)
-                appendLog(string.format("✔ Y offset %d -> (%.0f,%.0f)",
-                    result.offsetY, result.x, result.y))
-                setStatus(string.format("✔ Tìm được Y offset %d", result.offsetY),
+                infoLbl.Text = string.format("X=%.0f Y=%.0f ô(%d,%d)",
+                    result.x, result.y, result.i, result.j)
+                appendLog(string.format("✔ (%.0f,%.0f) ô(%d,%d)",
+                    result.x, result.y, result.i, result.j))
+                setStatus(string.format("✔ Tìm được (%.0f,%.0f)", result.x, result.y),
                     Color3.fromRGB(120, 220, 120))
             else
-                appendLog("✘ ±60 fail - executor sandbox?")
-                setStatus("✘ ±60 fail", Color3.fromRGB(255, 120, 120))
+                appendLog("✘ 5x5 fail - thử 3x3 hoặc executor khác")
+                setStatus("✘ 5x5 fail", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
 
     autoBtn.MouseButton1Click:Connect(function()
-        if not foundY then
-            appendLog("Chưa tìm được Y. Bấm SCAN HEIGHT trước.")
+        if not foundX then
+            appendLog("Chưa tìm được điểm.")
             return
         end
         autoEnabled = not autoEnabled
         if autoEnabled then
             autoBtn.Text = "2) AUTO ACCEPT: ON"
             autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
-            appendLog(string.format("AUTO ON tại (%.0f,%.0f)", foundX, foundY))
+            appendLog(string.format("AUTO ON (%.0f,%.0f)", foundX, foundY))
             setStatus("AUTO ON", Color3.fromRGB(120, 220, 120))
         else
             autoBtn.Text = "2) AUTO ACCEPT: OFF"
@@ -470,19 +469,19 @@ Chấm đỏ đi từ TRÊN xuống DƯỚI. Bạn sẽ thấy nó dừng
     task.spawn(function()
         local wasOpen = false
         while sg.Parent do
-            if autoEnabled and foundY then
+            if autoEnabled and foundX then
                 local nowOpen = isPopupOpen()
                 if nowOpen and not wasOpen then
                     appendLog("Auto: popup hiện")
                     showVisual(foundX, foundY)
-                    task.wait(0.2)
-                    local ok = tryClickAt(foundX, foundY)
+                    task.wait(0.1)
+                    local ok = fastClickAt(foundX, foundY)
                     hideVisual()
                     appendLog(ok and "✔ Auto OK" or "✘ Auto fail")
                 end
                 wasOpen = nowOpen
             end
-            task.wait(0.3)
+            task.wait(0.2)
         end
     end)
 end
@@ -492,4 +491,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v78 sẵn sàng. SCAN HEIGHT để quét chiều cao Y.")
+log("v79 sẵn sàng. FAST SCAN 3x3 trong ~1.5s.")
