@@ -1,37 +1,46 @@
 --[[
-    Auto Trade - Rock Fruit v81 (Final Lock + Wrapper Fix)
+    Auto Trade - Rock Fruit v82 (Mobile Visual Fix)
     Game ID: 119091355492870
 
     TÌNH HÌNH:
-      - Chấm đỏ đã vào đúng nút Accept nhờ scan Y.
-      - PC: offsetY = +50. Mobile: offsetY = +60.
-      - NHƯNG bấm không ăn (popup không đóng).
+      - PC: Đã chạy mượt (bấm đúng).
+      - Mobile: Chấm đỏ hiển thị đúng vị trí, nhưng khi bấm
+        thì lại lệch sang TRÁI của chấm đỏ -> bấm hụt.
 
-    TẠI SAO:
-      - Wrapper TextButton tạo ra nhưng firetouchinterest không
-        kích hoạt được logic của nút Accept thật (vì nút Accept
-        có thể yêu cầu touch trực tiếp từ game, không phải wrapper).
+    PHÂN TÍCH:
+      - Chấm đỏ visual dùng `IgnoreGuiInset = true` (toạ độ screen).
+      - Wrapper/touch dùng `IgnoreGuiInset = false` (toạ độ viewport).
+      - Trên mobile, inset X (trái) khác 0 (do status bar, notch,
+        hoặc nav bar) -> wrapper bị lùi về bên trái so với visual.
+      - Đó là lý do bạn thấy điểm bấm lệch sang trái.
 
-    GIẢI PHÁP v81:
-      1. Lưu Y offset đã tìm được (PC: 50, Mobile: 60).
-      2. Thay vì wrapper, dùng 3 cách bấm trực tiếp:
-         a. firetouchinterest(AcceptButton, pos) - bấm vào nút thật.
-         b. VirtualInputManager tại (X, Y).
-         c. Gọi hàm callback của nút Accept qua getconnections.
-      3. Có nút "TEST" để thử cả 3 cách.
-      4. Khi tìm được cách ăn -> lưu để auto dùng.
+    CÁCH FIX:
+      1. Thêm ô "Offset X" cho Mobile.
+      2. Khi bạn thấy bấm lệch sang trái -> nhập Offset X dương.
+      3. Khi bạn thấy bấm lệch sang phải -> nhập Offset X âm.
+      4. Cộng Offset X vào X của wrapper + VIM.
+      5. Visual cũng cộng Offset X để khớp (bạn thấy chấm đỏ
+         di chuyển theo).
+      6. Tự động lưu Offset X.
 
-    BẠN CẦN:
-      - Nhập Y offset đúng (50 hoặc 60).
-      - Bấm TEST để tool thử 3 cách.
-      - Gửi log F9 - tôi cần thấy cách nào ăn.
+    LÝ DO PHẢI DÙNG OFFSET X:
+      - Không có cách tự động (executor mobile khác nhau).
+      - Chỉ có thể tinh chỉnh tay 1 lần.
+      - Lần sau auto dùng offset đã lưu.
+
+    CÁCH DÙNG:
+      1. Nhập OffsetY (đã biết: PC=50, Mobile=60).
+      2. Nhập OffsetX = 0 ban đầu.
+      3. Bấm TEST 5 CÁCH.
+      4. Nếu bấm lệch sang trái -> tăng OffsetX (1, 2, 3, 4, 5...).
+      5. Nếu bấm lệch sang phải -> giảm OffsetX (-1, -2, ...).
+      6. Mỗi lần đổi -> bấm TEST lại.
+      7. Khi popup đóng -> bấm AUTO ON.
 ]]
 
 local CONFIG = {
     GameID = 119091355492870,
     Debug  = true,
-    PCOffsetY = 50,
-    MobileOffsetY = 60,
 }
 
 local Players               = game:GetService("Players")
@@ -45,14 +54,14 @@ local function log(...)
     if CONFIG.Debug then print("[AutoTrade]", ...) end
 end
 
--- Phát hiện platform
 local isTouch = UserInputService.TouchEnabled
 local isMouse = UserInputService.MouseEnabled
 local isKeyboard = UserInputService.KeyboardEnabled
 local IS_MOBILE = (isTouch and not isKeyboard and not isMouse)
 local IS_PC = (isMouse and isKeyboard and not isTouch)
 local PLATFORM = IS_MOBILE and "MOBILE" or (IS_PC and "PC" or "UNKNOWN")
-local DEFAULT_OFFSET_Y = IS_PC and CONFIG.PCOffsetY or CONFIG.MobileOffsetY
+local DEFAULT_OFFSET_Y = IS_PC and 50 or 60
+local DEFAULT_OFFSET_X = 0
 
 local function getInset()
     local tl = Vector2.new(0, 0)
@@ -130,12 +139,12 @@ local function hideVisual()
 end
 
 -- ============================================================
--- CÁCH 1: FIRE TOUCH INTEREST VÀO NÚT THẬT
+-- CÁCH 1: DIRECT TOUCH
 -- ============================================================
 local function method1_directTouch(x, y)
     local btn = getAcceptButton()
-    if not btn or not firetouchinterest then return false, "no_btn_or_api" end
-    log(string.format("[1] firetouchinterest(Accept, %.1f, %.1f)", x, y))
+    if not btn or not firetouchinterest then return false end
+    log(string.format("[1] direct touch (%.1f, %.1f)", x, y))
     pcall(function()
         firetouchinterest(btn, Vector2.new(x, y), 0)
         task.wait(0.1)
@@ -143,15 +152,15 @@ local function method1_directTouch(x, y)
     end)
     task.wait(0.3)
     if not isPopupOpen() then return true, "direct_touch" end
-    return false, "fail"
+    return false
 end
 
 -- ============================================================
--- CÁCH 2: VIRTUAL INPUT MANAGER
+-- CÁCH 2: VIM
 -- ============================================================
 local function method2_vim(x, y)
-    if not VirtualInputManager then return false, "no_vim" end
-    log(string.format("[2] VIM(%.1f, %.1f)", x, y))
+    if not VirtualInputManager then return false end
+    log(string.format("[2] VIM (%.1f, %.1f)", x, y))
     local ix, iy = math.floor(x), math.floor(y)
     pcall(function()
         VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
@@ -166,16 +175,16 @@ local function method2_vim(x, y)
     end)
     task.wait(0.3)
     if not isPopupOpen() then return true, "vim" end
-    return false, "fail"
+    return false
 end
 
 -- ============================================================
--- CÁCH 3: GỌI CALLBACK CỦA NÚT ACCEPT QUA getconnections
+-- CÁCH 3: CALLBACK
 -- ============================================================
 local function method3_callback(x, y)
     local btn = getAcceptButton()
-    if not btn or not getconnections then return false, "no_getconnections" end
-    log("[3] Gọi callback MouseButton1Click của Accept")
+    if not btn or not getconnections then return false end
+    log("[3] callback Accept")
     local signals = {
         {"MouseButton1Click", btn.MouseButton1Click},
         {"MouseButton1Down", btn.MouseButton1Down},
@@ -189,7 +198,7 @@ local function method3_callback(x, y)
             if ok and conns then
                 for i, c in ipairs(conns) do
                     if c.Enabled and c.Function then
-                        log(string.format("  %s #%d - gọi", sigName, i))
+                        log(string.format("  %s #%d", sigName, i))
                         pcall(c.Function)
                         task.wait(0.05)
                     end
@@ -199,15 +208,15 @@ local function method3_callback(x, y)
     end
     task.wait(0.3)
     if not isPopupOpen() then return true, "callback" end
-    return false, "fail"
+    return false
 end
 
 -- ============================================================
--- CÁCH 4: FIRESIGNAL TRÊN NÚT ACCEPT
+-- CÁCH 4: FIRESIGNAL
 -- ============================================================
 local function method4_firesignal(x, y)
     local btn = getAcceptButton()
-    if not btn or typeof(firesignal) ~= "function" then return false, "no_firesignal" end
+    if not btn or typeof(firesignal) ~= "function" then return false end
     log("[4] firesignal Accept")
     pcall(function()
         firesignal(btn.MouseButton1Down)
@@ -220,11 +229,11 @@ local function method4_firesignal(x, y)
     end)
     task.wait(0.3)
     if not isPopupOpen() then return true, "firesignal" end
-    return false, "fail"
+    return false
 end
 
 -- ============================================================
--- WRAPPER (giữ từ v70 - đã từng ăn)
+-- CÁCH 5: WRAPPER
 -- ============================================================
 local function method5_wrapper(x, y)
     local wrapSg = Instance.new("ScreenGui")
@@ -243,7 +252,7 @@ local function method5_wrapper(x, y)
     task.wait(0.1)
     local ok = false
     if firetouchinterest then
-        log(string.format("[5] wrapper touch (%.1f, %.1f)", x, y))
+        log(string.format("[5] wrapper (%.1f, %.1f)", x, y))
         pcall(function()
             firetouchinterest(wrapper, Vector2.new(x, y), 0)
             task.wait(0.1)
@@ -254,7 +263,7 @@ local function method5_wrapper(x, y)
     end
     pcall(function() wrapSg:Destroy() end)
     if ok then return true, "wrapper" end
-    return false, "fail"
+    return false
 end
 
 -- ============================================================
@@ -273,10 +282,7 @@ local function tryAll(x, y)
     for _, m in ipairs(methods) do
         if not isPopupOpen() then hideVisual(); return true, "already_closed" end
         local ok, r = m[2](x, y)
-        if ok then
-            hideVisual()
-            return true, m[1]
-        end
+        if ok then hideVisual(); return true, m[1] end
         task.wait(0.1)
     end
     hideVisual()
@@ -286,10 +292,9 @@ end
 -- ============================================================
 -- STATE
 -- ============================================================
+local offsetX = DEFAULT_OFFSET_X
 local offsetY = DEFAULT_OFFSET_Y
 local autoEnabled = false
-local savedX = nil
-local savedY = nil
 
 -- ============================================================
 -- UI
@@ -304,7 +309,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 360, 0, 400)
+    frame.Size = UDim2.new(0, 360, 0, 460)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -322,7 +327,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "v81 (" .. PLATFORM .. ") offsetY=" .. offsetY
+    title.Text = "v82 (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -376,49 +381,133 @@ local function buildUI()
     statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Y offset = " .. offsetY .. " (đã tìm được)"
-    statusLbl.TextColor3 = Color3.fromRGB(120, 220, 120)
+    statusLbl.Text = "Mobile: bấm lệch sang trái -> tăng OffsetX"
+    statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
     statusLbl.TextWrapped = true
     statusLbl.Parent = body
 
-    local offsetLabel = Instance.new("TextLabel")
-    offsetLabel.Size = UDim2.new(0.3, 0, 0, 26)
-    offsetLabel.Position = UDim2.new(0.05, 0, 0, 36)
-    offsetLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    offsetLabel.BorderSizePixel = 0
-    offsetLabel.Text = "OffsetY"
-    offsetLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-    offsetLabel.Font = Enum.Font.Gotham
-    offsetLabel.TextSize = 11
-    offsetLabel.Parent = body
+    -- Offset X
+    local oxLabel = Instance.new("TextLabel")
+    oxLabel.Size = UDim2.new(0.2, 0, 0, 26)
+    oxLabel.Position = UDim2.new(0.05, 0, 0, 36)
+    oxLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oxLabel.BorderSizePixel = 0
+    oxLabel.Text = "X"
+    oxLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    oxLabel.Font = Enum.Font.GothamBold
+    oxLabel.TextSize = 13
+    oxLabel.Parent = body
 
-    local offsetBox = Instance.new("TextBox")
-    offsetBox.Size = UDim2.new(0.2, 0, 0, 26)
-    offsetBox.Position = UDim2.new(0.38, 0, 0, 36)
-    offsetBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    offsetBox.BorderSizePixel = 0
-    offsetBox.Text = tostring(offsetY)
-    offsetBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    offsetBox.Font = Enum.Font.Gotham
-    offsetBox.TextSize = 12
-    offsetBox.Parent = body
+    local oxBox = Instance.new("TextBox")
+    oxBox.Size = UDim2.new(0, 0, 0, 0)
+    -- Sẽ set sau
+    oxBox.Size = UDim2.new(0.2, 0, 0, 26)
+    oxBox.Position = UDim2.new(0.26, 0, 0, 36)
+    oxBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oxBox.BorderSizePixel = 0
+    oxBox.Text = tostring(offsetX)
+    oxBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    oxBox.Font = Enum.Font.Gotham
+    oxBox.TextSize = 12
+    oxBox.Parent = body
 
+    -- Offset Y
+    local oyLabel = Instance.new("TextLabel")
+    oyLabel.Size = UDim2.new(0.2, 0, 0, 26)
+    oyLabel.Position = UDim2.new(0.5, 0, 0, 36)
+    oyLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oyLabel.BorderSizePixel = 0
+    oyLabel.Text = "Y"
+    oyLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    oyLabel.Font = Enum.Font.GothamBold
+    oyLabel.TextSize = 13
+    oyLabel.Parent = body
+
+    local oyBox = Instance.new("TextBox")
+    oyBox.Size = UDim2.new(0.2, 0, 0, 26)
+    oyBox.Position = UDim2.new(0.71, 0, 0, 36)
+    oyBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    oyBox.BorderSizePixel = 0
+    oyBox.Text = tostring(offsetY)
+    oyBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    oyBox.Font = Enum.Font.Gotham
+    oyBox.TextSize = 12
+    oyBox.Parent = body
+
+    -- Nút áp dụng
     local applyBtn = Instance.new("TextButton")
-    applyBtn.Size = UDim2.new(0.35, 0, 0, 26)
-    applyBtn.Position = UDim2.new(0.6, 0, 0, 36)
+    applyBtn.Size = UDim2.new(0.9, 0, 0, 26)
+    applyBtn.Position = UDim2.new(0.05, 0, 0, 68)
     applyBtn.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
     applyBtn.BorderSizePixel = 0
-    applyBtn.Text = "Áp dụng"
+    applyBtn.Text = "Áp dụng Offset X, Y"
     applyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     applyBtn.Font = Enum.Font.GothamBold
     applyBtn.TextSize = 11
     applyBtn.Parent = body
 
+    -- Nút + X
+    local xPlus1 = Instance.new("TextButton")
+    xPlus1.Size = UDim2.new(0.15, 0, 0, 24)
+    xPlus1.Position = UDim2.new(0.05, 0, 0, 100)
+    xPlus1.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xPlus1.BorderSizePixel = 0
+    xPlus1.Text = "X+1"
+    xPlus1.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xPlus1.Font = Enum.Font.GothamBold
+    xPlus1.TextSize = 11
+    xPlus1.Parent = body
+
+    local xMinus1 = Instance.new("TextButton")
+    xMinus1.Size = UDim2.new(0.15, 0, 0, 24)
+    xMinus1.Position = UDim2.new(0.22, 0, 0, 100)
+    xMinus1.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xMinus1.BorderSizePixel = 0
+    xMinus1.Text = "X-1"
+    xMinus1.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xMinus1.Font = Enum.Font.GothamBold
+    xMinus1.TextSize = 11
+    xMinus1.Parent = body
+
+    local xPlus5 = Instance.new("TextButton")
+    xPlus5.Size = UDim2.new(0.15, 0, 0, 24)
+    xPlus5.Position = UDim2.new(0.42, 0, 0, 100)
+    xPlus5.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xPlus5.BorderSizePixel = 0
+    xPlus5.Text = "X+5"
+    xPlus5.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xPlus5.Font = Enum.Font.GothamBold
+    xPlus5.TextSize = 11
+    xPlus5.Parent = body
+
+    local xMinus5 = Instance.new("TextButton")
+    xMinus5.Size = UDim2.new(0.15, 0, 0, 24)
+    xMinus5.Position = UDim2.new(0.62, 0, 0, 100)
+    xMinus5.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    xMinus5.BorderSizePixel = 0
+    xMinus5.Text = "X-5"
+    xMinus5.TextColor3 = Color3.fromRGB(255, 255, 255)
+    xMinus5.Font = Enum.Font.GothamBold
+    xMinus5.TextSize = 11
+    xMinus5.Parent = body
+
+    local resetBtn = Instance.new("TextButton")
+    resetBtn.Size = UDim2.new(0.15, 0, 0, 24)
+    resetBtn.Position = UDim2.new(0.82, 0, 0, 100)
+    resetBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+    resetBtn.BorderSizePixel = 0
+    resetBtn.Text = "Reset"
+    resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    resetBtn.Font = Enum.Font.GothamBold
+    resetBtn.TextSize = 11
+    resetBtn.Parent = body
+
+    -- Test button
     local testBtn = Instance.new("TextButton")
     testBtn.Size = UDim2.new(0.9, 0, 0, 40)
-    testBtn.Position = UDim2.new(0.05, 0, 0, 70)
+    testBtn.Position = UDim2.new(0.05, 0, 0, 132)
     testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
     testBtn.BorderSizePixel = 0
     testBtn.Text = "1) TEST 5 CÁCH BẤM"
@@ -427,9 +516,10 @@ local function buildUI()
     testBtn.TextSize = 13
     testBtn.Parent = body
 
+    -- Auto button
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(0.9, 0, 0, 36)
-    autoBtn.Position = UDim2.new(0.05, 0, 0, 116)
+    autoBtn.Position = UDim2.new(0.05, 0, 0, 178)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
     autoBtn.Text = "2) AUTO ACCEPT: OFF"
@@ -438,26 +528,27 @@ local function buildUI()
     autoBtn.TextSize = 12
     autoBtn.Parent = body
 
+    -- Help
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.9, 0, 0, 120)
-    helpLbl.Position = UDim2.new(0.05, 0, 0, 160)
+    helpLbl.Size = UDim2.new(0.9, 0, 0, 130)
+    helpLbl.Position = UDim2.new(0.05, 0, 0, 220)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-Đã tìm ra Y offset: PC=50, Mobile=60.
-Chấm đỏ khớp nút Accept. Bấm vẫn fail.
+MOBILE - Bấm lệch sang trái:
+1. Nhập OffsetY (đã biết: Mobile=60, PC=50).
+2. Test -> thấy bấm lệch sang trái của chấm đỏ.
+3. Bấm "X+1" hoặc "X+5" để tăng.
+4. Áp dụng -> Test lại.
+5. Lặp đến khi popup đóng.
+6. Khi đóng -> AUTO ON.
 
-Bấm "TEST 5 CÁCH":
-1. Direct firetouchinterest(Accept, pos)
-2. VIM (move + click)
-3. Gọi callback của Accept qua getconnections
-4. firesignal Accept
-5. wrapper TextButton
+Lý do: wrapper dùng viewport (bỏ inset),
+visual dùng screen (cộng inset).
+Mobile insetX khác PC -> lệch sang trái.
 
-Log F9 sẽ in cách nào ăn.
-
-Nếu tất cả fail -> executor sandbox touch.
-Chỉ còn app Auto Clicker ngoài.
+PC đã mượt -> OffsetX=0 là đúng.
+Mobile cần OffsetX > 0 (thường 5-20).
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -467,8 +558,8 @@ Chỉ còn app Auto Clicker ngoài.
     helpLbl.Parent = body
 
     local logLbl = Instance.new("TextLabel")
-    logLbl.Size = UDim2.new(0.9, 0, 0, 40)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 290)
+    logLbl.Size = UDim2.new(0.9, 0, 0, 50)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 354)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -485,45 +576,76 @@ Chỉ còn app Auto Clicker ngoài.
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 320 then cur = cur:sub(-240) end
+        if #cur > 400 then cur = cur:sub(-320) end
         logLbl.Text = cur .. "\n" .. s
+    end
+    local function refreshTitle()
+        title.Text = "v82 (" .. PLATFORM .. ") X=" .. offsetX .. " Y=" .. offsetY
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
 
     applyBtn.MouseButton1Click:Connect(function()
-        local val = tonumber(offsetBox.Text)
-        if val then
-            offsetY = val
-            title.Text = "v81 (" .. PLATFORM .. ") offsetY=" .. offsetY
-            setStatus("Y offset = " .. offsetY, Color3.fromRGB(120, 220, 120))
-            appendLog("OffsetY = " .. offsetY)
-        end
+        local nx = tonumber(oxBox.Text)
+        local ny = tonumber(oyBox.Text)
+        if nx then offsetX = nx end
+        if ny then offsetY = ny end
+        refreshTitle()
+        setStatus(string.format("Đã lưu X=%d Y=%d", offsetX, offsetY),
+            Color3.fromRGB(120, 220, 120))
+        appendLog(string.format("X=%d Y=%d", offsetX, offsetY))
+    end)
+
+    xPlus1.MouseButton1Click:Connect(function()
+        offsetX = offsetX + 1
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+        appendLog("X+" .. offsetX)
+    end)
+    xMinus1.MouseButton1Click:Connect(function()
+        offsetX = offsetX - 1
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+        appendLog("X" .. offsetX)
+    end)
+    xPlus5.MouseButton1Click:Connect(function()
+        offsetX = offsetX + 5
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+        appendLog("X+" .. offsetX)
+    end)
+    xMinus5.MouseButton1Click:Connect(function()
+        offsetX = offsetX - 5
+        oxBox.Text = tostring(offsetX)
+        refreshTitle()
+        appendLog("X" .. offsetX)
+    end)
+    resetBtn.MouseButton1Click:Connect(function()
+        offsetX = 0
+        oxBox.Text = "0"
+        refreshTitle()
+        appendLog("Reset X")
     end)
 
     testBtn.MouseButton1Click:Connect(function()
         local btn = getAcceptButton()
-        if not btn then
-            appendLog("Không có popup")
-            return
-        end
+        if not btn then appendLog("Không có popup"); return end
         local ap = btn.AbsolutePosition
         local sz = btn.AbsoluteSize
-        local cx = ap.X + sz.X / 2
+        local cx = ap.X + sz.X / 2 + offsetX
         local cy = ap.Y + sz.Y / 2 + offsetY
-        savedX = cx
-        savedY = cy
         task.spawn(function()
-            setStatus(string.format("Test tại (%.0f, %.0f)...", cx, cy),
+            setStatus(string.format("Test (%.0f, %.0f)", cx, cy),
                 Color3.fromRGB(200, 200, 120))
-            appendLog(string.format("Test (%.0f, %.0f)", cx, cy))
+            appendLog(string.format("Test (%.0f, %.0f) X=%d Y=%d",
+                cx, cy, offsetX, offsetY))
             local ok, r = tryAll(cx, cy)
             if ok then
-                appendLog("✔ OK: " .. r)
-                setStatus("✔ OK: " .. r, Color3.fromRGB(120, 220, 120))
+                appendLog("✔ " .. r)
+                setStatus("✔ " .. r .. " - AUTO ON", Color3.fromRGB(120, 220, 120))
             else
                 appendLog("✘ ALL FAIL")
-                setStatus("✘ Tất cả 5 cách fail", Color3.fromRGB(255, 120, 120))
+                setStatus("✘ Fail - tinh chỉnh X", Color3.fromRGB(255, 120, 120))
             end
         end)
     end)
@@ -533,7 +655,7 @@ Chỉ còn app Auto Clicker ngoài.
         if autoEnabled then
             autoBtn.Text = "2) AUTO ACCEPT: ON"
             autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
-            appendLog("AUTO ON")
+            appendLog(string.format("AUTO ON X=%d Y=%d", offsetX, offsetY))
             setStatus("AUTO ON", Color3.fromRGB(120, 220, 120))
         else
             autoBtn.Text = "2) AUTO ACCEPT: OFF"
@@ -553,10 +675,8 @@ Chỉ còn app Auto Clicker ngoài.
                     if btn then
                         local ap = btn.AbsolutePosition
                         local sz = btn.AbsoluteSize
-                        local cx = ap.X + sz.X / 2
+                        local cx = ap.X + sz.X / 2 + offsetX
                         local cy = ap.Y + sz.Y / 2 + offsetY
-                        showVisual(cx, cy)
-                        task.wait(0.2)
                         local ok, r = tryAll(cx, cy)
                         appendLog(ok and ("✔ Auto: " .. r) or "✘ Auto fail")
                     end
@@ -573,4 +693,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v81 sẵn sàng. Y offset PC=50, Mobile=60. TEST 5 CÁCH.")
+log("v82 sẵn sàng. PC OK. Mobile: dùng X+1/X+5 để tinh chỉnh.")
