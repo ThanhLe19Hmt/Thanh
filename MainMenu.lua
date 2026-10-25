@@ -9040,7 +9040,7 @@ local function SetupAutoTrade()
         SelectedUser = _G.Trade_SelectedUser or nil,
         Items        = _G.Trade_Items or {},
         Mode         = _G.Trade_Mode or "ReadyOnly",
-        OffsetX      = _G.Trade_OffsetX or 0,
+        OffsetX      = _G.Trade_OffsetX or 50,
         OffsetY      = _G.Trade_OffsetY or 60,
         AutoAccept   = _G.Trade_AutoAccept or false,
         AutoTrade    = _G.Trade_AutoTrade or false,
