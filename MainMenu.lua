@@ -32,7 +32,7 @@ local CONFIG = {
     GameID = 119091355492870,
     Debug  = true,
     ScanTopY = -20,   -- bắt đầu từ tâm - 20px
-    ScanBotY = 20,    -- kết thúc ở tâm + 20px
+    ScanBotY = 60,    -- kết thúc ở tâm + 20px
     ScanStep = 2,     -- bước 2px
     ClickDelay = 0.04, -- delay giữa các điểm (siêu nhanh)
 }
