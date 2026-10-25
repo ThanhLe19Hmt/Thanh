@@ -1,30 +1,26 @@
 --[[
-    Auto Trade - Rock Fruit v76 (Mobile Virtual Cursor TP & Click)
+    Auto Trade - Rock Fruit v77 (Grid Test)
     Game ID: 119091355492870
 
-    LOGIC:
-      - Mobile không có mousemoverel (Windows API).
-      - Nhưng có VirtualInputManager:SendMouseMoveEvent.
-      - Trên một số executor (Delta, Fluxus), hàm này map sang
-        touch event thật -> Roblox hiểu là touch tại toạ độ đó.
-      - Ta sẽ:
-        1. Lấy tâm nút Accept.
-        2. Vẽ chấm đỏ 20x20 nhảy tới đó (visual).
-        3. Gọi SendMouseMoveEvent(X, Y) -> di chuột ảo.
-        4. Chờ 0.2s.
-        5. Gọi SendMouseButtonEvent(X, Y, 0, true/false).
-        6. Nếu không đóng popup -> firetouchinterest qua wrapper
-           tại đúng toạ độ đó.
+    TRIẾT LÝ:
+      - Nút Accept có kích thước ~54x29px.
+      - Bấm vào tâm có thể lệch nếu executor xử lý sai.
+      - Ta sẽ chia nút thành lưới 3x3 (9 điểm) hoặc 5x5 (25 điểm).
+      - Bấm từng điểm cho đến khi popup đóng.
+      - Lưu điểm đúng.
 
-    LƯU Ý:
-      - v76 KHÔNG dùng offset, KHÔNG dùng kéo thả.
-      - Toạ độ lấy trực tiếp từ nút Accept -> chính xác.
-      - Chỉ cần bấm nút AUTO.
+    CÁCH DÙNG:
+      1. Nhờ acc phụ mời trade.
+      2. Khi popup hiện, bấm "TEST GRID" (hoặc bật AUTO GRID).
+      3. Tool sẽ bấm lần lượt từng điểm trong lưới.
+      4. Điểm nào làm popup đóng -> lưu lại.
+      5. Lần sau AUTO sẽ bấm đúng điểm đó.
 ]]
 
 local CONFIG = {
     GameID = 119091355492870,
     Debug  = true,
+    GridSize = 3, -- 3x3 hoặc 5x5
 }
 
 local Players               = game:GetService("Players")
@@ -64,20 +60,13 @@ local function getAcceptButton()
     return acc:FindFirstChild("Accept")
 end
 
-local function getCenter(btn)
-    if not btn then return nil end
-    local ap = btn.AbsolutePosition
-    local sz = btn.AbsoluteSize
-    return Vector2.new(ap.X + sz.X / 2, ap.Y + sz.Y / 2)
-end
-
 local function isPopupOpen()
     local tr = getTradeRequestFrame()
     return tr ~= nil and tr.Visible == true
 end
 
 -- ============================================================
--- CON TRỎ ẢO (VISUAL)
+-- VISUAL CURSOR (dùng để hiện điểm sắp bấm)
 -- ============================================================
 local visualGui = nil
 local visualDot = nil
@@ -85,13 +74,13 @@ local visualDot = nil
 local function ensureVisual()
     if visualGui and visualGui.Parent then return end
     visualGui = Instance.new("ScreenGui")
-    visualGui.Name = "HoangVirtualCursor"
+    visualGui.Name = "HoangVisualCursor"
     visualGui.ResetOnSpawn = false
-    visualGui.IgnoreGuiInset = true  -- dùng toạ độ screen
+    visualGui.IgnoreGuiInset = true
     visualGui.Parent = CoreGui
     visualDot = Instance.new("Frame")
-    visualDot.Size = UDim2.new(0, 20, 0, 20)
-    visualDot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    visualDot.Size = UDim2.new(0, 12, 0, 12)
+    visualDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
     visualDot.BackgroundTransparency = 0.3
     visualDot.BorderSizePixel = 2
     visualDot.BorderColor3 = Color3.fromRGB(255, 255, 255)
@@ -101,23 +90,13 @@ local function ensureVisual()
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(1, 0)
     corner.Parent = visualDot
-    local inner = Instance.new("Frame")
-    inner.Size = UDim2.new(0, 4, 0, 4)
-    inner.Position = UDim2.new(0.5, -2, 0.5, -2)
-    inner.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-    inner.BorderSizePixel = 0
-    inner.ZIndex = 999996
-    inner.Parent = visualDot
-    local c2 = Instance.new("UICorner")
-    c2.CornerRadius = UDim.new(1, 0)
-    c2.Parent = inner
 end
 
 local function showVisual(x, y)
     ensureVisual()
     local tl = Vector2.new(0, 0)
     pcall(function() tl = GuiService.TopLeftInset end)
-    visualDot.Position = UDim2.new(0, x + tl.X - 10, 0, y + tl.Y - 10)
+    visualDot.Position = UDim2.new(0, x + tl.X - 6, 0, y + tl.Y - 6)
     visualDot.Visible = true
 end
 
@@ -126,42 +105,17 @@ local function hideVisual()
 end
 
 -- ============================================================
--- BẤM QUA VIRTUAL INPUT (di chuyển chuột ảo + click)
+-- CLICK (wrapper + VIM)
 -- ============================================================
-local function clickViaVIM(x, y)
-    if not VirtualInputManager then return false, "no_vim" end
-    log(string.format("[VIM] Move (%d, %d) + Click", math.floor(x), math.floor(y)))
-    local ix, iy = math.floor(x), math.floor(y)
-    pcall(function()
-        VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
-    end)
-    task.wait(0.3)
-    local loc = UserInputService:GetMouseLocation()
-    log(string.format("  Sau move: (%.0f, %.0f)", loc.X, loc.Y))
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
-    end)
-    task.wait(0.15)
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
-    end)
-    task.wait(0.35)
-    if not isPopupOpen() then return true, "vim" end
-    return false, "vim_fail"
-end
-
--- ============================================================
--- BẤM QUA WRAPPER (fallback)
--- ============================================================
-local function clickViaWrapper(x, y)
+local function tryClickAt(x, y)
     local wrapSg = Instance.new("ScreenGui")
     wrapSg.Name = "HoangTouchWrapper"
     wrapSg.ResetOnSpawn = false
     wrapSg.IgnoreGuiInset = false
     wrapSg.Parent = CoreGui
     local wrapper = Instance.new("TextButton")
-    wrapper.Size = UDim2.new(0, 40, 0, 40)
-    wrapper.Position = UDim2.new(0, x - 20, 0, y - 20)
+    wrapper.Size = UDim2.new(0, 30, 0, 30)
+    wrapper.Position = UDim2.new(0, x - 15, 0, y - 15)
     wrapper.BackgroundTransparency = 1
     wrapper.Text = ""
     wrapper.Active = true
@@ -170,56 +124,77 @@ local function clickViaWrapper(x, y)
     task.wait(0.1)
     local ok = false
     if firetouchinterest then
-        log(string.format("[WRAPPER] firetouchinterest (%.0f, %.0f)", x, y))
         pcall(function()
             firetouchinterest(wrapper, Vector2.new(x, y), 0)
-            task.wait(0.15)
+            task.wait(0.1)
             firetouchinterest(wrapper, Vector2.new(x, y), 1)
         end)
-        task.wait(0.3)
+        task.wait(0.25)
         ok = not isPopupOpen()
     end
-    if not ok and typeof(firesignal) == "function" then
+    if not ok and VirtualInputManager then
+        local ix, iy = math.floor(x), math.floor(y)
         pcall(function()
-            firesignal(wrapper.MouseButton1Down)
-            task.wait(0.05)
-            firesignal(wrapper.MouseButton1Up)
-            task.wait(0.05)
-            firesignal(wrapper.MouseButton1Click)
+            VirtualInputManager:SendMouseMoveEvent(ix, iy, game)
         end)
-        task.wait(0.3)
+        task.wait(0.15)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, true, game, 0)
+        end)
+        task.wait(0.1)
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(ix, iy, 0, false, game, 0)
+        end)
+        task.wait(0.25)
         ok = not isPopupOpen()
     end
     pcall(function() wrapSg:Destroy() end)
-    if ok then return true, "wrapper" end
-    return false, "wrapper_fail"
+    return ok
 end
 
 -- ============================================================
--- ACCEPT TỔNG HỢP
+-- GRID SEARCH (tìm điểm bấm đúng)
 -- ============================================================
-local function acceptTrade()
+local function testGrid()
     local btn = getAcceptButton()
-    if not btn then return false, "no_popup" end
-    local c = getCenter(btn)
-    if not c then return false, "no_center" end
-
-    log(string.format("Target Accept center: (%.1f, %.1f)", c.X, c.Y))
-    showVisual(c.X, c.Y)
-    task.wait(0.3)  -- Cho bạn thấy chấm đỏ nhảy tới nút
-
-    -- Cách 1: VIM
-    local ok, r = clickViaVIM(c.X, c.Y)
-    if ok then hideVisual(); return true, r end
-
-    -- Cách 2: Wrapper
-    task.wait(0.1)
-    ok, r = clickViaWrapper(c.X, c.Y)
+    if not btn then return false, nil end
+    local ap = btn.AbsolutePosition
+    local sz = btn.AbsoluteSize
+    local N = CONFIG.GridSize
+    local stepX = sz.X / N
+    local stepY = sz.Y / N
+    
+    log(string.format("Grid %dx%d - btn size %.1fx%.1f", N, N, sz.X, sz.Y))
+    
+    for i = 1, N do
+        for j = 1, N do
+            -- Điểm ở giữa mỗi ô
+            local px = ap.X + (i - 0.5) * stepX
+            local py = ap.Y + (j - 0.5) * stepY
+            
+            showVisual(px, py)
+            task.wait(0.1)
+            
+            log(string.format("  Try (%d,%d): (%.0f, %.0f)", i, j, px, py))
+            local ok = tryClickAt(px, py)
+            if ok then
+                hideVisual()
+                log(string.format("✔ Found at (%d,%d) = (%.1f, %.1f)", i, j, px, py))
+                return true, {x = px, y = py, i = i, j = j}
+            end
+            task.wait(0.15)
+        end
+    end
     hideVisual()
-    if ok then return true, r end
-
-    return false, "all_fail"
+    return false, nil
 end
+
+-- ============================================================
+-- STATE
+-- ============================================================
+local foundX = nil
+local foundY = nil
+local autoEnabled = false
 
 -- ============================================================
 -- UI
@@ -234,7 +209,7 @@ local function buildUI()
     sg.Parent = CoreGui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 340, 0, 260)
+    frame.Size = UDim2.new(0, 340, 0, 320)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
     frame.BorderSizePixel = 0
@@ -252,7 +227,7 @@ local function buildUI()
     title.Size = UDim2.new(1, -70, 1, 0)
     title.Position = UDim2.new(0, 8, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Auto Trade v76 (TP & Click)"
+    title.Text = "Accept Tester v77 (Grid)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 13
@@ -306,48 +281,63 @@ local function buildUI()
     statusLbl.Position = UDim2.new(0.05, 0, 0, 0)
     statusLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     statusLbl.BorderSizePixel = 0
-    statusLbl.Text = "Tự tìm nút Accept + TP + Click. Bấm AUTO."
+    statusLbl.Text = "Nhờ mời trade, popup hiện -> bấm TEST GRID"
     statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
     statusLbl.Font = Enum.Font.Gotham
     statusLbl.TextSize = 11
     statusLbl.TextWrapped = true
     statusLbl.Parent = body
 
+    local gridBtn = Instance.new("TextButton")
+    gridBtn.Size = UDim2.new(0.9, 0, 0, 36)
+    gridBtn.Position = UDim2.new(0.05, 0, 0, 36)
+    gridBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
+    gridBtn.BorderSizePixel = 0
+    gridBtn.Text = "1) TEST GRID (3x3)"
+    gridBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    gridBtn.Font = Enum.Font.GothamBold
+    gridBtn.TextSize = 13
+    gridBtn.Parent = body
+
+    local grid5Btn = Instance.new("TextButton")
+    grid5Btn.Size = UDim2.new(0.9, 0, 0, 30)
+    grid5Btn.Position = UDim2.new(0.05, 0, 0, 76)
+    grid5Btn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    grid5Btn.BorderSizePixel = 0
+    grid5Btn.Text = "1b) TEST GRID (5x5 - chi tiết hơn)"
+    grid5Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    grid5Btn.Font = Enum.Font.GothamBold
+    grid5Btn.TextSize = 11
+    grid5Btn.Parent = body
+
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(0.9, 0, 0, 36)
-    autoBtn.Position = UDim2.new(0.05, 0, 0, 36)
+    autoBtn.Position = UDim2.new(0.05, 0, 0, 110)
     autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
     autoBtn.BorderSizePixel = 0
-    autoBtn.Text = "AUTO ACCEPT: OFF"
+    autoBtn.Text = "2) AUTO ACCEPT (cần tìm điểm trước): OFF"
     autoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     autoBtn.Font = Enum.Font.GothamBold
-    autoBtn.TextSize = 13
+    autoBtn.TextSize = 11
     autoBtn.Parent = body
 
-    local testBtn = Instance.new("TextButton")
-    testBtn.Size = UDim2.new(0.9, 0, 0, 30)
-    testBtn.Position = UDim2.new(0.05, 0, 0, 76)
-    testBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
-    testBtn.BorderSizePixel = 0
-    testBtn.Text = "TEST ngay (khi popup hiện)"
-    testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    testBtn.Font = Enum.Font.GothamBold
-    testBtn.TextSize = 12
-    testBtn.Parent = body
-
     local helpLbl = Instance.new("TextLabel")
-    helpLbl.Size = UDim2.new(0.9, 0, 0, 80)
-    helpLbl.Position = UDim2.new(0.05, 0, 0, 110)
+    helpLbl.Size = UDim2.new(0.9, 0, 0, 100)
+    helpLbl.Position = UDim2.new(0.05, 0, 0, 150)
     helpLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     helpLbl.BorderSizePixel = 0
     helpLbl.Text = [[
-1. Bấm AUTO ACCEPT (hoặc TEST khi popup hiện).
-2. Tool tự:
-   - Tìm tâm nút Accept.
-   - Chấm đỏ nhảy tới đó.
-   - VIM move + click.
-   - Fallback wrapper.
-3. Quan sát chấm đỏ. Nếu bấm đúng -> popup đóng.
+QUY TRÌNH:
+1. Nhờ acc phụ mời trade -> popup hiện.
+2. Bấm "TEST GRID (3x3)".
+3. Tool sẽ bấm từng điểm trong lưới 3x3 (9 điểm),
+   chấm đỏ nhảy tới từng điểm bạn sẽ thấy.
+4. Khi popup đóng -> điểm đúng đã được tìm.
+5. Nếu 3x3 không tìm được, thử "5x5".
+6. Bấm "AUTO ACCEPT: ON" - tool dùng điểm đã tìm.
+
+LƯU Ý: nếu 3x3 fail, mở 5x5 sẽ thử 25 điểm.
+Có thể mất 5-10s.
 ]]
     helpLbl.TextColor3 = Color3.fromRGB(200, 220, 200)
     helpLbl.Font = Enum.Font.Gotham
@@ -358,7 +348,7 @@ local function buildUI()
 
     local logLbl = Instance.new("TextLabel")
     logLbl.Size = UDim2.new(0.9, 0, 0, 34)
-    logLbl.Position = UDim2.new(0.05, 0, 0, 194)
+    logLbl.Position = UDim2.new(0.05, 0, 0, 254)
     logLbl.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     logLbl.BorderSizePixel = 0
     logLbl.Text = "Log:"
@@ -374,51 +364,83 @@ local function buildUI()
     end
     local function appendLog(s)
         local cur = logLbl.Text
-        if #cur > 280 then cur = cur:sub(-200) end
+        if #cur > 340 then cur = cur:sub(-260) end
         logLbl.Text = cur .. "\n" .. s
     end
 
     closeUI.MouseButton1Click:Connect(function() sg:Destroy() end)
 
-    local enabled = false
-    autoBtn.MouseButton1Click:Connect(function()
-        enabled = not enabled
-        if enabled then
-            autoBtn.Text = "AUTO ACCEPT: ON"
-            autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
-            setStatus("Đang chờ popup...", Color3.fromRGB(120, 220, 120))
-            appendLog("AUTO ON")
-        else
-            autoBtn.Text = "AUTO ACCEPT: OFF"
-            autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
-            setStatus("Đã tắt", Color3.fromRGB(200, 200, 120))
-            appendLog("AUTO OFF")
-        end
+    gridBtn.MouseButton1Click:Connect(function()
+        CONFIG.GridSize = 3
+        task.spawn(function()
+            setStatus("Đang test grid 3x3...", Color3.fromRGB(200, 200, 120))
+            appendLog("Grid 3x3 start")
+            local ok, result = testGrid()
+            if ok then
+                foundX = result.x
+                foundY = result.y
+                appendLog(string.format("✔ Found: (%.0f,%.0f) ô (%d,%d)",
+                    result.x, result.y, result.i, result.j))
+                setStatus(string.format("✔ Tìm được (%.0f,%.0f) - bật AUTO", result.x, result.y),
+                    Color3.fromRGB(120, 220, 120))
+            else
+                appendLog("✘ 3x3 fail - thử 5x5")
+                setStatus("✘ 3x3 fail - thử 5x5", Color3.fromRGB(255, 120, 120))
+            end
+        end)
     end)
 
-    testBtn.MouseButton1Click:Connect(function()
+    grid5Btn.MouseButton1Click:Connect(function()
+        CONFIG.GridSize = 5
         task.spawn(function()
-            if not isPopupOpen() then
-                appendLog("Không có popup")
-                return
+            setStatus("Đang test grid 5x5...", Color3.fromRGB(200, 200, 120))
+            appendLog("Grid 5x5 start")
+            local ok, result = testGrid()
+            if ok then
+                foundX = result.x
+                foundY = result.y
+                appendLog(string.format("✔ Found: (%.0f,%.0f) ô (%d,%d)",
+                    result.x, result.y, result.i, result.j))
+                setStatus(string.format("✔ Tìm được (%.0f,%.0f) - bật AUTO", result.x, result.y),
+                    Color3.fromRGB(120, 220, 120))
+            else
+                appendLog("✘ 5x5 fail - executor sandbox?")
+                setStatus("✘ 5x5 fail - thử executor khác", Color3.fromRGB(255, 120, 120))
             end
-            local ok, r = acceptTrade()
-            appendLog(ok and ("✔ OK: " .. r) or ("✘ Fail: " .. tostring(r)))
-            setStatus(ok and ("✔ " .. r) or "✘ Fail",
-                ok and Color3.fromRGB(120, 220, 120) or Color3.fromRGB(255, 120, 120))
         end)
+    end)
+
+    autoBtn.MouseButton1Click:Connect(function()
+        if not foundX then
+            appendLog("Chưa tìm điểm. Bấm TEST GRID trước.")
+            return
+        end
+        autoEnabled = not autoEnabled
+        if autoEnabled then
+            autoBtn.Text = "2) AUTO ACCEPT: ON"
+            autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
+            appendLog(string.format("AUTO ON tại (%.0f,%.0f)", foundX, foundY))
+            setStatus("AUTO ON", Color3.fromRGB(120, 220, 120))
+        else
+            autoBtn.Text = "2) AUTO ACCEPT: OFF"
+            autoBtn.BackgroundColor3 = Color3.fromRGB(120, 60, 60)
+            appendLog("AUTO OFF")
+            setStatus("AUTO OFF", Color3.fromRGB(200, 200, 120))
+        end
     end)
 
     task.spawn(function()
         local wasOpen = false
         while sg.Parent do
-            if enabled then
+            if autoEnabled and foundX then
                 local nowOpen = isPopupOpen()
                 if nowOpen and not wasOpen then
-                    appendLog("Popup hiện, accept...")
+                    appendLog("Auto: popup hiện")
+                    showVisual(foundX, foundY)
                     task.wait(0.2)
-                    local ok, r = acceptTrade()
-                    appendLog(ok and ("✔ Auto: " .. r) or "✘ Auto fail")
+                    local ok = tryClickAt(foundX, foundY)
+                    hideVisual()
+                    appendLog(ok and "✔ Auto OK" or "✘ Auto fail")
                 end
                 wasOpen = nowOpen
             end
@@ -432,4 +454,4 @@ if game.PlaceId ~= CONFIG.GameID then
 end
 
 buildUI()
-log("v76 sẵn sàng. Tự TP chuột ảo tới nút Accept + click.")
+log("v77 sẵn sàng. TEST GRID để tìm điểm bấm đúng.")
