@@ -325,7 +325,7 @@ local function buildUI()
     scanBtn.Position = UDim2.new(0.05, 0, 0, 68)
     scanBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 90)
     scanBtn.BorderSizePixel = 0
-    scanBtn.Text = "1) QUÉT DỌC (tâm ±20, bước 2px)"
+    scanBtn.Text = "1) QUÉT DỌC (tâm ±60, bước 2px)"
     scanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     scanBtn.Font = Enum.Font.GothamBold
     scanBtn.TextSize = 13
@@ -411,7 +411,7 @@ TỐC ĐỘ:
             return
         end
         CONFIG.ScanTopY = -20
-        CONFIG.ScanBotY = 20
+        CONFIG.ScanBotY = 60
         CONFIG.ScanStep = 2
         task.spawn(function()
             setStatus("Quét dọc ±20...", Color3.fromRGB(200, 200, 120))
