@@ -9033,20 +9033,21 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- 🆕 AUTO TRADE v84.0 (Full - Remote AddItem)
+-- 🆕 AUTO TRADE v84.1 (Full - 3 toggle độc lập)
 -- ============================================================
 local function SetupAutoTrade()
     local Trade = {
-        SelectedUser = _G.Trade_SelectedUser or nil,
-        Items        = _G.Trade_Items or {},
-        Mode         = _G.Trade_Mode or "ReadyOnly",
-        OffsetX      = _G.Trade_OffsetX or 50,
-        OffsetY      = _G.Trade_OffsetY or 60,
-        AutoAccept   = _G.Trade_AutoAccept or false,
-        AutoTrade    = _G.Trade_AutoTrade or false,
-        LogBuf       = {},
-        LogPara      = nil,
-        _lastInvite  = 0,
+        SelectedUser      = _G.Trade_SelectedUser or nil,
+        Items             = _G.Trade_Items or {},
+        Mode              = _G.Trade_Mode or "ReadyOnly",
+        OffsetX           = _G.Trade_OffsetX or 0,
+        OffsetY           = _G.Trade_OffsetY or 60,
+        AutoAccept        = _G.Trade_AutoAccept or false,
+        AutoTrade         = _G.Trade_AutoTrade or false,
+        AutoTradeOnAccept = _G.Trade_AutoTradeOnAccept or false,
+        LogBuf            = {},
+        LogPara           = nil,
+        _lastInvite       = 0,
     }
 
     -- ================= GETTERS =================
@@ -9273,7 +9274,7 @@ local function SetupAutoTrade()
         return false, "all_fail"
     end
 
-    -- ================= FETCH INVENTORY (attribute JSON) =================
+    -- ================= FETCH INVENTORY =================
     local _invCache, _invCacheTime = {}, 0
     function Trade.GetInventoryMap()
         local now = tick()
@@ -9356,6 +9357,57 @@ local function SetupAutoTrade()
         end
         task.wait(0.15)
         return true
+    end
+
+    -- ================= READY — retry + fallback =================
+    function Trade.ClickReady()
+        for attempt = 1, 5 do
+            local ready = Trade.ReadyBtn()
+            if ready then
+                local isDisabled = false
+                pcall(function()
+                    if ready:IsA("TextButton") and ready.Active == false then
+                        isDisabled = true
+                    end
+                    local attr = ready:GetAttribute("Disabled")
+                    if attr == true then isDisabled = true end
+                end)
+
+                if not isDisabled then
+                    Trade.Click(ready)
+                    task.wait(0.3)
+
+                    local ok = pcall(function()
+                        if not ready or not ready.Parent then return true end
+                        local txt = ready:IsA("TextButton") and ready.Text or ""
+                        if txt:lower():find("ready") or txt:lower():find("cancel") then
+                            return true
+                        end
+                    end)
+                    if ok then
+                        Trade.Log("✔ Ready (UI click, lần " .. attempt .. ")")
+                        return true, "ui_click"
+                    end
+                end
+            end
+            task.wait(0.4)
+        end
+
+        local remote = Trade.GetTradeRemote()
+        if remote then
+            for attempt = 1, 3 do
+                local ok = pcall(function() remote:FireServer("Ready") end)
+                if ok then
+                    Trade.Log("✔ Ready (remote, lần " .. attempt .. ")")
+                    task.wait(0.3)
+                    return true, "remote_ready"
+                end
+                task.wait(0.4)
+            end
+        end
+
+        Trade.Log("✘ Ready thất bại sau nhiều lần thử")
+        return false, "fail"
     end
 
     function Trade.DoAccept()
@@ -9594,7 +9646,6 @@ local function SetupAutoTrade()
         end
     })
 
-    -- Xóa theo tên
     local DeleteNameBox = ItemSec:Textbox({
         Title = "🗑️ Tên item cần xóa",
         Placeholder = "VD: Apple",
@@ -9656,7 +9707,6 @@ local function SetupAutoTrade()
         end
     })
 
-    -- Paragraph danh sách
     local SelPara = SelItemSec:Paragraph({
         Title = "📋 Items đã chọn",
         Content = "(chưa chọn item nào)"
@@ -9681,27 +9731,40 @@ local function SetupAutoTrade()
     RefreshSelPara()
 
     -- ============================================================
-    -- CONTROL
+    -- CONTROL — 3 TOGGLE ĐỘC LẬP
     -- ============================================================
     local StatusPara = CtrlSec:Paragraph({
         Title = "Status: OFF",
-        Content = "Bật Auto Accept hoặc AUTO TRADE"
+        Content = "Bật 1 trong 3 chế độ bên dưới"
     })
 
     CtrlSec:Toggle({
-        Title = "✅ Auto Accept (chỉ accept + Ready)",
+        Title = "✅ Auto Accept (tự accept + item + Ready)",
         Value = Trade.AutoAccept,
         Callback = function(v)
             Trade.AutoAccept = v
             _G.Trade_AutoAccept = v
             Trade.Log("Auto Accept: " .. tostring(v))
-            StatusPara:SetContent(v and "Auto Accept chạy — chỉ accept + Ready"
+            StatusPara:SetContent(v and "Auto Accept chạy — tự accept popup + thêm item + Ready"
                                      or "Auto Accept OFF")
         end
     })
 
     CtrlSec:Toggle({
-        Title = "🚀 AUTO TRADE (ON=WithItems / OFF=ReadyOnly)",
+        Title = "⚡ Auto Trade khi Accept (BẠN tự accept → item + Ready)",
+        Value = Trade.AutoTradeOnAccept,
+        Callback = function(v)
+            Trade.AutoTradeOnAccept = v
+            _G.Trade_AutoTradeOnAccept = v
+            Trade.Log("Auto Trade khi Accept: " .. tostring(v))
+            if v then
+                StatusPara:SetContent("Bạn tự bấm Accept trong game → script tự thêm item + Ready")
+            end
+        end
+    })
+
+    CtrlSec:Toggle({
+        Title = "🚀 AUTO TRADE (chủ động Invite + item + Ready)",
         Value = Trade.AutoTrade,
         Callback = function(v)
             Trade.AutoTrade = v
@@ -9713,7 +9776,7 @@ local function SetupAutoTrade()
                     .. " | User: " .. tostring(Trade.SelectedUser or "(chưa chọn)"))
             else
                 StatusPara:SetTitle("Status: OFF")
-                StatusPara:SetContent("Bật Auto Accept hoặc AUTO TRADE")
+                StatusPara:SetContent("Bật 1 trong 3 chế độ bên dưới")
             end
         end
     })
@@ -9724,21 +9787,28 @@ local function SetupAutoTrade()
     InfoSec:Paragraph({
         Title = "📖 Hướng dẫn",
         Content = [[
-1. Mở Frame_Trade → SelectBar hiện user
-2. REFRESH → chọn User từ Dropdown
-3. Nhập SL vào ô "Số lượng cho item sắp chọn"
-4. Chọn Item từ Dropdown → thêm item với SL
-5. Đổi SL: nhập SL mới → chọn lại item đó
-6. Xóa: theo tên / cuối / tất cả
-7. Chọn Mode (WithItems / ReadyOnly)
-8. Bật Auto Accept hoặc AUTO TRADE
+3 CHẾ ĐỘ (chỉ bật 1 tại 1 thời điểm):
 
-Auto Accept: KHÔNG mời, chỉ accept + Ready.
-AUTO TRADE: mời user + thêm item + Ready.
+1. Auto Accept:
+   - Tự accept popup khi có người gửi trade
+   - Tự thêm item + Ready
+   - Không chủ động mời ai
 
-Item dùng Remote Trade:FireServer("Add", name, qty)
-→ Thêm được MỌI item trong túi, không cần
-  mở bảng Trading hay cuộn ScrollingFrame.
+2. Auto Trade khi Accept:
+   - BẠN tự bấm Accept trong game
+   - Khi bảng trade mở → script tự thêm item + Ready
+   - Kiểm soát được ai được trade
+
+3. AUTO TRADE:
+   - Chủ động Invite user đã chọn
+   - Tự accept + thêm item + Ready
+
+Tất cả đều tuân theo Mode:
+- ON = WithItems (thêm item)
+- OFF = ReadyOnly (chỉ Ready)
+
+Item dùng remote Trade:FireServer("Add", name, qty)
+→ Thêm được MỌI item, không cần mở bảng.
 ]]
     })
 
@@ -9785,56 +9855,35 @@ Item dùng Remote Trade:FireServer("Add", name, qty)
     }
 
     -- ============================================================
-    -- LOOP CHÍNH
+    -- LOOP CHÍNH — 3 nhánh độc lập, tách wasTrading
     -- ============================================================
     task.spawn(function()
-        local wasPopup, wasTrading = false, false
+        -- Biến riêng cho từng toggle
+        local wasPopupAA, wasTradingAA = false, false      -- Auto Accept
+        local wasPopupAO, wasTradingAO = false, false      -- Auto Trade on Accept
+        local wasPopupAT, wasTradingAT = false, false      -- AUTO TRADE
         local lastAccept = 0
+
         while task.wait(0.3) do
             pcall(function()
+                -- ========== NHÁNH 1: AUTO ACCEPT ==========
                 if Trade.AutoAccept then
                     if Trade.PopupOpen() then
-                        if not wasPopup then Trade.Log("📩 Có popup → accept") end
-                        wasPopup = true
+                        if not wasPopupAA then Trade.Log("📩 [AutoAccept] Popup → accept") end
+                        wasPopupAA = true
                         if tick() - lastAccept >= 1.5 then
                             lastAccept = tick()
                             local ok, r = Trade.DoAccept()
                             Trade.Log(ok and ("✔ " .. r) or "✘ Accept fail")
                         end
                     else
-                        wasPopup = false
+                        wasPopupAA = false
                         if Trade.TradingOpen() then
-                            if not wasTrading then
-                                wasTrading = true
-                                Trade.Log("Trading mở → Ready")
+                            if not wasTradingAA then
+                                wasTradingAA = true
+                                Trade.Log("[AutoAccept] Trading mở (mode=" .. Trade.Mode .. ") → xử lý")
                                 task.spawn(function()
-                                    task.wait(0.5)
-                                    local ready = Trade.ReadyBtn()
-                                    if ready then Trade.Click(ready); Trade.Log("✔ Ready") end
-                                end)
-                            end
-                        else
-                            wasTrading = false
-                        end
-                    end
-                end
-
-                if Trade.AutoTrade then
-                    if Trade.PopupOpen() then
-                        if not wasPopup then Trade.Log("📩 Popup → accept") end
-                        wasPopup = true
-                        if tick() - lastAccept >= 1.5 then
-                            lastAccept = tick()
-                            local ok, r = Trade.DoAccept()
-                            Trade.Log(ok and ("✔ " .. r) or "✘ Accept fail")
-                        end
-                    else
-                        wasPopup = false
-                        if Trade.TradingOpen() then
-                            if not wasTrading then
-                                wasTrading = true
-                                Trade.Log("Trading mở (mode=" .. Trade.Mode .. ")")
-                                task.spawn(function()
+                                    task.wait(1.0)
                                     if Trade.Mode == "WithItems" then
                                         for _, it in ipairs(Trade.Items) do
                                             if it.name and it.name ~= "" and it.qty and it.qty > 0 then
@@ -9845,13 +9894,90 @@ Item dùng Remote Trade:FireServer("Add", name, qty)
                                             end
                                         end
                                     end
-                                    task.wait(0.5)
-                                    local ready = Trade.ReadyBtn()
-                                    if ready then Trade.Click(ready); Trade.Log("✔ Ready") end
+                                    task.wait(1.5)
+                                    Trade.ClickReady()
                                 end)
                             end
                         else
-                            wasTrading = false
+                            wasTradingAA = false
+                        end
+                    end
+                end
+
+                -- ========== NHÁNH 2: AUTO TRADE KHI ACCEPT ==========
+                if Trade.AutoTradeOnAccept then
+                    -- Tự accept popup (giống Auto Accept)
+                    if Trade.PopupOpen() then
+                        if not wasPopupAO then Trade.Log("📩 [AutoTradeOnAccept] Popup → accept") end
+                        wasPopupAO = true
+                        if tick() - lastAccept >= 1.5 then
+                            lastAccept = tick()
+                            local ok, r = Trade.DoAccept()
+                            Trade.Log(ok and ("✔ " .. r) or "✘ Accept fail")
+                        end
+                    else
+                        wasPopupAO = false
+                        if Trade.TradingOpen() then
+                            if not wasTradingAO then
+                                wasTradingAO = true
+                                Trade.Log("[AutoTradeOnAccept] Trading mở → thêm item (KHÔNG tự Ready)")
+                                task.spawn(function()
+                                    task.wait(1.0)
+                                    if #Trade.Items == 0 then
+                                        Trade.Log("⚠️ Chưa có item nào trong danh sách")
+                                        return
+                                    end
+                                    for _, it in ipairs(Trade.Items) do
+                                        if it.name and it.name ~= "" and it.qty and it.qty > 0 then
+                                            local ok, reason = Trade.AddItem(it.name, it.qty)
+                                            Trade.Log(ok and string.format("✔ %s x%d", it.name, it.qty)
+                                                       or string.format("✘ %s: %s", it.name, tostring(reason)))
+                                            task.wait(0.4)
+                                        end
+                                    end
+                                    Trade.Log("👉 Đã thêm item — bạn tự bấm Ready khi sẵn sàng")
+                                end)
+                            end
+                        else
+                            wasTradingAO = false
+                        end
+                    end
+                end
+
+                -- ========== NHÁNH 3: AUTO TRADE (chủ động Invite) ==========
+                if Trade.AutoTrade then
+                    if Trade.PopupOpen() then
+                        if not wasPopupAT then Trade.Log("📩 [AutoTrade] Popup → accept") end
+                        wasPopupAT = true
+                        if tick() - lastAccept >= 1.5 then
+                            lastAccept = tick()
+                            local ok, r = Trade.DoAccept()
+                            Trade.Log(ok and ("✔ " .. r) or "✘ Accept fail")
+                        end
+                    else
+                        wasPopupAT = false
+                        if Trade.TradingOpen() then
+                            if not wasTradingAT then
+                                wasTradingAT = true
+                                Trade.Log("[AutoTrade] Trading mở (mode=" .. Trade.Mode .. ") → xử lý")
+                                task.spawn(function()
+                                    task.wait(1.0)
+                                    if Trade.Mode == "WithItems" then
+                                        for _, it in ipairs(Trade.Items) do
+                                            if it.name and it.name ~= "" and it.qty and it.qty > 0 then
+                                                local ok, reason = Trade.AddItem(it.name, it.qty)
+                                                Trade.Log(ok and string.format("✔ %s x%d", it.name, it.qty)
+                                                           or string.format("✘ %s: %s", it.name, tostring(reason)))
+                                                task.wait(0.4)
+                                            end
+                                        end
+                                    end
+                                    task.wait(1.5)
+                                    Trade.ClickReady()
+                                end)
+                            end
+                        else
+                            wasTradingAT = false
                             local now = tick()
                             if Trade.SelectedUser
                                and (now - (Trade._lastInvite or 0)) >= 3.0 then
