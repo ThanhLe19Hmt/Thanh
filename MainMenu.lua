@@ -4531,6 +4531,33 @@ task.spawn(function()
 end)
 
 -- ============================================================
+-- TRIỆU HỒI RAID BOSS TRỰC TIẾP QUA REMOTE
+-- ============================================================
+_G.RaidBossRemoteNames = {
+    Bacon  = "Bacon of Grudge",
+    Dragon = "Dragon",
+    Lava   = "LavaTitan",
+}
+
+function _G.SummonRaidBoss(bossKey)
+    local rs = game:GetService("ReplicatedStorage")
+    local modules = rs:FindFirstChild("Modules")
+    local nf = modules and modules:FindFirstChild("NetworkFramework")
+    local netEvent = nf and nf:FindFirstChild("NetworkEvent")
+    if not netEvent then
+        return false, "no_network_event"
+    end
+    local remoteName = _G.RaidBossRemoteNames[bossKey] or bossKey
+    local ok, err = pcall(function()
+        netEvent:FireServer("fire", nil, "SpawnBossFight", remoteName)
+    end)
+    if not ok then
+        return false, "fire_fail:" .. tostring(err)
+    end
+    return true, remoteName
+end
+
+-- ============================================================
 -- 🆕 AUTO RAID BOSS BACON — v15 FULL (Dragon/Lava fallback)
 -- - Bacon chính: ArmorBall → Boss + Thanos spam F (bay 120m đợi)
 -- - Dragon fallback: Safe Zone → bay 500m; HP<50% + Thanos → spam F → bay 120m đợi
@@ -5275,6 +5302,33 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
     end
 end
 
+local function IsOtherRaidOccupied()
+    local bf = workspace:FindFirstChild("Boss Fight")
+    if not bf then return false, nil end
+
+    local dragonFolder = bf:FindFirstChild("Dragon")
+    if dragonFolder then
+        local boss = dragonFolder:FindFirstChild("Dragon Boss")
+        local hum = boss and boss:FindFirstChild("Humanoid")
+        if hum and hum.Health > 0 then
+            return true, "Dragon"
+        end
+    end
+
+    local lavaFolder = bf:FindFirstChild("LavaTitan")
+    if lavaFolder then
+        for _, obj in ipairs(lavaFolder:GetChildren()) do
+            if obj:IsA("Model") then
+                local hum = obj:FindFirstChild("Humanoid")
+                if hum and hum.Health > 0 then
+                    return true, "LavaTitan"
+                end
+            end
+        end
+    end
+    return false, nil
+end
+
 -- =====================================================
 -- OpenPortal (giữ nguyên gốc + fix buff lock)
 -- =====================================================
@@ -5282,48 +5336,132 @@ function Bacon_OpenPortal()
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-
     if tick() < _G.RaidPortalFireLock then return false end
 
+    -- Đã vào phòng (Bacon tồn tại) → done
     local bf = workspace:FindFirstChild("Boss Fight")
     if bf and bf:FindFirstChild("Bacon of Grudge") then
         _G.RaidPortalPhase = "IDLE"
         return true
     end
 
-    if not _G.RaidBuffUsed then
-        _G.RaidBuffUsed = true
-
+    -- ===== BƯỚC 1: KIỂM TRA CÓ BUFF TOOL KHÔNG =====
+    -- Chỉ kiểm tra 1 lần đầu mỗi session (khi mới bật auto raid)
+    if _G.RaidBuffCheckDone == nil then
+        _G.RaidBuffCheckDone = true
         local tool, buffName = Bacon_FindBuffTool()
         if tool then
-            print("[Bacon] ⚡ Có buff " .. buffName .. ", bắt đầu spam F trước cổng")
-            _G.RaidBuffSpamStartTime = tick()
-            _G.RaidBuffFinishTime = 0
-            _G.RaidBuffSpamActive = true
-
-            task.spawn(function()
-                Bacon_BuffSpamLoop()
-                _G.RaidBuffSpamActive = false
-                task.wait(0.3)
-                _G.RaidBuffFinishTime = tick()
-                print("[Bacon] ✅ Buff xong, bắt đầu mở cổng")
-                _G.RaidPortalPhase = "IDLE"
-                _G.RaidLastFireTime = 0
-            end)
-            return false
+            _G.RaidBuffToolName = buffName
+            _G.RaidHasBuffTool = true
+            print("[Bacon] ✅ Có buff tool: " .. buffName .. " → sẽ buff trước khi summon")
         else
-            print("[Bacon] ⚠️ Không có buff tool, bỏ qua")
+            _G.RaidBuffToolName = nil
+            _G.RaidHasBuffTool = false
+            print("[Bacon] ⚠️ Không có buff tool (SSJ...) → bỏ buff, summon luôn")
+            _G.RaidBuffUsed = true
             _G.RaidBuffFinishTime = tick()
-            _G.RaidBuffSpamActive = false
         end
+    end
+
+    -- ===== BƯỚC 2: NẾU CÓ BUFF TOOL → EQUIP + SPAM F =====
+    if _G.RaidHasBuffTool and not _G.RaidBuffUsed then
+        _G.RaidBuffUsed = true
+
+        local buffName = _G.RaidBuffToolName
+        print("[Bacon] ⚡ Equip " .. buffName .. " + spam F trước khi summon")
+
+        task.spawn(function()
+            -- 2a. Equip tool (retry đến khi được)
+            local equipped = false
+            local equipAttempts = 0
+            while not equipped and equipAttempts < 20 do
+                equipAttempts = equipAttempts + 1
+                local c = LocalPlayer.Character
+                if not c then break end
+                local hum = c:FindFirstChild("Humanoid")
+                if not hum then break end
+
+                -- Kiểm tra tool đã trên tay chưa
+                local currentTool = nil
+                for _, t in ipairs(c:GetChildren()) do
+                    if t:IsA("Tool") and t.Name:lower() == buffName:lower() then
+                        currentTool = t
+                        break
+                    end
+                end
+
+                if currentTool then
+                    equipped = true
+                    print("[Bacon] ✅ Đã equip " .. buffName .. " (lần " .. equipAttempts .. ")")
+                    break
+                end
+
+                -- Tìm trong Backpack và equip
+                local bp = LocalPlayer:FindFirstChild("Backpack")
+                if bp then
+                    for _, t in ipairs(bp:GetChildren()) do
+                        if t:IsA("Tool") and t.Name:lower() == buffName:lower() then
+                            pcall(function() hum:EquipTool(t) end)
+                            task.wait(0.3)
+                            -- Kiểm tra lại
+                            for _, check in ipairs(c:GetChildren()) do
+                                if check:IsA("Tool") and check.Name:lower() == buffName:lower() then
+                                    equipped = true
+                                    break
+                                end
+                            end
+                            break
+                        end
+                    end
+                end
+
+                if not equipped then
+                    print("[Bacon] 🔄 Chưa equip được " .. buffName .. " → thử lại (lần " .. equipAttempts .. ")")
+                    task.wait(0.5)
+                end
+            end
+
+            if not equipped then
+                print("[Bacon] ❌ Không equip được " .. buffName .. " sau 20 lần → bỏ buff, summon luôn")
+                _G.RaidBuffFinishTime = tick()
+                return
+            end
+
+            -- 2b. Spam F (giữ nguyên Bacon_BuffSpamLoop gốc)
+            Bacon_BuffSpamLoop()
+
+            task.wait(0.3)
+            _G.RaidBuffFinishTime = tick()
+            print("[Bacon] ✅ Buff F xong → summon boss")
+        end)
+        return false
     end
 
     if _G.RaidBuffFinishTime == 0 then return false end
     if tick() - _G.RaidBuffFinishTime < 0.3 then return false end
 
-    local tz = workspace:FindFirstChild("TeleportBossFightZone")
-    if tz and tz:FindFirstChild("Hitbox") then
-        if _G.RaidPortalPhase ~= "ENTERED" then
+    -- ===== BƯỚC 3: SUMMON QUA REMOTE =====
+    if _G.RaidPortalPhase == "IDLE" or _G.RaidPortalPhase == nil then
+        if tick() - _G.RaidLastFireTime >= _G.BACON_MIN_FIRE_GAP then
+            _G.RaidLastFireTime = tick()
+            _G.RaidPortalPhase = "GUI_OPENING"
+            _G.RaidPortalStartTime = tick()
+
+            local ok, name = _G.SummonRaidBoss("Bacon")
+            if ok then
+                print("[Bacon] 🌀 Summon qua remote: " .. tostring(name))
+            else
+                print("[Bacon] ❌ Summon fail: " .. tostring(name))
+                _G.RaidPortalPhase = "IDLE"
+            end
+            return true
+        end
+    end
+
+    -- ===== BƯỚC 4: CHỜ PORTAL =====
+    if _G.RaidPortalPhase == "GUI_OPENING" then
+        local tz = workspace:FindFirstChild("TeleportBossFightZone")
+        if tz and tz:FindFirstChild("Hitbox") then
             hrp.CFrame = tz.Hitbox.CFrame
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
@@ -5332,126 +5470,7 @@ function Bacon_OpenPortal()
             _G.RaidPortalPhase = "ENTERED"
             _G.RaidPortalFireLock = tick() + _G.BACON_PORTAL_FIRE_LOCK
             _G.RaidOriginalPos = tz.Hitbox.Position + Vector3.new(0, _G.BACON_AIM_HEIGHT, 0)
-        end
-        return true
-    end
-
-    local npcPrompt = workspace:FindFirstChild("NpcPrompt")
-    local openRaidNPC = npcPrompt and npcPrompt:FindFirstChild("Open Raid")
-    if openRaidNPC and _G.RaidPortalPhase == "IDLE" then
-        local npcHrp = openRaidNPC:FindFirstChild("HumanoidRootPart")
-            or openRaidNPC:FindFirstChildWhichIsA("BasePart")
-        if npcHrp then
-            local dist = (hrp.Position - npcHrp.Position).Magnitude
-            if dist > 10 then
-                hrp.CFrame = CFrame.new(npcHrp.Position + Vector3.new(0, 3, 0))
-                hrp.AssemblyLinearVelocity = Vector3.zero
-                hrp.AssemblyAngularVelocity = Vector3.zero
-                task.wait(0.3)
-            end
-            if tick() - _G.RaidLastFireTime >= _G.BACON_MIN_FIRE_GAP then
-                local prompt = openRaidNPC:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if prompt then
-                    _G.RaidLastFireTime = tick()
-                    _G.RaidPortalPhase = "GUI_OPENING"
-                    _G.RaidPortalStartTime = tick()
-                    pcall(function() fireproximityprompt(prompt) end)
-                    print("[Bacon] 👆 Fire NPC Open Raid")
-                    return true
-                end
-            end
-        end
-    end
-
-    if _G.RaidPortalPhase == "GUI_OPENING" then
-        local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-        local main = hud and hud:FindFirstChild("Main")
-        local raidBossFrame = main and main:FindFirstChild("Frame_RaidBoss")
-
-        if raidBossFrame then
-            local baconTemplate = nil
-            local sf = raidBossFrame:FindFirstChild("ScrollingFrame")
-            if sf then
-                for _, child in ipairs(sf:GetChildren()) do
-                    if child:IsA("Frame") then
-                        local titleLabel = child:FindFirstChild("TitleLabel", true)
-                        if titleLabel and titleLabel.Text then
-                            if titleLabel.Text:lower():find("bacon") then
-                                baconTemplate = child
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-
-            if baconTemplate then
-                local openButton = nil
-                for _, obj in ipairs(baconTemplate:GetDescendants()) do
-                    if (obj:IsA("TextLabel") or obj:IsA("TextButton")) and obj.Text then
-                        if obj.Text:lower() == "open" then
-                            local parent = obj.Parent
-                            while parent and parent ~= baconTemplate do
-                                if parent:IsA("TextButton") or parent:IsA("ImageButton") then
-                                    openButton = parent
-                                    break
-                                end
-                                parent = parent.Parent
-                            end
-                            if openButton then break end
-                        end
-                    end
-                end
-                if not openButton then
-                    local mainBtn = baconTemplate:FindFirstChild("Main", true)
-                    if mainBtn and (mainBtn:IsA("TextButton") or mainBtn:IsA("ImageButton")) then
-                        openButton = mainBtn
-                    end
-                end
-
-                if openButton then
-                    print("[Bacon] 🖱️ Click button Open")
-                    pcall(function()
-                        if firesignal then
-                            firesignal(openButton.MouseButton1Click)
-                        else
-                            openButton:Activate()
-                        end
-                    end)
-                    _G.RaidPortalPhase = "WAITING"
-                    _G.RaidPortalStartTime = tick()
-
-                    task.spawn(function()
-                        local startTime = tick()
-                        local closed = false
-                        while tick() - startTime < 3 do
-                            task.wait(0.15)
-                            if closed then break end
-                            pcall(function()
-                                local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-                                local main2 = hud2 and hud2:FindFirstChild("Main")
-                                local rbf2 = main2 and main2:FindFirstChild("Frame_RaidBoss")
-                                if rbf2 and rbf2.Visible then
-                                    local cb = rbf2:FindFirstChild("Close_")
-                                        or rbf2:FindFirstChild("Close")
-                                        or rbf2:FindFirstChild("CloseButton")
-                                    if cb then
-                                        pcall(function()
-                                            if firesignal then firesignal(cb.MouseButton1Click)
-                                            else cb:Activate() end
-                                        end)
-                                    end
-                                    task.wait(0.1)
-                                    if rbf2.Visible then pcall(function() rbf2.Visible = false end) end
-                                    closed = true
-                                    print("[Bacon] 🚪 Đã đóng GUI mở cổng")
-                                end
-                            end)
-                        end
-                    end)
-                    return true
-                end
-            end
+            return true
         end
 
         if tick() - _G.RaidPortalStartTime > 5 then
@@ -5460,6 +5479,7 @@ function Bacon_OpenPortal()
         return true
     end
 
+    -- ===== WAITING fallback =====
     if _G.RaidPortalPhase == "WAITING" then
         local elapsed = tick() - _G.RaidPortalStartTime
         local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
@@ -5467,7 +5487,7 @@ function Bacon_OpenPortal()
             hrp.CFrame = tz2.Hitbox.CFrame
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            print("[Bacon] 🌀 TP vào portal (sau click)")
+            print("[Bacon] 🌀 TP vào portal (sau summon)")
             _G.RaidEnterTime = tick()
             _G.RaidPortalPhase = "ENTERED"
             _G.RaidPortalFireLock = tick() + _G.BACON_PORTAL_FIRE_LOCK
@@ -5486,6 +5506,7 @@ function Bacon_OpenPortal()
         end
         return true
     end
+
     return false
 end
 
@@ -5526,6 +5547,9 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     _G.BaconFbLavaThanosCount = 0
     _G.BaconFbLavaSurfaced = false
     _G.BaconFbLavaSurfacedTime = 0
+	_G.RaidBuffCheckDone = nil        -- 🆕 reset để check lại buff sau khi die
+    _G.RaidHasBuffTool = nil          -- 🆕
+    _G.RaidBuffToolName = nil    
     print("[Bacon] 💀 Respawn → reset")
 end)
 
@@ -5566,6 +5590,9 @@ task.spawn(function()
                 _G.BaconFbLavaThanosCount = 0
                 _G.BaconFbLavaSurfaced = false
                 _G.BaconFbLavaSurfacedTime = 0
+				_G.RaidBuffCheckDone = nil        -- 🆕 reset check buff
+                _G.RaidHasBuffTool = nil          -- 🆕 reset
+                _G.RaidBuffToolName = nil
                 return
             end
 
@@ -6970,6 +6997,7 @@ function Dragon_OpenPortal()
         return true
     end
 
+    -- ===== GIỮ NGUYÊN: Buff SSJ =====
     if not _G.DragonBuffUsed then
         local tool, buffName = Dragon_FindBuffTool()
 
@@ -6987,18 +7015,14 @@ function Dragon_OpenPortal()
                     local now = tick()
                     if now - lastFTime >= _G.DRAGON_BUFF_COOLDOWN then
                         lastFTime = now
-
                         local c = LocalPlayer.Character
                         if not c then break end
-
                         local currentTool = nil
                         for _, t in ipairs(c:GetChildren()) do
                             if t:IsA("Tool") and t.Name:lower() == buffName:lower() then
-                                currentTool = t
-                                break
+                                currentTool = t; break
                             end
                         end
-
                         if not currentTool then
                             local bp = LocalPlayer:FindFirstChild("Backpack")
                             if bp then
@@ -7006,8 +7030,7 @@ function Dragon_OpenPortal()
                                     if t:IsA("Tool") and t.Name:lower() == buffName:lower() then
                                         c.Humanoid:EquipTool(t)
                                         task.wait(0.3)
-                                        currentTool = t
-                                        break
+                                        currentTool = t; break
                                     end
                                 end
                             end
@@ -7032,16 +7055,12 @@ function Dragon_OpenPortal()
                                 end
                             end
                         end
-
                         if fOnCooldown then
                             print("[Dragon] ⏹️ Buff F cooldown → dừng spam")
                             break
                         end
-
                         if Action then
-                            pcall(function()
-                                Action:FireServer(currentTool.Name, "f")
-                            end)
+                            pcall(function() Action:FireServer(currentTool.Name, "f") end)
                             print("[Dragon] ⚡ Buff F: " .. buffName)
                         end
                     end
@@ -7051,9 +7070,8 @@ function Dragon_OpenPortal()
                 _G.DragonBuffSpamActive = false
                 task.wait(0.3)
                 _G.DragonBuffFinishTime = tick()
-                print("[Dragon] ✅ Buff xong, bắt đầu mở cổng")
+                print("[Dragon] ✅ Buff xong, bắt đầu summon")
             end)
-
             return false
         else
             _G.DragonBuffFindAttempts = (_G.DragonBuffFindAttempts or 0) + 1
@@ -7071,13 +7089,14 @@ function Dragon_OpenPortal()
     if _G.DragonBuffFinishTime == 0 then return false end
     if tick() - _G.DragonBuffFinishTime < 0.3 then return false end
 
+    -- ===== GIỮ NGUYÊN: Chờ portal có sẵn (nếu bạn bè mở trước) =====
     local tz = workspace:FindFirstChild("TeleportBossFightZone")
     if tz and tz:FindFirstChild("Hitbox") then
         if _G.DragonPortalPhase ~= "ENTERED" then
             hrp.CFrame = tz.Hitbox.CFrame
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            print("[Dragon] 🌀 TP vào portal")
+            print("[Dragon] 🌀 TP vào portal (có sẵn)")
             _G.DragonEnterTime = tick()
             _G.DragonPortalPhase = "ENTERED"
             _G.DragonPortalFireLock = tick() + _G.DRAGON_PORTAL_FIRE_LOCK
@@ -7085,117 +7104,36 @@ function Dragon_OpenPortal()
         return true
     end
 
-    local npcPrompt = workspace:FindFirstChild("NpcPrompt")
-    local openRaidNPC = npcPrompt and npcPrompt:FindFirstChild("Open Raid")
-    if openRaidNPC and _G.DragonPortalPhase == "IDLE" then
-        local npcHrp = openRaidNPC:FindFirstChild("HumanoidRootPart")
-            or openRaidNPC:FindFirstChildWhichIsA("BasePart")
-        if npcHrp then
-            local dist = (hrp.Position - npcHrp.Position).Magnitude
-            if dist > 10 then
-                hrp.CFrame = CFrame.new(npcHrp.Position + Vector3.new(0, 3, 0))
-                hrp.AssemblyLinearVelocity = Vector3.zero
-                hrp.AssemblyAngularVelocity = Vector3.zero
-                task.wait(0.3)
+    -- ===== THAY ĐỔI: Summon qua Remote thay vì NPC Open Raid =====
+    if _G.DragonPortalPhase == "IDLE" then
+        if tick() - _G.DragonLastFireTime >= _G.DRAGON_MIN_FIRE_GAP then
+            _G.DragonLastFireTime = tick()
+            _G.DragonPortalPhase = "GUI_OPENING"
+            _G.DragonPortalStartTime = tick()
+
+            local ok, name = _G.SummonRaidBoss("Dragon")
+            if ok then
+                print("[Dragon] 🌀 Summon qua remote: " .. tostring(name))
+            else
+                print("[Dragon] ❌ Summon fail: " .. tostring(name))
+                _G.DragonPortalPhase = "IDLE"
             end
-            if tick() - _G.DragonLastFireTime >= _G.DRAGON_MIN_FIRE_GAP then
-                local prompt = openRaidNPC:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if prompt then
-                    _G.DragonLastFireTime = tick()
-                    _G.DragonPortalPhase = "GUI_OPENING"
-                    _G.DragonPortalStartTime = tick()
-                    pcall(function() fireproximityprompt(prompt) end)
-                    print("[Dragon] 👆 Fire NPC Open Raid")
-                    return true
-                end
-            end
+            return true
         end
     end
 
+    -- ===== GIỮ NGUYÊN: Chờ portal sau summon =====
     if _G.DragonPortalPhase == "GUI_OPENING" then
-        local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-        local main = hud and hud:FindFirstChild("Main")
-        local raidBossFrame = main and main:FindFirstChild("Frame_RaidBoss")
-
-        if raidBossFrame then
-            local dragonTemplate = raidBossFrame:FindFirstChild("Template_Dragon")
-            if not dragonTemplate then
-                local sf = raidBossFrame:FindFirstChild("ScrollingFrame")
-                if sf then
-                    for _, child in ipairs(sf:GetChildren()) do
-                        if child.Name:lower():find("dragon") then
-                            dragonTemplate = child
-                            break
-                        end
-                    end
-                end
-            end
-
-            if dragonTemplate then
-                local openButton = nil
-                for _, obj in ipairs(dragonTemplate:GetDescendants()) do
-                    if obj:IsA("TextLabel") and obj.Text == "Open" then
-                        local parent = obj.Parent
-                        while parent and parent ~= dragonTemplate do
-                            if parent:IsA("TextButton") or parent:IsA("ImageButton") then
-                                openButton = parent
-                                break
-                            end
-                            parent = parent.Parent
-                        end
-                        if openButton then break end
-                    end
-                end
-                if not openButton then
-                    local mainBtn = dragonTemplate:FindFirstChild("Main")
-                    if mainBtn and (mainBtn:IsA("TextButton") or mainBtn:IsA("ImageButton")) then
-                        openButton = mainBtn
-                    end
-                end
-
-                if openButton then
-                    print("[Dragon] 🖱️ Click button Open")
-                    pcall(function()
-                        if firesignal then
-                            firesignal(openButton.MouseButton1Click)
-                        else
-                            openButton:Activate()
-                        end
-                    end)
-                    _G.DragonPortalPhase = "WAITING"
-                    _G.DragonPortalStartTime = tick()
-
-                    task.spawn(function()
-                        local startTime = tick()
-                        local closed = false
-                        while tick() - startTime < 3 do
-                            task.wait(0.15)
-                            if closed then break end
-                            pcall(function()
-                                local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-                                local main2 = hud2 and hud2:FindFirstChild("Main")
-                                local rbf2 = main2 and main2:FindFirstChild("Frame_RaidBoss")
-                                if rbf2 and rbf2.Visible then
-                                    local cb = rbf2:FindFirstChild("Close_")
-                                        or rbf2:FindFirstChild("Close")
-                                        or rbf2:FindFirstChild("CloseButton")
-                                    if cb then
-                                        pcall(function()
-                                            if firesignal then firesignal(cb.MouseButton1Click)
-                                            else cb:Activate() end
-                                        end)
-                                    end
-                                    task.wait(0.1)
-                                    if rbf2.Visible then pcall(function() rbf2.Visible = false end) end
-                                    closed = true
-                                    print("[Dragon] 🚪 Đã đóng GUI mở cổng")
-                                end
-                            end)
-                        end
-                    end)
-                    return true
-                end
-            end
+        local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
+        if tz2 and tz2:FindFirstChild("Hitbox") then
+            hrp.CFrame = tz2.Hitbox.CFrame
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            print("[Dragon] 🌀 TP vào portal")
+            _G.DragonEnterTime = tick()
+            _G.DragonPortalPhase = "ENTERED"
+            _G.DragonPortalFireLock = tick() + _G.DRAGON_PORTAL_FIRE_LOCK
+            return true
         end
 
         if tick() - _G.DragonPortalStartTime > 5 then
@@ -7206,12 +7144,12 @@ function Dragon_OpenPortal()
 
     if _G.DragonPortalPhase == "WAITING" then
         local elapsed = tick() - _G.DragonPortalStartTime
-        local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
-        if tz2 and tz2:FindFirstChild("Hitbox") then
-            hrp.CFrame = tz2.Hitbox.CFrame
+        local tz3 = workspace:FindFirstChild("TeleportBossFightZone")
+        if tz3 and tz3:FindFirstChild("Hitbox") then
+            hrp.CFrame = tz3.Hitbox.CFrame
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            print("[Dragon] 🌀 TP vào portal (sau click)")
+            print("[Dragon] 🌀 TP vào portal (sau summon)")
             _G.DragonEnterTime = tick()
             _G.DragonPortalPhase = "ENTERED"
             _G.DragonPortalFireLock = tick() + _G.DRAGON_PORTAL_FIRE_LOCK
@@ -8374,7 +8312,6 @@ function Lava_OpenPortal()
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-
     if tick() < _G.LavaPortalFireLock then return false end
 
     local bf = workspace:FindFirstChild("Boss Fight")
@@ -8383,9 +8320,9 @@ function Lava_OpenPortal()
         return true
     end
 
+    -- ===== GIỮ NGUYÊN: Buff SSJ =====
     if not _G.LavaBuffUsed then
         _G.LavaBuffUsed = true
-
         local tool, buffName = Lava_FindBuffTool()
         if tool then
             print("[LavaTitan] ⚡ Có buff " .. buffName .. ", bắt đầu spam F trước cổng")
@@ -8398,7 +8335,7 @@ function Lava_OpenPortal()
                 _G.LavaBuffSpamActive = false
                 task.wait(0.3)
                 _G.LavaBuffFinishTime = tick()
-                print("[LavaTitan] ✅ Buff xong, bắt đầu mở cổng")
+                print("[LavaTitan] ✅ Buff xong, bắt đầu summon")
                 _G.LavaPortalPhase = "IDLE"
                 _G.LavaLastFireTime = 0
             end)
@@ -8410,20 +8347,17 @@ function Lava_OpenPortal()
         end
     end
 
-    if _G.LavaBuffFinishTime == 0 then
-        return false
-    end
-    if tick() - _G.LavaBuffFinishTime < 0.3 then
-        return false
-    end
+    if _G.LavaBuffFinishTime == 0 then return false end
+    if tick() - _G.LavaBuffFinishTime < 0.3 then return false end
 
+    -- ===== GIỮ NGUYÊN: Chờ portal có sẵn (bạn bè mở trước) =====
     local tz = workspace:FindFirstChild("TeleportBossFightZone")
     if tz and tz:FindFirstChild("Hitbox") then
         if _G.LavaPortalPhase ~= "ENTERED" then
             hrp.CFrame = tz.Hitbox.CFrame
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            print("[LavaTitan] 🌀 TP vào portal")
+            print("[LavaTitan] 🌀 TP vào portal (có sẵn)")
             _G.LavaEnterTime = tick()
             _G.LavaPortalPhase = "ENTERED"
             _G.LavaPortalFireLock = tick() + _G.LAVA_PORTAL_FIRE_LOCK
@@ -8431,126 +8365,40 @@ function Lava_OpenPortal()
         return true
     end
 
-    local npcPrompt = workspace:FindFirstChild("NpcPrompt")
-    local openRaidNPC = npcPrompt and npcPrompt:FindFirstChild("Open Raid")
+    -- ===== THAY ĐỔI: Summon qua Remote thay vì NPC Open Raid =====
+    if _G.LavaPortalPhase == "IDLE" then
+        if tick() - _G.LavaLastFireTime >= _G.LAVA_MIN_FIRE_GAP then
+            _G.LavaLastFireTime = tick()
+            _G.LavaPortalPhase = "GUI_OPENING"
+            _G.LavaPortalStartTime = tick()
 
-    if openRaidNPC and _G.LavaPortalPhase == "IDLE" then
-        local npcHrp = openRaidNPC:FindFirstChild("HumanoidRootPart")
-            or openRaidNPC:FindFirstChildWhichIsA("BasePart")
-        if npcHrp then
-            local dist = (hrp.Position - npcHrp.Position).Magnitude
-            if dist > 10 then
-                hrp.CFrame = CFrame.new(npcHrp.Position + Vector3.new(0, 3, 0))
-                hrp.AssemblyLinearVelocity = Vector3.zero
-                hrp.AssemblyAngularVelocity = Vector3.zero
-                task.wait(0.3)
-            end            if tick() - _G.LavaLastFireTime >= _G.LAVA_MIN_FIRE_GAP then
-                local prompt = openRaidNPC:FindFirstChildWhichIsA("ProximityPrompt", true)
-                if prompt then
-                    _G.LavaLastFireTime = tick()
-                    _G.LavaPortalPhase = "GUI_OPENING"
-                    _G.LavaPortalStartTime = tick()
-                    pcall(function() fireproximityprompt(prompt) end)
-                    print("[LavaTitan] 👆 Fire NPC Open Raid")
-                    return true
-                end
+            local ok, name = _G.SummonRaidBoss("Lava")
+            if ok then
+                print("[LavaTitan] 🌀 Summon qua remote: " .. tostring(name))
+            else
+                print("[LavaTitan] ❌ Summon fail: " .. tostring(name))
+                _G.LavaPortalPhase = "IDLE"
             end
+            return true
         end
     end
 
+    -- ===== GIỮ NGUYÊN: Chờ portal sau summon =====
     if _G.LavaPortalPhase == "GUI_OPENING" then
-        local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-        local main = hud and hud:FindFirstChild("Main")
-        local raidBossFrame = main and main:FindFirstChild("Frame_RaidBoss")
-
-        if raidBossFrame then
-            local lavaTemplate = raidBossFrame:FindFirstChild("Template_LavaTitan")
-            if not lavaTemplate then
-                local sf = raidBossFrame:FindFirstChild("ScrollingFrame")
-                if sf then
-                    for _, child in ipairs(sf:GetChildren()) do
-                        if child.Name:lower():find("lavatitan") then
-                            lavaTemplate = child
-                            break
-                        end
-                    end
-                end
-            end
-
-            if lavaTemplate then
-                local openButton = nil
-                for _, obj in ipairs(lavaTemplate:GetDescendants()) do
-                    if obj:IsA("TextLabel") and obj.Text == "Open" then
-                        local parent = obj.Parent
-                        while parent and parent ~= lavaTemplate do
-                            if parent:IsA("TextButton") or parent:IsA("ImageButton") then
-                                openButton = parent
-                                break
-                            end
-                            parent = parent.Parent
-                        end
-                        if openButton then break end
-                    end
-                end
-                if not openButton then
-                    local mainBtn = lavaTemplate:FindFirstChild("Main")
-                    if mainBtn and (mainBtn:IsA("TextButton") or mainBtn:IsA("ImageButton")) then
-                        openButton = mainBtn
-                    end
-                end
-
-                if openButton then
-                    print("[LavaTitan] 🖱️ Click button Open")
-                    pcall(function()
-                        if firesignal then
-                            firesignal(openButton.MouseButton1Click)
-                        else
-                            openButton:Activate()
-                        end
-                    end)
-                    _G.LavaPortalPhase = "WAITING"
-                    _G.LavaPortalStartTime = tick()
-
-                    task.spawn(function()
-                        local startTime = tick()
-                        local closed = false
-                        while tick() - startTime < 3 do
-                            task.wait(0.15)
-                            if closed then break end
-                            pcall(function()
-                                local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
-                                local main2 = hud2 and hud2:FindFirstChild("Main")
-                                local raidBossFrame2 = main2 and main2:FindFirstChild("Frame_RaidBoss")
-                                if raidBossFrame2 and raidBossFrame2.Visible then
-                                    local closeBtn = raidBossFrame2:FindFirstChild("Close_")
-                                        or raidBossFrame2:FindFirstChild("Close")
-                                        or raidBossFrame2:FindFirstChild("CloseButton")
-                                    if closeBtn then
-                                        pcall(function()
-                                            if firesignal then
-                                                firesignal(closeBtn.MouseButton1Click)
-                                            else
-                                                closeBtn:Activate()
-                                            end
-                                        end)
-                                    end
-                                    task.wait(0.1)
-                                    if raidBossFrame2.Visible then
-                                        pcall(function() raidBossFrame2.Visible = false end)
-                                    end
-                                    closed = true
-                                    print("[LavaTitan] 🚪 Đã đóng GUI mở cổng")
-                                end
-                            end)
-                        end
-                    end)
-                    return true
-                end
-            end
+        local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
+        if tz2 and tz2:FindFirstChild("Hitbox") then
+            hrp.CFrame = tz2.Hitbox.CFrame
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            print("[LavaTitan] 🌀 TP vào portal")
+            _G.LavaEnterTime = tick()
+            _G.LavaPortalPhase = "ENTERED"
+            _G.LavaPortalFireLock = tick() + _G.LAVA_PORTAL_FIRE_LOCK
+            return true
         end
 
         if tick() - _G.LavaPortalStartTime > 5 then
-            print("[LavaTitan] ⚠️ Timeout GUI → reset")
+            print("[LavaTitan] ⚠️ Timeout chờ portal → reset")
             _G.LavaPortalPhase = "IDLE"
         end
         return true
@@ -8558,12 +8406,12 @@ function Lava_OpenPortal()
 
     if _G.LavaPortalPhase == "WAITING" then
         local elapsed = tick() - _G.LavaPortalStartTime
-        local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
-        if tz2 and tz2:FindFirstChild("Hitbox") then
-            hrp.CFrame = tz2.Hitbox.CFrame
+        local tz3 = workspace:FindFirstChild("TeleportBossFightZone")
+        if tz3 and tz3:FindFirstChild("Hitbox") then
+            hrp.CFrame = tz3.Hitbox.CFrame
             hrp.AssemblyLinearVelocity = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
-            print("[LavaTitan] 🌀 TP vào portal (sau click)")
+            print("[LavaTitan] 🌀 TP vào portal (sau summon)")
             _G.LavaEnterTime = tick()
             _G.LavaPortalPhase = "ENTERED"
             _G.LavaPortalFireLock = tick() + _G.LAVA_PORTAL_FIRE_LOCK
