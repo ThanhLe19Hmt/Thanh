@@ -1,5 +1,6 @@
 local PLACEID_SEA1 = 119091355492870
 local PLACEID_SEA2 = 132854526011923
+local PLACEID_MOON = 82878101790702
 
 local URL_SEA1 = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MaverSEA1ROCKFRULT.lua"
 local URL_SEA2 = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MaverSEA2ROCKFRULT.lua"
@@ -33,6 +34,8 @@ if placeId == PLACEID_SEA1 then
     LoadScript(URL_SEA1, "Sea 1")
 elseif placeId == PLACEID_SEA2 then
     LoadScript(URL_SEA2, "Sea 2")
+elseif placeId == PLACEID_MOON then
+    LoadScript(URL_SEA1, "Moon")
 else
     return
 end
