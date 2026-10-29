@@ -15,6 +15,21 @@ local _writefile = writefile or function(path, data) warn("File saving not suppo
 local _readfile = readfile or function() return "{}" end
 local _listfiles = listfiles or function() return {} end
 local _delfile = delfile or function() warn("File deletion not supported.") end
+local _ActiveConnections = {}
+
+local function TrackConnection(conn)
+    if conn then
+        table.insert(_ActiveConnections, conn)
+    end
+    return conn
+end
+
+local function DisconnectAll()
+    for _, conn in ipairs(_ActiveConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    _ActiveConnections = {}
+end
 
 local function SafeCopyToClipboard(text)
     if setclipboard then
@@ -94,29 +109,29 @@ local function MakeDraggable(topbar, object)
     topbar.Active = true
     object.Active = true
     local dragging, dragInput, dragStart, startPos
-    topbar.InputBegan:Connect(function(input)
+    TrackConnection(topbar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = object.Position
-            input.Changed:Connect(function()
+            TrackConnection(input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
                 end
-            end)
+            end))
         end
-    end)
-    topbar.InputChanged:Connect(function(input)
+    end))
+    TrackConnection(topbar.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
+    end))
+    TrackConnection(UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
             Tween(object, {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}, 0.08)
         end
-    end)
+    end))
 end
 
 local AccentColor = Color3.fromRGB(40, 40, 40)
@@ -527,8 +542,9 @@ function Library:CreateWindow(options)
 
     MakeDraggable(BottomDragHitbox, MainFrame)
 
-    RunService.RenderStepped:Connect(function()
-        if MainFrame and MainFrame.Visible then
+    TrackConnection(RunService.RenderStepped:Connect(function()
+        if not MainFrame or not MainFrame.Parent then return end
+        if MainFrame.Visible then
             BottomDragHitbox.Visible = true
             local currentScale = MainScale.Scale
             local frameHeight = 420 * currentScale
@@ -545,7 +561,7 @@ function Library:CreateWindow(options)
         else
             BottomDragHitbox.Visible = false
         end
-    end)
+    end))
 
     local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true})
     MakeDraggable(TopBar, MainFrame)
@@ -701,9 +717,17 @@ function Library:CreateWindow(options)
             end
         end
         task.wait(0.35)
+        DisconnectAll()
         ScreenGui:Destroy()
     end)
 
+    -- Auto cleanup nếu ScreenGui bị destroy từ bên ngoài
+    TrackConnection(ScreenGui.AncestryChanged:Connect(function()
+        if not ScreenGui.Parent then
+            DisconnectAll()
+        end
+    end))
+	
     NoBtn.MouseButton1Click:Connect(function()
         Tween(Popup, {BackgroundTransparency = 1}, 0.3)
         Tween(PopupCard, {BackgroundTransparency = 1}, 0.3)
@@ -1190,9 +1214,9 @@ function Library:CreateWindow(options)
                         internalSet(math.floor(min + ((max - min) * pos)))
                     end
 
-                    Knob.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end end)
-                    UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
-                    UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then Update(input) end end)
+                    TrackConnection(Knob.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true end end))
+                    TrackConnection(UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end))
+                    TrackConnection(UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then Update(input) end end))
                     AddInfoIcon(SliFrame, UDim2.new(1, -65, 0, 0), infoData)
 
                     if callback then callback(val) end
@@ -1471,11 +1495,11 @@ function Library:CreateWindow(options)
                     local draggingSV = false
                     local draggingHue = false
 
-                    SVMap.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingSV = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end)
-                    HueSlider.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingHue = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end)
-                    UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingSV = false draggingHue = false if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = true end end end)
+                    TrackConnection(SVMap.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingSV = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end))
+                    TrackConnection(HueSlider.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingHue = true if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = false end end end))
+                    TrackConnection(UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingSV = false draggingHue = false if PageObj and PageObj.Scroll then PageObj.Scroll.ScrollingEnabled = true end end end))
 
-                    UserInputService.InputChanged:Connect(function(input)
+                    TrackConnection(UserInputService.InputChanged:Connect(function(input)
                         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                             if draggingSV then
                                 local relX = math.clamp((input.Position.X - SVMap.AbsolutePosition.X) / SVMap.AbsoluteSize.X, 0, 1)
@@ -1491,7 +1515,7 @@ function Library:CreateWindow(options)
                                 UpdateColor()
                             end
                         end
-                    end)
+                    end))
 
                     DisplayBtn.MouseButton1Click:Connect(function() dropped = not dropped Tween(CFrame_, {Size = UDim2.new(1, 0, 0, dropped and 185 or 30)}, 0.3) end)
                     AddInfoIcon(CFrame_, UDim2.new(1, -65, 0, 7), infoData)
