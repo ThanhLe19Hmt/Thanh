@@ -523,6 +523,7 @@ function Library:CreateWindow(options)
 
     -- ===== BACKGROUND IMAGE =====
     if backgroundImage and backgroundImage ~= "" then
+        -- Lớp ảnh nền
         local BgImage = Create("ImageLabel", {
             Parent = MainFrame,
             BackgroundTransparency = 1,
@@ -531,20 +532,23 @@ function Library:CreateWindow(options)
             Size = UDim2.new(1, 0, 1, 0),
             Position = UDim2.new(0, 0, 0, 0),
             ZIndex = 0,
-            ImageTransparency = 0.15,
+            ImageTransparency = 0, -- Hiển thị ảnh rõ 100%
+            Visible = true,        -- Đảm bảo không bị ẩn
         })
-        -- Lớp gradient tối phủ lên ảnh để chữ dễ đọc
+        
+        -- Lớp phủ tối (Overlay) để làm dịu ảnh, giúp chữ dễ đọc
         local BgOverlay = Create("Frame", {
             Parent = MainFrame,
-            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-            BackgroundTransparency = 0.35,
+            BackgroundColor3 = Color3.fromRGB(10, 10, 15),
+            BackgroundTransparency = 0.5, -- 50% trong suốt (vẫn thấy ảnh)
             Size = UDim2.new(1, 0, 1, 0),
             ZIndex = 1,
             BorderSizePixel = 0,
         })
         Create("UICorner", {Parent = BgOverlay, CornerRadius = UDim.new(0, 8)})
-        -- Gradient tím → cam nhẹ để hợp tông ảnh
-        local BgGradient = Create("UIGradient", {
+        
+        -- Gradient nhẹ để tạo không gian (Tím -> Đen -> Cam)
+        Create("UIGradient", {
             Parent = BgOverlay,
             Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 20, 120)),
@@ -553,10 +557,15 @@ function Library:CreateWindow(options)
             }),
             Rotation = 45,
             Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 0.6),
-                NumberSequenceKeypoint.new(1, 0.8),
+                NumberSequenceKeypoint.new(0, 0.5), -- Giảm độ mờ của gradient
+                NumberSequenceKeypoint.new(1, 0.7),
             }),
         })
+        
+        -- Viền phát sáng tím cho MainFrame
+        MainStroke.Color = Color3.fromRGB(150, 80, 255)
+        MainStroke.Thickness = 2
+        MainStroke.Transparency = 0.2
     end
 
     Tween(MainScale, {Scale = 1}, 0.5)
@@ -605,7 +614,7 @@ function Library:CreateWindow(options)
         end
     end))
 
-    local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(10, 10, 14), BackgroundTransparency = 0.35, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true, ZIndex = 2})
+    local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(10, 10, 14), BackgroundTransparency = 0.5, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true, ZIndex = 2})
     MakeDraggable(TopBar, MainFrame)
 
     local titleOffsetX = 15
@@ -633,7 +642,7 @@ function Library:CreateWindow(options)
     local CloseBtn = Create("TextButton", {Parent = TopBar, Text = "X", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -35, 0, 0)})
     local MinBtn = Create("TextButton", {Parent = TopBar, Text = "—", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -65, 0, 0)})
 
-    local Sidebar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(8, 8, 12), BackgroundTransparency = 0.55, Size = UDim2.new(0, sideBarWidth, 1, -40), Position = UDim2.new(0, 0, 0, 40), Active = true, ZIndex = 2})
+    local Sidebar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(8, 8, 12), BackgroundTransparency = 0.3, Size = UDim2.new(0, sideBarWidth, 1, -40), Position = UDim2.new(0, 0, 0, 40), Active = true, ZIndex = 2})
     local TabSearchBox = Create("TextBox", {Parent = Sidebar, BackgroundColor3 = CardColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 5), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, PlaceholderText = "Search tabs...", TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
     Create("UIPadding", {Parent = TabSearchBox, PaddingLeft = UDim.new(0, 8)})
     Create("UICorner", {Parent = TabSearchBox, CornerRadius = UDim.new(0, 4)})
@@ -947,7 +956,7 @@ function Library:CreateWindow(options)
             TabConfig.Content.Position = UDim2.new(0, 0, 0, 15)
             Tween(TabConfig.Content, {Position = UDim2.new(0, 0, 0, 0)}, 0.35)
 
-            Tween(TabBtn, {BackgroundColor3 = Color3.fromRGB(80, 40, 130), BackgroundTransparency = 0.35}, 0.2)
+            Tween(TabBtn, {BackgroundColor3 = Color3.fromRGB(100, 50, 180), BackgroundTransparency = 0}, 0.2)
             Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
             Tween(Txt, {TextColor3 = TextColor}, 0.2)
 
@@ -1082,8 +1091,8 @@ function Library:CreateWindow(options)
 
                 local SectionContainer = Create("Frame", {
                     Parent = nil,
-                    BackgroundColor3 = Color3.fromRGB(18, 18, 24),
-                    BackgroundTransparency = 0.15,
+                    BackgroundColor3 = Color3.fromRGB(15, 15, 22), -- Màu tối đậm
+                    BackgroundTransparency = 0.05,                 -- Chỉ mờ 5% để chữ nổi bật
                     Size = UDim2.new(1, 0, 0, 30),
                     AutomaticSize = Enum.AutomaticSize.Y,
                     ClipsDescendants = true,
@@ -1091,7 +1100,8 @@ function Library:CreateWindow(options)
                     ZIndex = 3,
                 })
                 Create("UICorner", {Parent = SectionContainer, CornerRadius = UDim.new(0, 8)})
-                Create("UIStroke", {Parent = SectionContainer, Color = Color3.fromRGB(90, 50, 140), Thickness = 1, Transparency = 0.5})
+                -- Viền sáng tím, rõ nét
+                Create("UIStroke", {Parent = SectionContainer, Color = Color3.fromRGB(140, 80, 220), Thickness = 1.5, Transparency = 0.2})
 
                 table.insert(Window.AllCards, {
                     Card = SectionContainer,
