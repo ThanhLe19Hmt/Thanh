@@ -488,7 +488,7 @@ function Library:CreateWindow(options)
 
     -- Hiệu ứng load xong (Thu nhỏ biến mất)
     task.spawn(function()
-        task.wait(2) -- Thời gian chờ load (2 giây)
+        task.wait(5) -- Thời gian chờ load (2 giây)
         
         -- Thu nhỏ Loading Screen vào tâm
         local vanishTween = TweenService:Create(LoadingScreen, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
@@ -646,7 +646,7 @@ function Library:CreateWindow(options)
 
     -- HIỆN MENU SAU KHI LOADING XONG
     task.spawn(function()
-        task.wait(2.6) -- Chờ loading screen biến mất (2s + 0.6s thu nhỏ)
+        task.wait(5.6) -- Chờ loading screen biến mất (2s + 0.6s thu nhỏ)
         MainFrame.Visible = true
         Tween(MainScale, {Scale = 1}, 0.5)
         Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
