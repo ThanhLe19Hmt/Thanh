@@ -356,6 +356,7 @@ function Library:CreateWindow(options)
     local sphIconSize = 26
     local windowSize = UDim2.fromOffset(580, 460)
     local sideBarWidth = 160
+	local backgroundImage = nil
 
     if type(options) == "table" then
         hubName = options.Title or hubName
@@ -389,6 +390,8 @@ function Library:CreateWindow(options)
         sphIconSize = options.SphereIconSize or 26
         windowSize = options.Size or windowSize
         sideBarWidth = options.SideBarWidth or sideBarWidth
+
+        backgroundImage = options.BackgroundImage
 
         if options.Map ~= nil or options.MapId ~= nil then
             Library.SaveManager:SetMap(options.Map or options.MapId, options.SaveFolder)
@@ -516,7 +519,46 @@ function Library:CreateWindow(options)
     local MainFrame = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, Size = windowSize, Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ClipsDescendants = true, BackgroundTransparency = 1, Active = true})
     local MainScale = Create("UIScale", {Parent = MainFrame, Scale = 0.8})
     Create("UICorner", {Parent = MainFrame, CornerRadius = UDim.new(0, 8)})
-    Create("UIStroke", {Parent = MainFrame, Color = Color3.fromRGB(40, 40, 45), Thickness = 1})
+    local MainStroke = Create("UIStroke", {Parent = MainFrame, Color = Color3.fromRGB(140, 80, 220), Thickness = 1.5})
+
+    -- ===== BACKGROUND IMAGE =====
+    if backgroundImage and backgroundImage ~= "" then
+        local BgImage = Create("ImageLabel", {
+            Parent = MainFrame,
+            BackgroundTransparency = 1,
+            Image = backgroundImage,
+            ScaleType = Enum.ScaleType.Crop,
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, 0),
+            ZIndex = 0,
+            ImageTransparency = 0.15,
+        })
+        -- Lớp gradient tối phủ lên ảnh để chữ dễ đọc
+        local BgOverlay = Create("Frame", {
+            Parent = MainFrame,
+            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            BackgroundTransparency = 0.35,
+            Size = UDim2.new(1, 0, 1, 0),
+            ZIndex = 1,
+            BorderSizePixel = 0,
+        })
+        Create("UICorner", {Parent = BgOverlay, CornerRadius = UDim.new(0, 8)})
+        -- Gradient tím → cam nhẹ để hợp tông ảnh
+        local BgGradient = Create("UIGradient", {
+            Parent = BgOverlay,
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 20, 120)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 0, 0)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 50, 10)),
+            }),
+            Rotation = 45,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.6),
+                NumberSequenceKeypoint.new(1, 0.8),
+            }),
+        })
+    end
+
     Tween(MainScale, {Scale = 1}, 0.5)
     Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
 
@@ -563,7 +605,7 @@ function Library:CreateWindow(options)
         end
     end))
 
-    local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true})
+    local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(10, 10, 14), BackgroundTransparency = 0.35, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true, ZIndex = 2})
     MakeDraggable(TopBar, MainFrame)
 
     local titleOffsetX = 15
@@ -591,7 +633,7 @@ function Library:CreateWindow(options)
     local CloseBtn = Create("TextButton", {Parent = TopBar, Text = "X", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -35, 0, 0)})
     local MinBtn = Create("TextButton", {Parent = TopBar, Text = "—", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -65, 0, 0)})
 
-    local Sidebar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(0, sideBarWidth, 1, -40), Position = UDim2.new(0, 0, 0, 40), Active = true})
+    local Sidebar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(8, 8, 12), BackgroundTransparency = 0.55, Size = UDim2.new(0, sideBarWidth, 1, -40), Position = UDim2.new(0, 0, 0, 40), Active = true, ZIndex = 2})
     local TabSearchBox = Create("TextBox", {Parent = Sidebar, BackgroundColor3 = CardColor, Size = UDim2.new(1, -20, 0, 26), Position = UDim2.new(0, 10, 0, 5), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, PlaceholderText = "Search tabs...", TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false})
     Create("UIPadding", {Parent = TabSearchBox, PaddingLeft = UDim.new(0, 8)})
     Create("UICorner", {Parent = TabSearchBox, CornerRadius = UDim.new(0, 4)})
@@ -601,7 +643,7 @@ function Library:CreateWindow(options)
     Create("UIListLayout", {Parent = TabContainer, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 5)})
     Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(40, 40, 45), BorderSizePixel = 0, Size = UDim2.new(0, 1, 1, -40), Position = UDim2.new(0, sideBarWidth, 0, 40)})
 
-    local ContentArea = Create("Frame", {Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -(sideBarWidth + 5), 1, -40), Position = UDim2.new(0, sideBarWidth + 5, 0, 40), Active = true})
+    local ContentArea = Create("Frame", {Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -(sideBarWidth + 5), 1, -40), Position = UDim2.new(0, sideBarWidth + 5, 0, 40), Active = true, ZIndex = 2})
 
     local Sphere = Create("ImageButton", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 0.2, Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Visible = false, AutoButtonColor = false, ImageTransparency = 1, ClipsDescendants = true})
     Create("UICorner", {Parent = Sphere, CornerRadius = UDim.new(0, 20)})
@@ -822,7 +864,7 @@ function Library:CreateWindow(options)
             end
         end
 
-        local TabBtn = Create("TextButton", {Parent = TabContainer, Text = "", BackgroundColor3 = HoverColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35), AutoButtonColor = false})
+        local TabBtn = Create("TextButton", {Parent = TabContainer, Text = "", BackgroundColor3 = Color3.fromRGB(30, 20, 45), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35), AutoButtonColor = false, ZIndex = 3})
         Create("UICorner", {Parent = TabBtn, CornerRadius = UDim.new(0, 6)})
         AddBounce(TabBtn, 0.98)
         local Indicator = Create("Frame", {Name = "Indicator", Parent = TabBtn, BackgroundColor3 = isLocked and Color3.fromRGB(255, 215, 0) or AccentColor, Size = UDim2.new(0, 3, 0, 0), Position = UDim2.new(0, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5)})
@@ -888,7 +930,7 @@ function Library:CreateWindow(options)
             task.delay(0.4, function() tabSwitching = false end)
 
             if Window.CurrentTab then
-                Tween(Window.CurrentTab.Button, {BackgroundTransparency = 1}, 0.2)
+                Tween(Window.CurrentTab.Button, {BackgroundTransparency = 1, BackgroundColor3 = Color3.fromRGB(30, 20, 45)}, 0.2)
                 Tween(Window.CurrentTab.Indicator, {Size = UDim2.new(0, 3, 0, 0)}, 0.2)
                 Tween(Window.CurrentTab.Txt, {TextColor3 = SubTextColor}, 0.2)
                 Window.CurrentTab.Content.Visible = false
@@ -905,7 +947,7 @@ function Library:CreateWindow(options)
             TabConfig.Content.Position = UDim2.new(0, 0, 0, 15)
             Tween(TabConfig.Content, {Position = UDim2.new(0, 0, 0, 0)}, 0.35)
 
-            Tween(TabBtn, {BackgroundTransparency = 0}, 0.2)
+            Tween(TabBtn, {BackgroundColor3 = Color3.fromRGB(80, 40, 130), BackgroundTransparency = 0.35}, 0.2)
             Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
             Tween(Txt, {TextColor3 = TextColor}, 0.2)
 
@@ -1040,13 +1082,16 @@ function Library:CreateWindow(options)
 
                 local SectionContainer = Create("Frame", {
                     Parent = nil,
-                    BackgroundColor3 = CardColor,
+                    BackgroundColor3 = Color3.fromRGB(18, 18, 24),
+                    BackgroundTransparency = 0.15,
                     Size = UDim2.new(1, 0, 0, 30),
                     AutomaticSize = Enum.AutomaticSize.Y,
                     ClipsDescendants = true,
                     Visible = false,
+                    ZIndex = 3,
                 })
-                Create("UICorner", {Parent = SectionContainer, CornerRadius = UDim.new(0, 6)})
+                Create("UICorner", {Parent = SectionContainer, CornerRadius = UDim.new(0, 8)})
+                Create("UIStroke", {Parent = SectionContainer, Color = Color3.fromRGB(90, 50, 140), Thickness = 1, Transparency = 0.5})
 
                 table.insert(Window.AllCards, {
                     Card = SectionContainer,
