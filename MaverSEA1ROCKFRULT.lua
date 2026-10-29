@@ -1,12 +1,4 @@
--- ============================================================
--- SEA 1 SCRIPT - FULL FEATURES (v47 FINAL + AutoSkill Fix) — English
--- MarvenRiz Hub - Rock Fruit (Sea 1 + Moon)
--- ============================================================
 print("[Sea 1] ▶️ Loading...")
-
--- ============================================================
--- SERVICES & MODULES (SAFE LOAD)
--- ============================================================
 local Players             = game:GetService("Players")
 local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local HttpService         = game:GetService("HttpService")
@@ -25,7 +17,7 @@ local function FormatNumber(n)
     end
 
     if n < 1000000 then
-        local k = math.floor(n / 100) / 10  -- 🆕 cắt xuống 1 chữ số
+        local k = math.floor(n / 100) / 10
         if k == math.floor(k) then
             return tostring(math.floor(k)) .. "K"
         end
@@ -33,14 +25,14 @@ local function FormatNumber(n)
     end
 
     if n < 1000000000 then
-        local m = math.floor(n / 100000) / 10  -- 🆕 cắt xuống 1 chữ số
+        local m = math.floor(n / 100000) / 10
         if m == math.floor(m) then
             return tostring(math.floor(m)) .. "M"
         end
         return string.format("%.1fM", m)
     end
 
-    local b = math.floor(n / 100000000) / 10  -- 🆕 cắt xuống 1 chữ số
+    local b = math.floor(n / 100000000) / 10
     if b == math.floor(b) then
         return tostring(math.floor(b)) .. "B"
     end
@@ -92,9 +84,6 @@ if #missingModules > 0 then
     warn("[Sea 1] ⚠️ Missing modules: " .. table.concat(missingModules, ", "))
 end
 
--- ============================================================
--- CONFIG & GLOBALS
--- ============================================================
 local TypeTool         = {"Melee", "Sword", "Special", "DevilFruit"}
 local RandomChestValue = {"x5", "x10", "x15"}
 
@@ -169,10 +158,6 @@ _G.AutoBossAll = false
 _G.LAVA_UNDER_LAVA_Y = -100
 _G.LAVA_AIM_HEIGHT = 25
 _G.LAVA_SURFACE_DELAY = 1.5
-
--- ============================================================
--- BUILD LISTS
--- ============================================================
 
 if PointItemM then
     for Item, Price in pairs(PointItemM) do
@@ -255,9 +240,6 @@ if #WeaponAll == 0 then
     WeaponAll = {"Melee", "Sword", "Special", "DevilFruit"}
 end
 
--- ============================================================
--- HELPER FUNCTIONS
--- ============================================================
 local function GetQuest_Level(My_level)
     local Quest
     for _, v in ipairs(Quest_List) do
@@ -295,32 +277,31 @@ local function Teleport(Pos)
     end
 end
 
--- ============================================================
--- LOAD UI
--- ============================================================
 local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Ui_New.lua"
+    "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/UI_Test.lua"
 ))()
 local MySaveManager = Library.SaveManager
 
 local MOON_PLACE_ID = 82878101790702
-local SEA2_PLACE_ID = 132854526011923   -- 🆕 Sea 2
+local SEA2_PLACE_ID = 132854526011923
 local IS_MOON_MAP   = (game.PlaceId == MOON_PLACE_ID)
 local IS_SEA2_MAP   = (game.PlaceId == SEA2_PLACE_ID)   -- 🆕
 print("[Map] " .. (IS_MOON_MAP and "🌙 Moon" or IS_SEA2_MAP and "🌊 Sea 2" or "🌊 Sea 1") .. " detected")
 
 local Window = Library:CreateWindow({
-    Title = "MarvenRiz Hub" .. (IS_MOON_MAP and " (Moon)" or ""),
-    Subtitle = IS_MOON_MAP and "Auto Raid Moon Only" or "Sea 1 — Rock Fruit",
-    Size = UDim2.fromOffset(500, 370),
-    AccentColor = Color3.fromRGB(50, 150, 255),
-    SideBarWidth = 120,
-    Logo = "rbxassetid://87526284179554",
-    LogoSize = 32,
+    Title = "MarvenRiz Hub",
+    Subtitle = "Sea 1 — Rock Fruit",
+    Size = UDim2.fromOffset(580, 460),
+    AccentColor = Color3.fromRGB(180, 100, 255),
+    SideBarWidth = 160,
+    Logo = "rbxassetid://73243738744141",
+    LogoSize = 34,
     SphereText = false,
-    SphereImage = "rbxassetid://87526284179554",
+    SphereImage = "rbxassetid://73243738744141",
     SphereIconSize = 38,
-    Map = "RockFruit"
+    Map = "RockFruit",
+    BackgroundImage = "rbxassetid://104569104995749",
+    LoadingImage = "rbxassetid://89825534401862" 
 })
 
 function _G.SeaNotify(title, desc, duration)
@@ -331,70 +312,20 @@ function _G.SeaNotify(title, desc, duration)
     end)
 end
 
--- ============================================================
--- 🌙 MOON MAP UI
--- ============================================================
 if IS_MOON_MAP then
-
-    local MoonTab    = Window:CreateTab("Auto Raid Moon", true, false)
-    local MoonPage   = MoonTab:CreatePage("Moon Raid")
-    local MoonFarm   = MoonPage:CreateSection("🌙 Auto Farm Moon", "Left")
-    local MoonSkills = MoonPage:CreateSection("⚔️ Attack / Skill", "Right")
-    local MoonWeapon = MoonPage:CreateSection("🗡️ Weapons", "Left")
-    local MoonInfo   = MoonPage:CreateSection("📊 Status", "Right")
-    local MoonTravel = MoonPage:CreateSection("🌍 Travel", "Left")
-
-    local MoonStatusPara = MoonInfo:Paragraph({
-        Title = "Status: Waiting",
-        Content = "Enable left toggle to farm Moon"
-    })
-
-    local MoonRunning       = false
-    local MoonLastRunning   = false
-    local MoonLastAttack    = 0
-    local MoonLastSkill     = 0
-    local MoonLastEquip     = 0
-    local MoonCurrentTarget = nil
-    local MoonLastAction    = 0
-    local MoonAtCave        = false
-
+    _G.MoonRunning = false
     _G.MoonHitPosition = "Upper"
     _G.MoonHitDistance = 12
 
-    local MoonRocketTower     = nil
-    local MoonRocketPos       = nil
-    local MoonRocketLastCheck = 0
-    local MOON_ROCKET_CACHE   = 15
+    local MoonLastRunning   = false
+    local MoonCurrentTarget = nil
+    local MoonAtCave        = false
+    local MoonLastEquip     = 0
 
     local CAVE_POS = Vector3.new(-195, 14, 412)
-    local MOON_SAVE_FOLDER = "MarvenRiz_Moon"
 
-    local function EnsureFolder()
-        if not isfolder(MOON_SAVE_FOLDER) then
-            pcall(function() makefolder(MOON_SAVE_FOLDER) end)
-        end
-    end
-
-    local function GetSavePath(name)
-        return MOON_SAVE_FOLDER .. "/" .. name .. ".json"
-    end
-
-    local function GetSaveList()
-        local list = {}
-        if not isfolder(MOON_SAVE_FOLDER) then return list end
-
-        local ok, files = pcall(function() return listfiles(MOON_SAVE_FOLDER) end)
-        if not ok or type(files) ~= "table" then return list end
-
-        for _, file in ipairs(files) do
-            local name = tostring(file):match("([^/\\]+)%.json$")
-            if name and not name:find("^_") then
-                table.insert(list, name)
-            end
-        end
-        table.sort(list)
-        return list
-    end
+    local function IsMoonRunning() return _G.MoonRunning == true end
+    local function SetMoonRunning(v) _G.MoonRunning = v and true or false end
 
     local function AsString(v)
         if type(v) == "string" then return v end
@@ -412,44 +343,10 @@ if IS_MOON_MAP then
             table.insert(list, v)
         elseif type(v) == "table" then
             for _, item in pairs(v) do
-                if type(item) == "string" then
-                    table.insert(list, item)
-                end
+                if type(item) == "string" then table.insert(list, item) end
             end
         end
         return list
-    end
-
-    local function FindRocketTower()
-        if MoonRocketTower and MoonRocketTower.Parent and MoonRocketPos then
-            if tick() - MoonRocketLastCheck < MOON_ROCKET_CACHE then
-                return MoonRocketPos
-            end
-        end
-
-        local rocket = workspace:FindFirstChild("island")
-        if rocket then rocket = rocket:FindFirstChild("Moon") end
-        if rocket then rocket = rocket:FindFirstChild("RocketTower") end
-
-        if not rocket then return nil end
-
-        local pos
-        if rocket:IsA("Model") then
-            local part = rocket:FindFirstChild("HumanoidRootPart")
-                or rocket.PrimaryPart
-                or rocket:FindFirstChildWhichIsA("BasePart")
-            if part then pos = part.Position end
-        elseif rocket:IsA("BasePart") then
-            pos = rocket.Position
-        end
-
-        if pos then
-            MoonRocketTower     = rocket
-            MoonRocketPos       = pos
-            MoonRocketLastCheck = tick()
-            return pos
-        end
-        return nil
     end
 
     local function GetMobFolder()
@@ -482,39 +379,21 @@ if IS_MOON_MAP then
             MoonCurrentTarget = nil
         end
 
-        local basePos = FindRocketTower()
-        local bestTarget, bestDist = nil, math.huge
-
+        local bestTarget = nil
+        local minDist = math.huge
         for _, mob in ipairs(mobFolder:GetChildren()) do
             if IsMobValid(mob) then
-                local mPos = mob.HumanoidRootPart.Position
-                if basePos then
-                    local d = (basePos - mPos).Magnitude
-                    if d < bestDist then
-                        bestDist   = d
-                        bestTarget = mob
-                    end
+                local d = (myHrp.Position - mob.HumanoidRootPart.Position).Magnitude
+                if d < minDist then
+                    minDist = d
+                    bestTarget = mob
                 end
             end
         end
-
-        if not bestTarget then
-            local minPDist = math.huge
-            for _, mob in ipairs(mobFolder:GetChildren()) do
-                if IsMobValid(mob) then
-                    local dp = (myHrp.Position - mob.HumanoidRootPart.Position).Magnitude
-                    if dp < minPDist then
-                        minPDist   = dp
-                        bestTarget = mob
-                    end
-                end
-            end
-        end
-
-        return bestTarget, bestTarget and "🎯 DEFEND ROCKETTOWER" or nil
+        return bestTarget, bestTarget and "🎯 ATTACKING" or nil
     end
-	
-	local function Moon_GetMethodFarm(height)
+
+    local function Moon_GetMethodFarm(height)
         height = height or (_G.MoonHitDistance or 12)
         local mode = _G.MoonHitPosition or "Upper"
         if mode == "Below" then
@@ -535,11 +414,52 @@ if IS_MOON_MAP then
         hrp.AssemblyAngularVelocity = Vector3.zero
     end
 
+    local function MoonEquipWeapon()
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+
+            local mainWeapon     = AsString(_G.MainWeapon) or "Melee"
+            local supportWeapons = AsStringList(_G.Select_EquipWeapon)
+
+            local wantedTypes = {}
+            wantedTypes[mainWeapon] = true
+            for _, w in ipairs(supportWeapons) do
+                if type(w) == "string" then wantedTypes[w] = true end
+            end
+
+            for _, v in ipairs(char:GetChildren()) do
+                if v:IsA("Tool") then
+                    local toolType = v:GetAttribute("Type")
+                    if not wantedTypes[toolType] then
+                        v.Parent = LocalPlayer.Backpack
+                    end
+                end
+            end
+
+            local bp = LocalPlayer:FindFirstChild("Backpack")
+            if bp then
+                for _, v in ipairs(bp:GetChildren()) do
+                    if v:IsA("Tool") then
+                        local toolType = v:GetAttribute("Type")
+                        if wantedTypes[toolType] then
+                            v.Parent = char
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    local function Moon_GetAction()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        return remotes and remotes:FindFirstChild("Action")
+    end
+
     local function Moon_AutoSkill()
         local char = LocalPlayer.Character
         if not char then return end
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        local action = remotes and remotes:FindFirstChild("Action")
+        local action = Moon_GetAction()
         if not action then return end
 
         local Skills = {}
@@ -561,8 +481,7 @@ if IS_MOON_MAP then
     local function Moon_Attack()
         local char = LocalPlayer.Character
         if not char then return end
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        local action = remotes and remotes:FindFirstChild("Action")
+        local action = Moon_GetAction()
         if not action then return end
         for _, v in ipairs(char:GetChildren()) do
             if v:IsA("Tool") then
@@ -570,199 +489,237 @@ if IS_MOON_MAP then
             end
         end
     end
+	
+    local BUFF_LIST = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
 
-    local MoonAttackJitter = 0
-    local function MoonAttack()
+    local function FindBuffTool()
         local char = LocalPlayer.Character
-        if not char then return end
-        local action = ReplicatedStorage:FindFirstChild("Remotes")
-        if action then action = action:FindFirstChild("Action") end
-        if not action then return end
-
-        MoonAttackJitter = MoonAttackJitter + 1
-        if MoonAttackJitter % 3 == 0 then
-            task.wait(math.random(1, 3) * 0.01)
-        end
-
-        for _, v in ipairs(char:GetChildren()) do
-            if v:IsA("Tool") then
-                pcall(function() action:FireServer(v.Name, "hit") end)
+        if not char then return nil, nil, nil end
+        for _, buffName in ipairs(BUFF_LIST) do
+            for _, tool in ipairs(char:GetChildren()) do
+                if tool:IsA("Tool") and tool.Name:lower() == buffName:lower() then
+                    return tool, buffName, "equipped"
+                end
             end
         end
+		
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if bp then
+            for _, buffName in ipairs(BUFF_LIST) do
+                for _, tool in ipairs(bp:GetChildren()) do
+                    if tool:IsA("Tool") and tool.Name:lower() == buffName:lower() then
+                        return tool, buffName, "backpack"
+                    end
+                end
+            end
+        end
+
+        return nil, nil, nil
     end
 
-    local DASH_SKILLS = {z = true, x = true, c = true, v = true}
+    local function EnsureBuffEquipped()
+        local char = LocalPlayer.Character
+        if not char then return nil, nil end
+        local hum = char:FindFirstChild("Humanoid")
+        if not hum then return nil, nil end
 
-    function MoonEquipWeapon()
-        pcall(function()
+        local tool, buffName, location = FindBuffTool()
+        if not tool then return nil, nil end
+        if location == "equipped" then return tool, buffName end
+
+        pcall(function() hum:EquipTool(tool) end)
+        task.wait(0.3)
+
+        for _, t in ipairs(char:GetChildren()) do
+            if t:IsA("Tool") and t.Name:lower() == buffName:lower() then
+                print("[Moon] 🗡️ Đã equip " .. buffName .. " từ Backpack")
+                return t, buffName
+            end
+        end
+        return nil, nil
+    end
+
+    local function IsFBuffOnCooldown(buffName)
+        local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
+        local main = hud and hud:FindFirstChild("Main")
+        local skillList = main and main:FindFirstChild("Frame_SkillList_" .. buffName)
+        if not skillList then return false end
+        local border = skillList:FindFirstChild("Border")
+        local mainFrame = border and border:FindFirstChild("Main")
+        local fFrame = mainFrame and mainFrame:FindFirstChild("F")
+        if not fFrame then return false end
+        local readyLabel = fFrame:FindFirstChild("Ready")
+        local cooldownFrame = fFrame:FindFirstChild("CooldownFrame")
+        local isUnready = readyLabel and readyLabel.Text == "UnReady"
+        local isCooldownVisible = cooldownFrame and cooldownFrame.Visible
+        return isUnready or isCooldownVisible
+    end
+
+    local function Moon_AutoBuffOnStart()
+        task.spawn(function()
+            local action = Moon_GetAction()
+            if not action then return end
+
+            local tool, buffName = EnsureBuffEquipped()
+            if not tool then
+                local char = LocalPlayer.Character
+                if char and not char:FindFirstChild("HakiFolder") then
+                    pcall(function() action:FireServer("Misc", "buso") end)
+                end
+                return
+            end
+			
+            local startTime = tick()
+            local fireCount = 0
+
+            while tick() - startTime < 20 do
+                local char = LocalPlayer.Character
+                if not char then break end
+                local stillEquipped = false
+                for _, t in ipairs(char:GetChildren()) do
+                    if t:IsA("Tool") and t.Name:lower() == buffName:lower() then
+                        tool = t
+                        stillEquipped = true
+                        break
+                    end
+                end
+                if not stillEquipped then
+                    local t2, b2 = EnsureBuffEquipped()
+                    if t2 then
+                        tool, buffName = t2, b2
+                    else
+                        break
+                    end
+                end
+
+                if IsFBuffOnCooldown(buffName) and fireCount > 0 then
+                    break
+                end
+
+                pcall(function() action:FireServer(tool.Name, "f") end)
+                fireCount = fireCount + 1
+                task.wait(0.35)
+            end
+
+            task.wait(0.3)
             local char = LocalPlayer.Character
-            if not char then return end
-
-            local mainWeapon = AsString(_G.MainWeapon) or "Melee"
-            local supportWeapons = AsStringList(_G.Select_EquipWeapon)
-
-            local wantedTypes = {}
-            wantedTypes[mainWeapon] = true
-            for _, w in ipairs(supportWeapons) do
-                if type(w) == "string" then
-                    wantedTypes[w] = true
-                end
-            end
-
-            for _, v in ipairs(char:GetChildren()) do
-                if v:IsA("Tool") then
-                    local toolType = v:GetAttribute("Type")
-                    if not wantedTypes[toolType] then
-                        v.Parent = LocalPlayer.Backpack
-                    end
-                end
-            end
-
-            local backpack = LocalPlayer:FindFirstChild("Backpack")
-            if backpack then
-                for _, v in ipairs(backpack:GetChildren()) do
-                    if v:IsA("Tool") then
-                        local toolType = v:GetAttribute("Type")
-                        if wantedTypes[toolType] then
-                            v.Parent = char
-                        end
-                    end
-                end
+            if char and not char:FindFirstChild("HakiFolder") then
+                pcall(function() action:FireServer("Misc", "buso") end)
             end
         end)
     end
 	
-	task.spawn(function()
-        while task.wait() do
-            pcall(function()
-                -- ===== KHI TẮT =====
-                if not MoonRunning then
-                    if MoonLastRunning then
-                        MoonLastRunning = false
-                        MoonCurrentTarget = nil
-                        _G.CanAutoSkill = false
-                        MoonAtCave = false
+    local VFX_CONNECTIONS = {}
+    local VFX_KILL_CLASSES = {
+        ["ParticleEmitter"] = true,
+        ["Beam"] = true,
+        ["Trail"] = true,
+        ["Sparkles"] = true,
+        ["Fire"] = true,
+        ["Smoke"] = true,
+        ["Highlight"] = true,
+        ["PointLight"] = true,
+        ["SpotLight"] = true,
+        ["SurfaceLight"] = true,
+    }
 
-                        local char = LocalPlayer.Character
-                        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            hrp.Anchored = false
-                            hrp.AssemblyLinearVelocity  = Vector3.zero
-                            hrp.AssemblyAngularVelocity = Vector3.zero
-                        end
-                        local hum = char and char:FindFirstChild("Humanoid")
-                        if hum then hum.PlatformStand = false end
-                    end
-                    return
-                end
-
-                -- ===== KHI BẬT LẦN ĐẦU =====
-                if not MoonLastRunning then
-                    MoonLastRunning = true
-                    MoonCurrentTarget = nil
-                    MoonAtCave = false
-                end
-
-                local char = LocalPlayer.Character
-                local hum  = char and char:FindFirstChild("Humanoid")
-                local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-                if not hum or not hrp or hum.Health <= 0 then return end
-
-                local target, priorityText = GetMoonTarget()
-
-                -- ===== KHÔNG CÓ TARGET → CHỜ Ở CAVE, TẮT SKILL/ATTACK =====
-                if not target then
-                    _G.CanAutoSkill = false        -- 🆕 tắt hoàn toàn khi chờ
-                    MoonCurrentTarget = nil
-
-                    if not MoonAtCave then
-                        MoonStatusPara:SetTitle("⏳ Waiting for mob...")
-                        MoonStatusPara:SetContent("Standing at cave waiting for mob")
-                        hrp.CFrame = CFrame.new(CAVE_POS)
-                        hrp.AssemblyLinearVelocity  = Vector3.zero
-                        hrp.AssemblyAngularVelocity = Vector3.zero
-                        MoonAtCave = true
-                    end
-                    return   -- 🆕 không gọi skill/attack
-                end
-
-                -- ===== CÓ TARGET → BẬT SKILL + BÁM + ĐÁNH =====
-                _G.CanAutoSkill = true
-                MoonAtCave = false
-
-                if target ~= MoonCurrentTarget then
-                    MoonCurrentTarget = target
-                    MoonStatusPara:SetTitle(priorityText .. ": " .. target.Name)
-                end
-
-                local tHrp = target:FindFirstChild("HumanoidRootPart")
-                local tHum = target:FindFirstChild("Humanoid")
-                if not tHrp or not tHum then return end
-
-                tHum.WalkSpeed = 0
-                tHum.JumpPower = 0
-
-                Moon_TeleportToMob(hrp, tHrp)
-                MoonEquipWeapon()
-
-                -- 🆕 ƯU TIÊN SKILL — nếu có ít nhất 1 skill bật thì KHÔNG attack thường
-                local hasSkill = _G.AutoSkillZ or _G.AutoSkillX
-                              or _G.AutoSkillC or _G.AutoSkillV or _G.AutoSkillF
-
-                if hasSkill then
-                    Moon_AutoSkill()          -- 🆕 chỉ spam skill
-                else
-                    Moon_Attack()             -- fallback attack thường khi KHÔNG bật skill nào
-                end
-
-                MoonStatusPara:SetContent(string.format(
-                    "HP: %d / %d | Dist: %d | %s",
-                    math.floor(tHum.Health),
-                    math.floor(tHum.MaxHealth),
-                    math.floor((hrp.Position - tHrp.Position).Magnitude),
-                    hasSkill and "⚔️ SKILL" or "👊 ATTACK"
-                ))
-            end)
-        end
-    end)
-
-    task.spawn(function()
-        while task.wait(1) do
-            pcall(function()
-                if not MoonRunning then return end
-                local char = LocalPlayer.Character
-                if not char then return end
-                if not char:FindFirstChild("HakiFolder") then
-                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-                    local action = remotes and remotes:FindFirstChild("Action")
-                    if action then action:FireServer("Misc", "buso") end
-                end
-            end)
-        end
-    end)
-
-    task.spawn(function()
-        task.wait(2)
+    local function TryKillVFX(obj)
+        if not obj or not obj.Parent then return end
+        local cls = obj.ClassName
+        if not VFX_KILL_CLASSES[cls] then return end
         pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            if not char:FindFirstChild("HakiFolder") then
-                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-                local action = remotes and remotes:FindFirstChild("Action")
-                if action then
-                    action:FireServer("Misc", "buso")
-                end
+            if cls == "ParticleEmitter" or cls == "Beam" or cls == "Trail"
+               or cls == "Sparkles" or cls == "Fire" or cls == "Smoke"
+               or cls == "Highlight" or cls == "PointLight"
+               or cls == "SpotLight" or cls == "SurfaceLight" then
+                if obj.Enabled then obj.Enabled = false end
             end
         end)
-    end)
+    end
 
-    -- MOON UI
+    local function KillVFXIn(container)
+        if not container then return end
+        pcall(function()
+            for _, v in ipairs(container:GetDescendants()) do
+                TryKillVFX(v)
+            end
+        end)
+    end
+
+    local function HookContainer(container)
+        if not container then return end
+        local conn = container.DescendantAdded:Connect(function(obj)
+            if _G.VFXDisabled then TryKillVFX(obj) end
+        end)
+        table.insert(VFX_CONNECTIONS, conn)
+    end
+
+    function Moon_NoVFX(state)
+        _G.VFXDisabled = state
+
+        for _, conn in ipairs(VFX_CONNECTIONS) do
+            pcall(function() conn:Disconnect() end)
+        end
+        VFX_CONNECTIONS = {}
+
+        if not state then return end
+
+        KillVFXIn(workspace)
+        local cam = workspace.CurrentCamera
+        if cam then KillVFXIn(cam) end
+        local char = LocalPlayer.Character
+        if char then KillVFXIn(char) end
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then KillVFXIn(pg) end
+
+        if char then
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+                if hum.JumpPower < 50 then hum.JumpPower = 50 end
+            end
+            for _, folderName in ipairs({"Stun", "StunS"}) do
+                local folder = char:FindFirstChild(folderName)
+                if folder and #folder:GetChildren() > 0 then
+                    pcall(function() folder:ClearAllChildren() end)
+                end
+            end
+        end
+
+        HookContainer(workspace)
+        if cam then HookContainer(cam) end
+        if char then HookContainer(char) end
+        if pg then HookContainer(pg) end
+
+        local respawnConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
+            if not _G.VFXDisabled then return end
+            task.wait(0.5)
+            KillVFXIn(newChar)
+            HookContainer(newChar)
+        end)
+        table.insert(VFX_CONNECTIONS, respawnConn)
+    end
+
+    local MoonTab    = Window:CreateTab("Auto Raid Moon", true, false)
+    local MoonPage   = MoonTab:CreatePage("Moon Raid")
+    local MoonFarm   = MoonPage:CreateSection("🌙 Auto Farm Moon", "Left")
+    local MoonSkills = MoonPage:CreateSection("⚔️ Attack / Skill", "Right")
+    local MoonWeapon = MoonPage:CreateSection("🗡️ Weapons", "Left")
+    local MoonInfo   = MoonPage:CreateSection("📊 Status", "Right")
+    local MoonTravel = MoonPage:CreateSection("🌍 Travel", "Left")
+	local MoonFX = MoonPage:CreateSection("✨ VFX", "Right")
+
+    local MoonStatusPara = MoonInfo:Paragraph({
+        Title = "Status: Waiting",
+        Content = "Enable left toggle to farm Moon"
+    })
+
     MoonFarm:Toggle({
         Title = "🌙 Auto Farm Moon Mob",
+        Id = "MOON_AUTO_FARM",
         Value = false,
         Callback = function(v)
-            if v == MoonRunning then return end
-            MoonRunning = v
+            SetMoonRunning(v)
             MoonStatusPara:SetTitle(v and "Status: FARMING" or "Status: Disabled")
             MoonStatusPara:SetContent(v and "Searching mob..." or "Re-enable to continue")
         end
@@ -775,8 +732,7 @@ if IS_MOON_MAP then
         Value = "Upper",
         Callback = function(v)
             local val = AsString(v)
-            if not val then return end
-            _G.MoonHitPosition = val
+            if val then _G.MoonHitPosition = val end
         end
     })
 
@@ -784,40 +740,44 @@ if IS_MOON_MAP then
         Title = "📏 Hit Distance",
         Min = 5, Max = 40, Value = 12,
         Callback = function(v)
-            if type(v) == "number" then
-                _G.MoonHitDistance = v
-            end
+            if type(v) == "number" then _G.MoonHitDistance = v end
         end
     })
 
     MoonWeapon:Dropdown({
         Title = "🗡️ Main Weapon",
         Options = {"Melee", "Sword", "Special", "DevilFruit"},
-        Id = "MAINWEAPON",
         Multi = false,
         Value = "Melee",
         Callback = function(v)
             local val = AsString(v)
-            if not val then return end
-            _G.MainWeapon = val
+            if val then _G.MainWeapon = val end
         end
     })
 
     MoonWeapon:Dropdown({
         Title = "🗡️ Support Weapons",
         Options = {"Melee", "Sword", "Special", "DevilFruit"},
-        Id = "SUPWEAPON",
         Multi = true,
         Callback = function(v)
-            local list = AsStringList(v)
-            _G.Select_EquipWeapon = list
+            _G.Select_EquipWeapon = AsStringList(v)
         end
     })
-    MoonSkills:Toggle({Title = "Auto Skill Z", Id = "SkillsZ", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
-    MoonSkills:Toggle({Title = "Auto Skill X", Id = "SkillsX", Value = false, Callback = function(v) _G.AutoSkillX = v end})
-    MoonSkills:Toggle({Title = "Auto Skill C", Id = "SkillsC", Value = false, Callback = function(v) _G.AutoSkillC = v end})
-    MoonSkills:Toggle({Title = "Auto Skill V", Id = "SkillsV", Value = false, Callback = function(v) _G.AutoSkillV = v end})
-    MoonSkills:Toggle({Title = "Auto Skill F", Id = "SkillsF", Value = false, Callback = function(v) _G.AutoSkillF = v end})
+
+    MoonSkills:Toggle({Title = "Auto Skill Z", Id = "MOON_SKILL_Z", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
+    MoonSkills:Toggle({Title = "Auto Skill X", Id = "MOON_SKILL_X", Value = false, Callback = function(v) _G.AutoSkillX = v end})
+    MoonSkills:Toggle({Title = "Auto Skill C", Id = "MOON_SKILL_C", Value = false, Callback = function(v) _G.AutoSkillC = v end})
+    MoonSkills:Toggle({Title = "Auto Skill V", Id = "MOON_SKILL_V", Value = false, Callback = function(v) _G.AutoSkillV = v end})
+    MoonSkills:Toggle({Title = "Auto Skill F", Id = "MOON_SKILL_F", Value = false, Callback = function(v) _G.AutoSkillF = v end})
+	
+	MoonFX:Toggle({
+        Title = "🚫 Disable VFX",
+        Id = "MOON_NO_VFX",
+        Value = false,
+        Callback = function(v)
+            if Moon_NoVFX then Moon_NoVFX(v) end
+        end
+    })
 
     MoonTravel:Button({
         Title = "🌍 Back To Earth",
@@ -845,61 +805,195 @@ if IS_MOON_MAP then
 
             task.wait(0.4)
 
-            local prompt = npcHrp:FindFirstChildWhichIsA("ProximityPrompt", true)
-            if not prompt then
-                prompt = backEarth:FindFirstChildWhichIsA("ProximityPrompt", true)
+            local prompt = backEarth:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if prompt then
+                pcall(function() fireproximityprompt(prompt, prompt.HoldDuration + 0.1) end)
             end
-            if not prompt then
-                _G.SeaNotify("❌ No prompt", "", 4)
-                return
-            end
-
-            pcall(function() fireproximityprompt(prompt, prompt.HoldDuration + 0.1) end)
-            task.wait(0.3)
-            pcall(function()
-                prompt:InputHoldBegin()
-                task.wait(prompt.HoldDuration + 0.15)
-                prompt:InputHoldEnd()
-            end)
-            task.wait(0.3)
-            pcall(function()
-                if prompt.Triggered then prompt.Triggered:Fire(LocalPlayer) end
-            end)
-
             _G.SeaNotify("✅ Activated", "Waiting for map change...", 5)
         end
     })
-
-        -- ============================================================
-    -- MOON SETTING — dùng SaveManager của UI chính
-    -- ============================================================
-    local MoonSettingTab = Window:CreateTab("⚙️ Setting", false, false)
-    MySaveManager:BuildConfigTab(MoonSettingTab)
-
-    -- Autoload config khi mở script (dùng folder MarvenRiz_Moon)
     task.spawn(function()
-        task.wait(1)
-        MySaveManager:LoadAutoloadConfig()
+        while task.wait() do
+            pcall(function()
+                if not IsMoonRunning() then
+                    if MoonLastRunning then
+                        MoonLastRunning = false
+                        MoonCurrentTarget = nil
+                        MoonAtCave = false
+                        _G.CanAutoSkill = false
+
+                        local char = LocalPlayer.Character
+                        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            hrp.Anchored = false
+                            hrp.AssemblyLinearVelocity  = Vector3.zero
+                            hrp.AssemblyAngularVelocity = Vector3.zero
+                        end
+                        local hum = char and char:FindFirstChild("Humanoid")
+                        if hum then hum.PlatformStand = false end
+                    end
+                    return
+                end
+
+                if not MoonLastRunning then
+                    MoonLastRunning = true
+                    MoonCurrentTarget = nil
+                    MoonAtCave = false
+                end
+
+                local char = LocalPlayer.Character
+                local hum  = char and char:FindFirstChild("Humanoid")
+                local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+                if not hum or not hrp or hum.Health <= 0 then return end
+
+                local target, priorityText = GetMoonTarget()
+                if not target then
+                    _G.CanAutoSkill = false
+                    MoonCurrentTarget = nil
+
+                    if not MoonAtCave then
+                        MoonStatusPara:SetTitle("⏳ Waiting for mob...")
+                        MoonStatusPara:SetContent("Standing at cave waiting for mob")
+                        hrp.CFrame = CFrame.new(CAVE_POS)
+                        hrp.AssemblyLinearVelocity  = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
+                        MoonAtCave = true
+                    end
+                    return
+                end
+
+                _G.CanAutoSkill = true
+                MoonAtCave = false
+
+                if target ~= MoonCurrentTarget then
+                    MoonCurrentTarget = target
+                    MoonStatusPara:SetTitle(priorityText .. ": " .. target.Name)
+                end
+
+                local tHrp = target:FindFirstChild("HumanoidRootPart")
+                local tHum = target:FindFirstChild("Humanoid")
+                if not tHrp or not tHum then return end
+
+                tHum.WalkSpeed = 0
+                tHum.JumpPower = 0
+                Moon_TeleportToMob(hrp, tHrp)
+
+                local now = tick()
+                if now - MoonLastEquip >= 0.5 then
+                    MoonLastEquip = now
+                    MoonEquipWeapon()
+                end
+
+                local hasSkill = _G.AutoSkillZ or _G.AutoSkillX
+                              or _G.AutoSkillC or _G.AutoSkillV or _G.AutoSkillF
+
+                if hasSkill then
+                    Moon_AutoSkill()
+                else
+                    Moon_Attack()
+                end
+
+                MoonStatusPara:SetContent(string.format(
+                    "HP: %d / %d | Dist: %d | %s",
+                    math.floor(tHum.Health),
+                    math.floor(tHum.MaxHealth),
+                    math.floor((hrp.Position - tHrp.Position).Magnitude),
+                    hasSkill and "⚔️ SKILL" or "👊 ATTACK"
+                ))
+            end)
+        end
     end)
+    task.spawn(function()
+        while task.wait(1) do
+            pcall(function()
+                if not IsMoonRunning() then return end
+                if not _G.CanAutoSkill then return end
+                local char = LocalPlayer.Character
+                if not char then return end
+                if not char:FindFirstChild("HakiFolder") then
+                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                    local action = remotes and remotes:FindFirstChild("Action")
+                    if action then action:FireServer("Misc", "buso") end
+                end
+            end)
+        end
+    end)
+    task.spawn(function()
+        task.wait(2)
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            if not char:FindFirstChild("HakiFolder") then
+                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                local action = remotes and remotes:FindFirstChild("Action")
+                if action then action:FireServer("Misc", "buso") end
+            end
+        end)
+    end)
+    task.spawn(function()
+        task.wait(3)
+        local waited = 0
+        while waited < 10 do
+            local char = LocalPlayer.Character
+            local hum  = char and char:FindFirstChild("Humanoid")
+            local bp   = LocalPlayer:FindFirstChild("Backpack")
+            if char and hum and bp and hum.Health > 0 then break end
+            task.wait(0.5)
+            waited = waited + 0.5
+        end
+        MoonLastRunning = true
+        Moon_AutoBuffOnStart()
+    end)
+
+    if MySaveManager then
+        pcall(function() MySaveManager:SetFolder("MarvenRiz_Moon") end)
+
+        local okBuild, errBuild = pcall(function()
+            local MoonSettingTab = Window:CreateTab("⚙️ Setting", false, false)
+            MySaveManager:BuildConfigTab(MoonSettingTab)
+        end)
+
+        if not okBuild then
+            warn("[Moon] BuildConfigTab failed:", errBuild)
+            pcall(function() Window:CreateTab("⚙️ Setting", false, false) end)
+        end
+
+        task.spawn(function()
+            task.wait(1.5)
+            local okLoad, errLoad = pcall(function()
+                return MySaveManager:LoadAutoloadConfig()
+            end)
+
+            if not okLoad then
+                warn("[Moon] Autoload error:", errLoad)
+                return
+            end
+
+            task.wait(0.2)
+            if _G.MoonRunning == true then
+                _G.MoonRunning = false
+                SetMoonRunning(true)
+                if MoonStatusPara then
+                    MoonStatusPara:SetTitle("Status: FARMING")
+                    MoonStatusPara:SetContent("Searching mob...")
+                end
+            else
+            end
+        end)
+    else
+        warn("[Moon] MySaveManager is nil — skip Setting tab")
+        pcall(function() Window:CreateTab("⚙️ Setting", false, false) end)
+    end
 
 end
 
--- ============================================================
--- NON-MOON MAP → FULL UI
--- ============================================================
 if not IS_MOON_MAP and not IS_SEA2_MAP then
 
--- ============================================================
--- TRACK DASH SKILLS
--- ============================================================
 _G.LastSkillTime = 0
 _G.LastSkillKey  = ""
 _G.DASH_SKILLS   = {x = true}
 _G.DASH_NEGATE_TIME = 0.35
 
--- ============================================================
--- AUTO SKILL v132 — REMOVE BODYMOVER + DO NOT BLOCK CFrame
--- ============================================================
 local function AutoSkill()
     pcall(function()
         local char = LocalPlayer.Character
@@ -1020,9 +1114,6 @@ local function Attack()
     end)
 end
 
--- ============================================================
--- NO VFX v3 — EVENT-DRIVEN, NO LAG
--- ============================================================
 local VFX_CONNECTIONS = {}
 local VFX_KILL_CLASSES = {
     ["ParticleEmitter"] = true,
@@ -1127,9 +1218,6 @@ LocalPlayer.Idled:Connect(function()
     VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- ============================================================
--- TAB 1: SETTINGS
--- ============================================================
 local Tab1       = Window:CreateTab("Settings", true, false)
 local Tab_Page1  = Tab1:CreatePage("Main Settings")
 local Weapon     = Tab_Page1:CreateSection("🗡️ Select Weapon", "Left")
@@ -1179,19 +1267,11 @@ Accessory:Toggle({
     Callback = function(v) _G.Auto_Rebirth = v end
 })
 
--- ============================================================
--- 🆕 X2 POTION UI — v3 (Multi + Auto + Info)
--- ============================================================
-
--- 🆕 Toggle Auto
-
--- 🆕 Dropdown MULTI
 Potion:Dropdown({
     Title = "🧪 Select X2 Potion",
     Options = X2List,
     Multi = true,
     Callback = function(v)
-        -- 🆕 Normalize: xử lý cả array và dictionary
         local list = {}
         local seen = {}
 
@@ -1203,11 +1283,10 @@ Potion:Dropdown({
         end
 
         if type(v) == "table" then
-            -- Dạng 1: array {"A", "B"}
             for _, item in ipairs(v) do
                 addItem(item)
             end
-            -- Dạng 2: dictionary {["A"]=true, ["B"]=true}
+			
             for key, val in pairs(v) do
                 if val == true then
                     addItem(key)
@@ -1232,15 +1311,11 @@ Potion:Toggle({
     end
 })
 
--- 🆕 Info Paragraph (tự update — không cần bấm Check)
 local PotionInfoPara = Potion:Paragraph({
     Title = "🍦 X2 Potions: ---",
-    Content = "Chọn Potion để xem"
+    Content = "Select Potion to view"
 })
 
--- ============================================================
--- TAB 2: MAIN
--- ============================================================
 local Tab2            = Window:CreateTab("Main", false, false)
 local Farm            = Tab2:CreatePage("Farm")
 local AllBoss         = Tab2:CreatePage("Boss")
@@ -1392,9 +1467,6 @@ DungeonCard:Toggle({
     end
 })
 
--- ============================================================
--- RAID BOSS UI
--- ============================================================
 local RaidBossData = {
     ["Bacon of Grudge"] = {
         Name = "Bacon of Grudge",
@@ -1427,7 +1499,7 @@ local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
 
 RaidBossCard:Dropdown({
     Title = "Choose a boss to raid",
-    Options = {"Bacon of Grudge", "Dragon", "Lava Titan", "??? (Raid4)"},
+    Options = {"Bacon of Grudge", "Dragon", "Lava Titan"},
     Multi = false,
     Callback = function(Value)
         _G.AutoRaidWho = Value
@@ -1449,7 +1521,6 @@ RaidBossCard:Button({
             _G.SeaNotify("❌ Invalid Raid", "NO RAID!!!", 3); return
         end
 
-        -- ===== PHÂN NHÁNH THEO BOSS =====
         if _G.AutoRaidWho == "Dragon" then
             if _G.AutoRaidRunning then _G.AutoRaidRunning = false end
             if _G.AutoRaidLava then _G.AutoRaidLava = false end
@@ -1472,7 +1543,6 @@ RaidBossCard:Button({
             return
         end
 
-        -- Mặc định: Bacon of Grudge
         if _G.AutoRaidDragon then _G.AutoRaidDragon = false end
         if _G.AutoRaidLava then _G.AutoRaidLava = false end
         _G.AutoRaidRunning = not _G.AutoRaidRunning
@@ -1488,9 +1558,6 @@ RaidSettingsCard:Slider({
     Callback = function(v) _G.RaidBallOffsetY = v end
 })
 
--- ============================================================
--- SHOP RAID UI
--- ============================================================
 local ShopInfoPara = ShopRaidInfoCard:Paragraph({
     Title = "RaidPoint: ( loading... )",
     Content = "Restock In: ( loading... )"
@@ -1751,17 +1818,10 @@ ShopDunCard:Toggle({
     end
 })
 
--- ============================================================
--- TAB 3: OTHER
--- ============================================================
 local Tab3            = Window:CreateTab("Other", false, false)
 local RandomM         = Tab3:CreatePage("Random Chest")
 local CraftTablePage  = Tab3:CreatePage("Craft Table")
 local GokuPage        = Tab3:CreatePage("Npc Goku Gods")
-
--- ============================================================
--- RANDOM CHEST
--- ============================================================
 local DiamondChest     = RandomM:CreateSection("💎 Diamond Chest", "Right")
 local MoonChest        = RandomM:CreateSection("🌙 Moon Chest", "Left")
 local GuaranteeDiamond = RandomM:CreateSection("🎖️ Guarantee Gem Point", "Right")
@@ -2167,7 +2227,6 @@ task.spawn(function()
     end
 end)
 
--- CRAFT TABLE
 local CraftCard       = CraftTablePage:CreateSection("🔨 Craft Table", "Left")
 local CraftStatusCard = CraftTablePage:CreateSection("📊 Status", "Right")
 local CraftInfoCard   = CraftTablePage:CreateSection("📋 Craft Info", "Right")
@@ -2480,9 +2539,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- GOKU NPC
--- ============================================================
 local GokuCurrentCard = GokuPage:CreateSection("📍 Available NPCs", "Left")
 local GokuActionCard  = GokuPage:CreateSection("⚙️ Actions", "Right")
 
@@ -2687,9 +2743,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- TAB 4: TELEPORT
--- ============================================================
 local TabTP    = Window:CreateTab("Teleport", false, false)
 local TPPage   = TabTP:CreatePage("Teleport Sea 1")
 local IslandCard = TPPage:CreateSection("🏝️ Sea 1 Islands", "Left")
@@ -2801,20 +2854,12 @@ SeaCard:Button({
     end
 })
 
--- ============================================================
--- TAB 5: CONFIG
--- ============================================================
 local ConfigTab = Window:CreateTab("Config", false, false)
 MySaveManager:BuildConfigTab(ConfigTab)
 task.spawn(function()
     task.wait(1)
     MySaveManager:LoadAutoloadConfig()
 end)
-
--- ============================================================
--- BACKGROUND LOOPS
--- ============================================================
-
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -2832,7 +2877,6 @@ task.spawn(function()
         end)
     end
 end)
-
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -2848,7 +2892,6 @@ task.spawn(function()
         end)
     end
 end)
-
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -2866,7 +2909,6 @@ task.spawn(function()
         end)
     end
 end)
-
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -2879,7 +2921,6 @@ task.spawn(function()
         end)
     end
 end)
-
 task.spawn(function()
     while task.wait() do
         xpcall(function()
@@ -2894,7 +2935,6 @@ task.spawn(function()
         end, print)
     end
 end)
-
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -2906,10 +2946,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- ============================================================
--- AUTO SKILL LOOP v123 — ONLY SPAM WHEN ATTACKING
--- ============================================================
 task.spawn(function()
     while task.wait(0.1) do
         local hasAuto = _G.Auto_Farm_Level or _G.Auto_Farm_Material or _G.Auto_FarmBoss
@@ -2925,11 +2961,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- 🆕 AUTO QTE BLADE OF CHAOS — chạy nền như Auto Skill
--- Khi PlayerGui.Battle mở → tự bấm phím hiển thị
--- Nếu phím không đổi > STUCK_TIMEOUT → bấm lại
--- ============================================================
 local QTE_KEY_MAP = {
     A=Enum.KeyCode.A, B=Enum.KeyCode.B, C=Enum.KeyCode.C, D=Enum.KeyCode.D,
     E=Enum.KeyCode.E, F=Enum.KeyCode.F, G=Enum.KeyCode.G, H=Enum.KeyCode.H,
@@ -2951,13 +2982,11 @@ local QTE_WasOpen     = false
 
 local function QTE_PressKey(keyCode, btn)
     pcall(function()
-        -- PC: bàn phím ảo
         if VirtualInputManager then
             VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
             task.wait(0.02)
             VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
         end
-        -- MOBILE: tap trực tiếp lên button QTE
         if btn and btn:IsA("GuiButton") then
             if firesignal then
                 firesignal(btn.MouseButton1Click)
@@ -2975,9 +3004,6 @@ local function QTE_PressKey(keyCode, btn)
     end)
 end
 
--- ============================================================
--- 🆕 ANTI-LAUNCH — kéo player + boss về khi bị skill V đẩy bay
--- ============================================================
 local function AntiLaunchFix(hrp)
     if not hrp or not hrp.Parent then return end
 
@@ -2989,29 +3015,23 @@ local function AntiLaunchFix(hrp)
     if not tHrp or not tHrp.Parent then return end
 
     local dist = (hrp.Position - tHrp.Position).Magnitude
-
-    -- Nếu bay quá 80 studs → kéo cả 2 về vị trí chiến đấu
     if dist > 80 then
         local height = _G.BACON_AIM_HEIGHT or _G.LAVA_AIM_HEIGHT or 25
         local mF = CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
         hrp.CFrame = tHrp.CFrame * mF
         hrp.AssemblyLinearVelocity  = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
-
-        -- Kéo boss xuống + zero Y velocity
         tHrp.CFrame = CFrame.new(tHrp.Position.X, tHrp.Position.Y - 50, tHrp.Position.Z)
         tHrp.AssemblyLinearVelocity  = Vector3.new(
             tHrp.AssemblyLinearVelocity.X, 0, tHrp.AssemblyLinearVelocity.Z
         )
         tHrp.AssemblyAngularVelocity = Vector3.zero
     else
-        -- Luôn chặn Y velocity của boss (không cho bay lên)
         tHrp.AssemblyLinearVelocity = Vector3.new(
             tHrp.AssemblyLinearVelocity.X, 0, tHrp.AssemblyLinearVelocity.Z
         )
     end
 end
-
 task.spawn(function()
     while task.wait(0.02) do
         pcall(function()
@@ -3055,11 +3075,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- ============================================================
--- 🆕 AUTO POTION SMART + UPDATE INFO (v4)
--- Auto: dùng khi time = 0 | Info: hiện số lượng + time
--- ============================================================
 task.spawn(function()
     local lastUseTime = {}
     local lastInfoUpdate = 0
@@ -3075,8 +3090,6 @@ task.spawn(function()
     while task.wait(0.3) do
         pcall(function()
             local now = tick()
-
-            -- 🆕 UPDATE INFO mỗi 0.5s
             if now - lastInfoUpdate >= 0.5 then
                 lastInfoUpdate = now
 
@@ -3111,12 +3124,11 @@ task.spawn(function()
                 end
 
                 if PotionInfoPara then
-                    PotionInfoPara:SetTitle("🍦 X2 Potions (⭐ = đã chọn)")
+                    PotionInfoPara:SetTitle("🍦 X2 Potions (⭐ = selected)")
                     PotionInfoPara:SetContent(table.concat(lines, "\n"))
                 end
             end
 
-            -- 🆕 AUTO USE (chỉ khi time = 0)
             if not _G.Auto_Use_Potion then return end
             if type(_G.Select_Potion) ~= "table" or #_G.Select_Potion == 0 then return end
 
@@ -3131,14 +3143,12 @@ task.spawn(function()
                 if attrName then
                     local timeLeft = tonumber(LocalPlayer:GetAttribute(attrName)) or 0
                     if timeLeft <= 0 then
-                        -- Cooldown 2s tránh spam
                         local last = lastUseTime[potionName] or 0
                         if tick() - last >= 2 then
                             local have = (Inv[potionName] and Inv[potionName].amount) or 0
                             if have > 0 then
                                 lastUseTime[potionName] = tick()
                                 pcall(function() remote:FireServer(potionName) end)
-                                print("[Potion] 🤖 Auto used: " .. potionName)
                             end
                         end
                     end
@@ -3147,8 +3157,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- AUTO EQUIP ACCESSORY
 task.spawn(function()
     while task.wait(1) do
         pcall(function()
@@ -3181,8 +3189,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- AUTO REBIRTH
 task.spawn(function()
     while task.wait() do
         pcall(function()
@@ -3194,8 +3200,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- GUARANTEE AUTO BUY
 task.spawn(function()
     while task.wait() do
         if _G.Auto_Guarantee_Moon and PointItemMoon then
@@ -3207,7 +3211,6 @@ task.spawn(function()
         end
     end
 end)
-
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -3238,8 +3241,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- SHOP DUNGEON LOOPS
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -3250,7 +3251,6 @@ task.spawn(function()
         end)
     end
 end)
-
 task.spawn(function()
     while task.wait(0.3) do
         if _G.AutoBuyDunRunning and _G.AutoBuyDunItem then
@@ -3261,8 +3261,6 @@ task.spawn(function()
         end
     end
 end)
-
--- SHOP RAID LOOP
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -3297,8 +3295,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- AUTO FARM LEVEL
 task.spawn(function()
     while wait() do
         xpcall(function()
@@ -3367,10 +3363,6 @@ task.spawn(function()
         end, print)
     end
 end)
-
--- ============================================================
--- AUTO FARM MATERIAL v106
--- ============================================================
 task.spawn(function()
     local lastMaterialLog = 0
     local lastTargetLog = 0
@@ -3485,17 +3477,12 @@ task.spawn(function()
             AutoSkill()
             Attack()
 
-            -- 🆕 Dùng Teleport đơn giản như bản gốc — không rung
             Teleport(tHrp.CFrame * MethodFarm)
         end, function(err)
             warn("[AutoFarm] Error:", err)
         end)
     end
 end)
-
--- ============================================================
--- AUTO FARM BOSS (Full) — v6 FOLLOW 24/7 AFTER RESPAWN
--- ============================================================
 task.spawn(function()
     local lastSummonTime = 0
     local summonCooldown = 1.5
@@ -3536,8 +3523,6 @@ task.spawn(function()
                 EquipWeapon()
                 AutoSkill()
                 Attack()
-
-                -- 🆕 Dùng Teleport đơn giản như bản gốc — không rung
                 Teleport(tHrp.CFrame * MethodFarm)
                 return
             end
@@ -3560,11 +3545,6 @@ task.spawn(function()
         end, function(err) warn("[AutoFarmBoss] Error:", err) end)
     end
 end)
-
--- ============================================================
--- 🆕 AUTO BOSS ALL — Piccolo + Kraken + Devil Boat + Thief
--- Ưu tiên: Piccolo → Kraken → Devil Boat → Thief
--- ============================================================
 task.spawn(function()
     local lastTargetKey = nil
     local lastSummonTime = 0
@@ -3588,8 +3568,6 @@ task.spawn(function()
 
             local mobFolder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
             if not mobFolder then return end
-
-            -- 🆕 Tìm boss theo thứ tự ưu tiên
             local BossNames = {"Piccolo", "Kraken", "Devil Boat", "DevilBoat", "Bacon Thief"}
             local Target = nil
             local TargetName = nil
@@ -3609,7 +3587,6 @@ task.spawn(function()
                 if Target then break end
             end
 
-            -- Chỉ đứng chờ boss xuất hiện
             if not Target then
                 _G.CanAutoSkill = false
                 lastTargetKey = nil
@@ -3635,27 +3612,20 @@ task.spawn(function()
             EquipWeapon()
             AutoSkill()
             Attack()
-
-            -- 🆕 Bám boss (dùng Teleport cho mượt)
             Teleport(tHrp.CFrame * MethodFarm)
 
-            -- 🆕 XỬ LÝ RIÊNG CHO THIEF: Mở chest sau khi Thief chết
             if TargetName == "Bacon Thief" then
-                -- Đợi Thief chết + rương rơi
                 task.spawn(function()
                     local startTime = tick()
-                    -- Đợi tối đa 10s cho Thief chết + chest spawn
                     while tick() - startTime < 10 do
                         task.wait(0.5)
-                        -- Nếu Thief chết → tìm chest gần nhất
                         if not Target.Parent or not Target:FindFirstChild("Humanoid") 
                            or Target.Humanoid.Health <= 0 then
                             break
                         end
                     end
                     
-                    -- 🆕 Tìm chest gần nhất trong MobSpawnGroup
-                    task.wait(1)  -- Đợi chest spawn
+                    task.wait(1)
                     local mobSpawnGroup = workspace:FindFirstChild("MobSpawnGroup")
                     if mobSpawnGroup then
                         local char = LocalPlayer.Character
@@ -3675,11 +3645,9 @@ task.spawn(function()
                                 end
                             end
                             
-                            -- 🆕 Mở chest nếu tìm thấy
                             if nearestChest then
                                 local prompt = nearestChest:FindFirstChildWhichIsA("ProximityPrompt", true)
                                 if prompt and prompt.ActionText == "Open" then
-                                    print("[BossAll] 🎁 Mở chest Thief")
                                     hrp.CFrame = CFrame.new(nearestChest.Position + Vector3.new(0, 3, 0))
                                     hrp.AssemblyLinearVelocity = Vector3.zero
                                     hrp.AssemblyAngularVelocity = Vector3.zero
@@ -3697,8 +3665,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- AUTO PICCOLO
 task.spawn(function()
     while task.wait() do
         if _G.Auto_Piccolo then
@@ -3729,10 +3695,6 @@ task.spawn(function()
         end
     end
 end)
-
--- ============================================================
--- AUTO DUCK (Full) — v6 FOLLOW 24/7 AFTER RESPAWN
--- ============================================================
 task.spawn(function()
     local lastSummonTime = 0
     local summonCooldown = 2.5
@@ -3774,8 +3736,6 @@ task.spawn(function()
                 EquipWeapon()
                 AutoSkill()
                 Attack()
-
-                -- 🆕 Dùng Teleport đơn giản như bản gốc — không rung
                 Teleport(tHrp.CFrame * MethodFarm)
                 return
             end
@@ -3823,8 +3783,6 @@ task.spawn(function()
         end, function(err) warn("[AutoDuckFull] Error:", err) end)
     end
 end)
-
--- AUTO DEVIL BOAT
 task.spawn(function()
     while task.wait() do
         if _G.Auto_DevilBoat then
@@ -3854,10 +3812,6 @@ task.spawn(function()
         end
     end
 end)
-
--- ============================================================
--- 🐙 AUTO FARM KRAKEN — v1
--- ============================================================
 task.spawn(function()
     local lastTargetKey = nil
     local jitterSeed = 0
@@ -3918,10 +3872,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- ============================================================
--- AUTO CRAFT WEAPON v133 — FIX SPAM + SMART
--- ============================================================
 task.spawn(function()
     local lastNotifyTime = 0
     local lastCraftTime = 0
@@ -3997,10 +3947,6 @@ task.spawn(function()
         end, print)
     end
 end)
-
--- ============================================================
--- UPDATE ITEM REQUIREMENTS v133 — FIX (None) N/A
--- ============================================================
 task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -4061,8 +4007,6 @@ task.spawn(function()
         end)
     end
 end)
-
--- AUTO FARM SET
 task.spawn(function()
     while task.wait() do
         if _G.Auto_Farm_Set then
@@ -4120,10 +4064,6 @@ task.spawn(function()
         end
     end
 end)
-
--- ============================================================
--- TRIỆU HỒI RAID BOSS TRỰC TIẾP QUA REMOTE
--- ============================================================
 _G.RaidBossRemoteNames = {
     Bacon  = "Bacon of Grudge",
     Dragon = "Dragon",
@@ -4148,12 +4088,6 @@ function _G.SummonRaidBoss(bossKey)
     return true, remoteName
 end
 
--- ============================================================
--- 🆕 AUTO RAID BOSS BACON — v15 FULL (Dragon/Lava fallback)
--- - Bacon chính: ArmorBall → Boss + Thanos spam F (bay 120m đợi)
--- - Dragon fallback: Safe Zone → bay 500m; HP<50% + Thanos → spam F → bay 120m đợi
--- - Lava fallback: lặn/trồi; HP<50% + Thanos → spam F → bay 120m đợi
--- ============================================================
 _G.AutoRaidRunning      = false
 _G.RaidLastFireTime     = 0
 _G.RaidLastAttack       = 0
@@ -4179,8 +4113,6 @@ _G.RaidThanosWaitPos    = nil
 _G.RaidThanosHoverFixedPos = nil
 _G.RaidThanosHoverStart = 0
 _G.RaidOriginalPos      = nil
-
--- Fallback state
 _G.BaconFbBossName = nil
 _G.BaconFbType = nil
 _G.BaconFbDragonSafeActive = false
@@ -4198,7 +4130,6 @@ _G.BaconFbLavaSurfaced = false
 _G.BaconFbLavaSurfacedTime = 0
 _G.LAVA_UNDER_LAVA_Y = -100
 _G.LAVA_AIM_HEIGHT = 25
-
 _G.BACON_AIM_HEIGHT       = 25
 _G.BACON_BOSS_HEIGHT      = 55
 _G.BACON_MIN_FIRE_GAP     = 3
@@ -4214,9 +4145,6 @@ function Bacon_GetMethodFarm(height)
     return CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
 end
 
--- =====================================================
--- Tìm tool Thanos
--- =====================================================
 function Bacon_FindThanosTool()
     local char = LocalPlayer.Character
     if not char then return nil, "character" end
@@ -4262,9 +4190,6 @@ function Bacon_EnsureThanosEquipped()
     return nil
 end
 
--- =====================================================
--- Tìm tool buff
--- =====================================================
 function Bacon_FindBuffTool()
     local char = LocalPlayer.Character
     if not char then return nil, nil end
@@ -4288,17 +4213,12 @@ function Bacon_FindBuffTool()
     return nil, nil
 end
 
--- =====================================================
--- Spam F buff
--- =====================================================
 function Bacon_BuffSpamLoop()
     local tool, buffName = Bacon_FindBuffTool()
     if not tool then
-        print("[Bacon] ⚠️ Không có buff tool, bỏ qua")
         return false
     end
 
-    print("[Bacon] ⚡ Bắt đầu spam F buff: " .. buffName)
     local startTime = tick()
     local lastFTime = 0
 
@@ -4352,7 +4272,6 @@ function Bacon_BuffSpamLoop()
             end
 
             if fOnCooldown then
-                print("[Bacon] ⏹️ Buff F cooldown → dừng spam")
                 break
             end
 
@@ -4360,19 +4279,13 @@ function Bacon_BuffSpamLoop()
                 pcall(function()
                     Action:FireServer(currentTool.Name, "f")
                 end)
-                print("[Bacon] ⚡ Buff F: " .. buffName)
             end
         end
         task.wait(0.1)
     end
-
-    print("[Bacon] ✅ Buff spam xong")
     return true
 end
 
--- =====================================================
--- TryUseThanosF
--- =====================================================
 function Bacon_TryUseThanosF(hrp)
     if not hrp then return "no_tool" end
     local char = LocalPlayer.Character
@@ -4411,9 +4324,6 @@ function Bacon_TryUseThanosF(hrp)
     return "no_tool"
 end
 
--- =====================================================
--- CloseFrame
--- =====================================================
 function Bacon_CloseFrame(frame)
     if not frame then return false end
     local closeBtn = frame:FindFirstChild("Close_")
@@ -4438,9 +4348,6 @@ function Bacon_CloseFrame(frame)
     return true
 end
 
--- =====================================================
--- GetTarget (Bacon)
--- =====================================================
 function Bacon_GetTarget()
     local bf = workspace:FindFirstChild("Boss Fight")
     if not bf then return nil, nil, nil end
@@ -4465,9 +4372,6 @@ function Bacon_GetTarget()
     return nil, nil, nil
 end
 
--- =====================================================
--- GetAnyBoss — fallback Dragon/Lava/Generic
--- =====================================================
 function Bacon_GetAnyBoss()
     local bf = workspace:FindFirstChild("Boss Fight")
     if not bf then return nil, nil, nil, nil end
@@ -4512,9 +4416,6 @@ function Bacon_GetAnyBoss()
     return nil, nil, nil, nil
 end
 
--- =====================================================
--- FallbackSmart — Dragon / Lava
--- =====================================================
 function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
     if not bossModel or not bossHrp or not bossHum or not myHrp then return end
 
@@ -4522,21 +4423,16 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
 
     if _G.BaconFbBossName ~= bossModel.Name then
         _G.BaconFbBossName = bossModel.Name
-        print("[Bacon] ⚠️ Fallback đánh: " .. bossModel.Name .. " [" .. bossType .. "]")
     end
     if _G.BaconFbType ~= bossType then
         _G.BaconFbType = bossType
-        print("[Bacon] 🔄 Fallback type: " .. bossType)
     end
 
     bossHum.WalkSpeed = 0
     bossHum.JumpPower = 0
 
     local hpPct = (bossHum.Health / bossHum.MaxHealth) * 100
-
-    -- ============ DRAGON ============
     if bossType == "Dragon" then
-        -- Safe Zone (green) — ưu tiên cao nhất
         local safePart = nil
         if _G.BaconFbDragonSafePart and _G.BaconFbDragonSafePart.Parent then
             safePart = _G.BaconFbDragonSafePart
@@ -4567,7 +4463,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
         if safePart then
             if not _G.BaconFbDragonSafeActive then
                 _G.BaconFbDragonSafeActive = true
-                print("[Bacon] 🛡️ Dragon Safe Zone → bay 500m tránh chết")
             end
             _G.CanAutoSkill = false
             local safePos = safePart.Position + Vector3.new(0, 500, 0)
@@ -4580,7 +4475,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
             _G.BaconFbDragonSafePart = nil
         end
 
-        -- 🆕 Đã bay cao → giữ nguyên
         if _G.BaconFbDragonWaiting then
             if _G.BaconFbDragonSafePos then
                 myHrp.CFrame = CFrame.new(_G.BaconFbDragonSafePos, bossHrp.Position)
@@ -4592,7 +4486,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
 
         if hpPct <= 50 then
             if not Bacon_FindThanosTool() then
-                -- Không Thanos → đánh thường
                 _G.CanAutoSkill = true
                 _G.BaconFbDragonThanosStart = 0
                 _G.BaconFbDragonThanosCount = 0
@@ -4622,7 +4515,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
             if _G.BaconFbDragonThanosStart == 0 then
                 _G.BaconFbDragonThanosStart = now
                 _G.BaconFbDragonThanosCount = 0
-                print("[Bacon] ⚡ Dragon HP<50% + Thanos → spam F")
             end
 
             local tPos = bossHrp.Position + Vector3.new(0, 25, 0)
@@ -4647,7 +4539,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
                 end
             end
 
-            -- Cooldown → bay 120m đợi
             if fCd and _G.BaconFbDragonThanosCount > 0 then
                 if not _G.BaconFbDragonWaiting then
                     _G.BaconFbDragonWaiting = true
@@ -4656,9 +4547,7 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
                         bossHrp.Position.Y + 500,
                         myHrp.Position.Z
                     )
-					_G.CanAutoSkill = false 
-                    print(string.format("[Bacon] ⏸️ Dragon F #%d → cooldown → bay 120m đợi boss chết",
-                        _G.BaconFbDragonThanosCount))
+					_G.CanAutoSkill = false
                 end
                 myHrp.CFrame = CFrame.new(_G.BaconFbDragonSafePos, bossHrp.Position)
                 myHrp.AssemblyLinearVelocity = Vector3.zero
@@ -4704,14 +4593,12 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
         end
     end
 
-    -- ============ LAVA TITAN ============
     if bossType == "Lava" then
         if not _G.BaconFbLavaOriginPos then
             _G.BaconFbLavaOriginPos = bossHrp.Position
             print("[Bacon] 🌋 Lava fallback: OriginPos lưu")
         end
-
-        -- 🆕 Đã bay cao → giữ nguyên
+		
         if _G.BaconFbLavaWaiting then
             if _G.BaconFbLavaSafePos then
                 myHrp.CFrame = CFrame.new(_G.BaconFbLavaSafePos, bossHrp.Position)
@@ -4721,7 +4608,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
             return
         end
 
-        -- 🆕 Check boss đang lặn/dưới đất → KHÔNG đánh, chỉ đợi trồi
         local bossY = bossHrp.Position.Y
         local bossUnderLava = bossY < _G.LAVA_UNDER_LAVA_Y
 
@@ -4729,7 +4615,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
             if not _G.BaconFbLavaSurfaced then
                 _G.BaconFbLavaSurfaced = true
                 _G.BaconFbLavaSurfacedTime = 0
-                print("[Bacon] 🌋 Lava fallback: boss lặn → KHÔNG đánh, bay lên đợi")
             end
             _G.CanAutoSkill = false
 
@@ -4740,11 +4625,9 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
             myHrp.AssemblyAngularVelocity = Vector3.zero
             return
         else
-            -- 🆕 Boss đã trồi lên
             if _G.BaconFbLavaSurfaced then
                 if _G.BaconFbLavaSurfacedTime == 0 then
                     _G.BaconFbLavaSurfacedTime = now
-                    print("[Bacon] 🌋 Lava fallback: boss trồi → đợi 1.5s")
                 end
                 if now - _G.BaconFbLavaSurfacedTime < 1.5 then
                     _G.CanAutoSkill = false
@@ -4757,11 +4640,9 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
                 end
                 _G.BaconFbLavaSurfaced = false
                 _G.BaconFbLavaSurfacedTime = 0
-                print("[Bacon] 🌋 Lava fallback: boss đã trồi → bám đánh")
             end
         end
 
-        -- 🆕 Boss đã trồi → mới xử lý HP < 50% + Thanos
         if hpPct <= 50 then
             if not Bacon_FindThanosTool() then
                 _G.CanAutoSkill = true
@@ -4793,7 +4674,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
             if _G.BaconFbLavaThanosStart == 0 then
                 _G.BaconFbLavaThanosStart = now
                 _G.BaconFbLavaThanosCount = 0
-                print("[Bacon] 🌋 Lava HP<50% + Thanos → spam F")
             end
 
             local tPos = bossHrp.Position + Vector3.new(0, 25, 0)
@@ -4818,7 +4698,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
                 end
             end
 
-            -- Cooldown → bay 300m đợi boss chết
             if fCd and _G.BaconFbLavaThanosCount > 0 then
                 if not _G.BaconFbLavaWaiting then
                     _G.BaconFbLavaWaiting = true
@@ -4837,7 +4716,6 @@ function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
                 return
             end
 
-            -- Fire F
             if not fCd and now - _G.RaidLastThanosTime >= 0.3 then
                 _G.RaidLastThanosTime = now
                 _G.BaconFbLavaThanosCount = _G.BaconFbLavaThanosCount + 1
@@ -8463,14 +8341,12 @@ task.spawn(function()
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             if not hrp then return end
-
-            -- 🆕 ZERO VELOCITY ngay khi physics step
             hrp.AssemblyLinearVelocity  = Vector3.zero
             hrp.AssemblyAngularVelocity = Vector3.zero
         end)
     end)
 end)
 
-end   -- End if not IS_MOON_MAP
+end
 
 print("[Sea 1] ✅ Load successful!")
