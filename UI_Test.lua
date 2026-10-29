@@ -411,7 +411,7 @@ function Library:CreateWindow(options)
     })
 
     -- ============================================================
-    -- LOADING SCREEN (HỐ ĐEN VŨ TRỤ - PULSE EFFECT)
+    -- LOADING SCREEN (HỐ ĐEN VŨ TRỤ - FIXED PROPORTIONS)
     -- ============================================================
     local LoadingScreen = Create("Frame", {
         Parent = ScreenGui,
@@ -422,57 +422,65 @@ function Library:CreateWindow(options)
 
     -- Ảnh lỗ đen ở giữa
     if loadingImage and loadingImage ~= "" then
+        -- Lớp Hào quang (Glow) phía sau
+        local GlowImg = Create("ImageLabel", {
+            Parent = LoadingScreen,
+            BackgroundTransparency = 1,
+            Image = loadingImage,
+            ImageColor3 = AccentColor,
+            ImageTransparency = 0.6,
+            ScaleType = Enum.ScaleType.Fit, -- Giữ nguyên tỉ lệ
+            Size = UDim2.new(0, 450, 0, 450), -- To hơn để tỏa sáng
+            Position = UDim2.new(0.5, 0, 0.5, -20),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            ZIndex = 499,
+        })
+        
+        local pulseGlow = TweenService:Create(GlowImg, 
+            TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), 
+            {Size = UDim2.new(0, 500, 0, 500), ImageTransparency = 0.8}
+        )
+        pulseGlow:Play()
+
+        -- Ảnh chính
         local LoadImg = Create("ImageLabel", {
             Parent = LoadingScreen,
             BackgroundTransparency = 1,
             Image = loadingImage,
-            ImageTransparency = 0.2,
-            Size = UDim2.new(0, 250, 0, 250), -- Kích thước ảnh cho vừa vặn
-            Position = UDim2.new(0.5, 0, 0.5, 0),
+            ImageTransparency = 0,
+            ScaleType = Enum.ScaleType.Fit, -- Fix méo ảnh
+            Size = UDim2.new(0, 300, 0, 300),
+            Position = UDim2.new(0.5, 0, 0.5, -20),
             AnchorPoint = Vector2.new(0.5, 0.5),
             ZIndex = 501,
         })
         
-        -- Hiệu ứng Nhịp thở (Pulse): Phóng to và thu nhỏ nhẹ nhàng
+        -- Hiệu ứng Nhịp thở (Pulse)
         local pulseTween = TweenService:Create(LoadImg, 
             TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), 
-            {Size = UDim2.new(0, 280, 0, 280)}
+            {Size = UDim2.new(0, 330, 0, 330)}
         )
         pulseTween:Play()
-        
-        -- Hiệu ứng Hào quang (Glow) đè lên ảnh
-        local GlowImg = Create("ImageLabel", {
-            Parent = LoadImg,
-            BackgroundTransparency = 1,
-            Image = loadingImage,
-            ImageColor3 = AccentColor, -- Đổi sang màu tím
-            ImageTransparency = 0.8,    -- Rất mờ
-            Size = UDim2.new(1.5, 0, 1.5, 0),
-            Position = UDim2.new(0.5, 0, 0.5, 0),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            ZIndex = 500,
-        })
     end
 
-    -- Vòng xoáy năng lượng phía ngoài (Xoay để tạo cảm giác đĩa bồi tụ đang quay)
+    -- Vòng xoáy năng lượng phía ngoài
     local SpinRing = Create("Frame", {
         Parent = LoadingScreen,
         BackgroundColor3 = AccentColor,
         BackgroundTransparency = 1,
-        Size = UDim2.new(0, 260, 0, 260),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Size = UDim2.new(0, 280, 0, 280),
+        Position = UDim2.new(0.5, 0, 0.5, -20),
         AnchorPoint = Vector2.new(0.5, 0.5),
         ZIndex = 502,
     })
     Create("UICorner", {Parent = SpinRing, CornerRadius = UDim.new(1, 0)})
-    local RingStroke = Create("UIStroke", {Parent = SpinRing, Color = AccentColor, Thickness = 2, Transparency = 0.2})
-    local RingGradient = Create("UIGradient", {Parent = RingStroke, Transparency = NumberSequence.new({
+    local RingStroke = Create("UIStroke", {Parent = SpinRing, Color = AccentColor, Thickness = 2, Transparency = 0.4})
+    Create("UIGradient", {Parent = RingStroke, Transparency = NumberSequence.new({
         NumberSequenceKeypoint.new(0, 1),
         NumberSequenceKeypoint.new(0.5, 0.1),
         NumberSequenceKeypoint.new(1, 1)
     })})
     
-    -- Chỉ xoay cái vòng, không xoay ảnh
     local ringRotate = TweenService:Create(SpinRing, TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), {Rotation = 360})
     ringRotate:Play()
 
@@ -481,19 +489,19 @@ function Library:CreateWindow(options)
         Parent = LoadingScreen,
         Text = "INITIALIZING",
         Font = Enum.Font.GothamBlack,
-        TextSize = 22,
+        TextSize = 20,
         TextColor3 = Color3.fromRGB(255, 255, 255),
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 30),
-        Position = UDim2.new(0, 0, 0.5, 160), -- Đẩy xuống dưới ảnh một chút
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0.5, 180), -- Đẩy xuống dưới
         ZIndex = 503,
         TextTransparency = 1,
+        TextXAlignment = Enum.TextXAlignment.Center,
     })
     
-    -- Chữ phát sáng nhẹ
-    local TextStroke = Create("UIStroke", {Parent = LoadText, Color = AccentColor, Thickness = 1, Transparency = 0.5})
-
-    -- Chữ Loading mờ dần hiện lên
+    -- Hiệu ứng phát sáng cho chữ
+    local TextStroke = Create("UIStroke", {Parent = LoadText, Color = AccentColor, Thickness = 2, Transparency = 0.2})
+    
     Tween(LoadText, {TextTransparency = 0}, 0.5)
     
     -- Chấm nhấp nháy
@@ -510,10 +518,8 @@ function Library:CreateWindow(options)
 
     -- Hiệu ứng load xong (Thu nhỏ biến mất)
     task.spawn(function()
-        -- Bạn có thể đổi số 5 thành số khác để tăng/giảm thời gian chờ
         task.wait(5) 
         
-        -- Thu nhỏ toàn bộ Loading Screen vào tâm
         local vanishTween = TweenService:Create(LoadingScreen, TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
             Size = UDim2.new(0, 0, 0, 0)
         })
