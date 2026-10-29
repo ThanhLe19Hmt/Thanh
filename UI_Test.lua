@@ -728,6 +728,9 @@ function Library:CreateWindow(options)
         end
     end)
 
+    -- ============================================================
+    -- FIX BUG 1: Search reset không bật Visible cho page khác
+    -- ============================================================
     local searchDebounce = false
     SearchInput:GetPropertyChangedSignal("Text"):Connect(function()
         if searchDebounce then return end
@@ -742,8 +745,7 @@ function Library:CreateWindow(options)
             local activePage = currentTab.CurrentPage
 
             if query == "" then
-                -- FIX: chỉ bật Visible cho card thuộc PAGE đang active.
-                -- Card của page khác (dù đã mount) phải ẩn đi.
+                -- Chỉ bật Visible cho card thuộc PAGE đang active
                 for _, data in ipairs(Window.AllCards) do
                     if data.Tab == currentTab and data.Mounted then
                         if data.Page == activePage then
@@ -883,6 +885,9 @@ function Library:CreateWindow(options)
             Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
             Tween(Txt, {TextColor3 = TextColor}, 0.2)
 
+            if #TabConfig.Pages > 0 then
+                local firstPage = TabConfig.Pages[1]
+
                 for _, data in ipairs(Window.AllCards) do
                     if data.Page == firstPage and not data.Mounted then
                         data.Mounted = true
@@ -906,6 +911,10 @@ function Library:CreateWindow(options)
                     Tween(firstPage.Highlight, {Size = UDim2.new(1, 0, 0, 2), BackgroundTransparency = 0}, 0)
                 end
             end
+
+            -- ============================================================
+            -- FIX BUG 2: bật/tắt Visible CHÍNH XÁC theo page đang active
+            -- ============================================================
             if TabConfig.CurrentPage then
                 for _, data in ipairs(Window.AllCards) do
                     if data.Tab == TabConfig and data.Mounted then
@@ -914,6 +923,7 @@ function Library:CreateWindow(options)
                 end
             end
         end)
+
         function TabConfig:CreatePage(pageName)
             local PageBtn = Create("TextButton", {Parent = PageNavInner, Text = pageName, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = SubTextColor, BackgroundTransparency = 1, Size = UDim2.new(0, 0, 1, 0), AutomaticSize = Enum.AutomaticSize.X})
             local PageHighlight = Create("Frame", {Parent = PageBtn, BackgroundColor3 = AccentColor, Size = UDim2.new(0, 0, 0, 2), Position = UDim2.new(0.5, 0, 1, -5), AnchorPoint = Vector2.new(0.5, 0), BackgroundTransparency = 1})
@@ -945,11 +955,13 @@ function Library:CreateWindow(options)
                     end
                 end
 
+                -- ============================================================
+                -- FIX BUG 3: ẩn card page cũ, hiện card page mới
+                -- ============================================================
                 if TabConfig.CurrentPage then
                     Tween(TabConfig.CurrentPage.Btn, {TextColor3 = SubTextColor}, 0.2)
                     Tween(TabConfig.CurrentPage.Highlight, {Size = UDim2.new(0, 0, 0, 2), BackgroundTransparency = 1}, 0.2)
                     TabConfig.CurrentPage.Scroll.Visible = false
-                    -- FIX: ẩn card của page cũ
                     for _, data in ipairs(Window.AllCards) do
                         if data.Page == TabConfig.CurrentPage and data.Mounted then
                             data.Card.Visible = false
@@ -958,7 +970,6 @@ function Library:CreateWindow(options)
                 end
                 TabConfig.CurrentPage = PageObj
                 PageObj.Scroll.Visible = true
-                -- FIX: hiện card của page mới
                 for _, data in ipairs(Window.AllCards) do
                     if data.Page == PageObj and data.Mounted then
                         data.Card.Visible = true
