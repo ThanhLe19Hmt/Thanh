@@ -19,7 +19,7 @@ local function SafeCopyToClipboard(text)
 end
 
 -- ============================================================
--- THEME — modern dark, soft gradients
+-- THEME
 -- ============================================================
 local Theme = {
     Background      = Color3.fromRGB(14, 14, 18),
@@ -130,7 +130,6 @@ local function BuildSearchIndex(card)
     return table.concat(parts, " ")
 end
 
--- Tạo drop shadow (ảnh mờ dưới frame)
 local function AddShadow(parent, transparency)
     local s = Create("ImageLabel", {
         Parent = parent,
@@ -348,19 +347,15 @@ function Library:CreateWindow(options)
     })
     Create("UIListLayout", {Parent = NotifContainer, VerticalAlignment = Enum.VerticalAlignment.Bottom, HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 10)})
 
-    -- ============ INFO OVERLAY (FIXED LAYOUT) ============
+    -- ============ INFO OVERLAY ============
     local InfoOverlay = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(5, 5, 8), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 400, Visible = false, Active = true})
     local InfoCard = Create("Frame", {Parent = InfoOverlay, BackgroundColor3 = Theme.Card, Size = UDim2.new(0, 440, 0, 360), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 401, BackgroundTransparency = 1, ClipsDescendants = false})
     Create("UICorner", {Parent = InfoCard, CornerRadius = UDim.new(0, 12)})
     Create("UIStroke", {Parent = InfoCard, Color = AccentColor, Thickness = 1.5, Transparency = 1})
     AddShadow(InfoCard, 0.7)
     local InfoScale = Create("UIScale", {Parent = InfoCard, Scale = 0.9})
-
-    -- Padding tổng thể Info (rộng rãi để chữ không sát viền)
-    local InfoPad = Create("UIPadding", {Parent = InfoCard, PaddingTop = UDim.new(0, 20), PaddingBottom = UDim.new(0, 20), PaddingLeft = UDim.new(0, 24), PaddingRight = UDim.new(0, 24)})
-
-    -- Layout dọc: header → scroll
-    local InfoLayout = Create("UIListLayout", {Parent = InfoCard, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 14)})
+    Create("UIPadding", {Parent = InfoCard, PaddingTop = UDim.new(0, 20), PaddingBottom = UDim.new(0, 20), PaddingLeft = UDim.new(0, 24), PaddingRight = UDim.new(0, 24)})
+    Create("UIListLayout", {Parent = InfoCard, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 14)})
 
     local InfoHeader = Create("Frame", {Parent = InfoCard, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 1})
     local InfoTitle = Create("TextLabel", {Parent = InfoHeader, Text = "Feature Info", Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, TextTruncate = Enum.TextTruncate.AtEnd})
@@ -369,80 +364,27 @@ function Library:CreateWindow(options)
     InfoClose.MouseEnter:Connect(function() Tween(InfoClose, {TextColor3 = Theme.Danger}, 0.15) end)
     InfoClose.MouseLeave:Connect(function() Tween(InfoClose, {TextColor3 = SubTextColor}, 0.15) end)
 
-    -- Scroll body — chiếm toàn bộ phần còn lại
     local InfoScroll = Create("ScrollingFrame", {
-        Parent = InfoCard,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, -44),
-        LayoutOrder = 2,
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 3,
-        ScrollBarImageColor3 = AccentColor,
-        ScrollBarImageTransparency = 0.3,
-        BorderSizePixel = 0,
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Parent = InfoCard, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -44), LayoutOrder = 2,
+        CanvasSize = UDim2.new(0, 0, 0, 0), ScrollBarThickness = 3, ScrollBarImageColor3 = AccentColor,
+        ScrollBarImageTransparency = 0.3, BorderSizePixel = 0, AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollingDirection = Enum.ScrollingDirection.Y,
     })
     Create("UIPadding", {Parent = InfoScroll, PaddingRight = UDim.new(0, 8)})
-    local InfoList = Create("UIListLayout", {Parent = InfoScroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12)})
+    Create("UIListLayout", {Parent = InfoScroll, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12)})
 
-    -- Description label — co giãn tự động, wrap đúng
     local InfoDesc = Create("TextLabel", {
-        Parent = InfoScroll,
-        Text = "",
-        Font = Enum.Font.Gotham,
-        TextSize = 13,
-        TextColor3 = SubTextColor,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextWrapped = true,
-        TextTransparency = 1,
-        LineHeight = 1.3,
-        LayoutOrder = 1,
+        Parent = InfoScroll, Text = "", Font = Enum.Font.Gotham, TextSize = 13, TextColor3 = SubTextColor,
+        BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+        TextWrapped = true, TextTransparency = 1, LineHeight = 1.3, LayoutOrder = 1,
     })
-
-    -- Example box — padding đúng, không đè chữ
-    local InfoExample = Create("Frame", {
-        Parent = InfoScroll,
-        BackgroundColor3 = Color3.fromRGB(12, 12, 16),
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        Visible = false,
-        LayoutOrder = 2,
-    })
+    local InfoExample = Create("Frame", {Parent = InfoScroll, BackgroundColor3 = Color3.fromRGB(12, 12, 16), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, Visible = false, LayoutOrder = 2})
     Create("UICorner", {Parent = InfoExample, CornerRadius = UDim.new(0, 8)})
     Create("UIStroke", {Parent = InfoExample, Color = Color3.fromRGB(48, 48, 60), Thickness = 1})
     Create("UIPadding", {Parent = InfoExample, PaddingTop = UDim.new(0, 12), PaddingBottom = UDim.new(0, 12), PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14)})
-    local InfoExampleLabel = Create("TextLabel", {
-        Parent = InfoExample,
-        Text = "EXAMPLE",
-        Font = Enum.Font.GothamBold,
-        TextSize = 10,
-        TextColor3 = AccentColor,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 14),
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTransparency = 1,
-    })
-    local InfoExampleText = Create("TextLabel", {
-        Parent = InfoExample,
-        Text = "",
-        Font = Enum.Font.Code,
-        TextSize = 12,
-        TextColor3 = Color3.fromRGB(220, 220, 230),
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 0),
-        Position = UDim2.new(0, 0, 0, 20),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        TextWrapped = true,
-        TextTransparency = 1,
-        LineHeight = 1.2,
-    })
+    local InfoExampleLabel = Create("TextLabel", {Parent = InfoExample, Text = "EXAMPLE", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 14), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1})
+    local InfoExampleText = Create("TextLabel", {Parent = InfoExample, Text = "", Font = Enum.Font.Code, TextSize = 12, TextColor3 = Color3.fromRGB(220, 220, 230), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 20), AutomaticSize = Enum.AutomaticSize.Y, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, TextTransparency = 1, LineHeight = 1.2})
 
     local function OpenInfo(d)
         InfoTitle.Text = d.Title or "Information"
@@ -502,16 +444,14 @@ function Library:CreateWindow(options)
     Tween(MainScale, {Scale = 1}, 0.4)
     Tween(Main, {BackgroundTransparency = 0}, 0.4)
 
-    -- Background gradient nhẹ cho main
     local MainBgGrad = Create("Frame", {Parent = Main, BackgroundColor3 = Color3.new(1,1,1), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 0})
     Create("UIGradient", {Parent = MainBgGrad, Color = ColorSequence.new(Theme.Background, Theme.BackgroundGrad), Rotation = 90, Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.9), NumberSequenceKeypoint.new(1, 1)})})
     Create("UICorner", {Parent = MainBgGrad, CornerRadius = UDim.new(0, 12)})
 
-    -- Top bar
     local TopBar = Create("Frame", {Parent = Main, BackgroundColor3 = Theme.TopBar, Size = UDim2.new(1, 0, 0, 56), Active = true, ZIndex = 2})
     Create("UICorner", {Parent = TopBar, CornerRadius = UDim.new(0, 12)})
-    local TopBarFill = Create("Frame", {Parent = TopBar, BackgroundColor3 = Theme.TopBar, Size = UDim2.new(1, 0, 1, 12), Position = UDim2.new(0, 0, 0, 0), ZIndex = 2})
-    local TopBorder = Create("Frame", {Parent = TopBar, BackgroundColor3 = Color3.fromRGB(35, 35, 45), Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1), ZIndex = 3})
+    Create("Frame", {Parent = TopBar, BackgroundColor3 = Theme.TopBar, Size = UDim2.new(1, 0, 1, 12), Position = UDim2.new(0, 0, 0, 0), ZIndex = 2})
+    Create("Frame", {Parent = TopBar, BackgroundColor3 = Color3.fromRGB(35, 35, 45), Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1), ZIndex = 3})
     MakeDraggable(TopBar, Main)
 
     local titleOffset = 20
@@ -524,7 +464,6 @@ function Library:CreateWindow(options)
     Create("TextLabel", {Parent = titleBox, Text = cfg.Title, Font = Enum.Font.GothamBold, TextSize = 15, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 10), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
     Create("TextLabel", {Parent = titleBox, Text = cfg.Subtitle, Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 14), Position = UDim2.new(0, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
 
-    -- Global search
     local searchBox = Create("Frame", {Parent = TopBar, BackgroundColor3 = Theme.ElementBg, Size = UDim2.new(0, 250, 0, 34), Position = UDim2.new(1, -340, 0.5, -17), ZIndex = 3})
     Create("UICorner", {Parent = searchBox, CornerRadius = UDim.new(0, 8)})
     Create("UIStroke", {Parent = searchBox, Color = Color3.fromRGB(45, 45, 58), Thickness = 1})
@@ -538,10 +477,9 @@ function Library:CreateWindow(options)
     minBtn.MouseEnter:Connect(function() Tween(minBtn, {TextColor3 = TextColor}, 0.15) end)
     minBtn.MouseLeave:Connect(function() Tween(minBtn, {TextColor3 = SubTextColor}, 0.15) end)
 
-    -- Sidebar
     local Sidebar = Create("Frame", {Parent = Main, BackgroundColor3 = Theme.Sidebar, Size = UDim2.new(0, cfg.SidebarWidth, 1, -56), Position = UDim2.new(0, 0, 0, 56), ZIndex = 2})
     Create("UICorner", {Parent = Sidebar, CornerRadius = UDim.new(0, 12)})
-    local SidebarFill = Create("Frame", {Parent = Sidebar, BackgroundColor3 = Theme.Sidebar, Size = UDim2.new(1, 12, 1, 0), Position = UDim2.new(0, 0, 0, 0), ZIndex = 2})
+    Create("Frame", {Parent = Sidebar, BackgroundColor3 = Theme.Sidebar, Size = UDim2.new(1, 12, 1, 0), Position = UDim2.new(0, 0, 0, 0), ZIndex = 2})
 
     local tabSearch = Create("TextBox", {Parent = Sidebar, BackgroundColor3 = Theme.ElementBg, Size = UDim2.new(1, -24, 0, 32), Position = UDim2.new(0, 12, 0, 12), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, PlaceholderText = "Search tabs...", PlaceholderColor3 = SubTextColor, TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, ZIndex = 3})
     Create("UIPadding", {Parent = tabSearch, PaddingLeft = UDim.new(0, 10)})
@@ -551,10 +489,8 @@ function Library:CreateWindow(options)
     local TabList = Create("ScrollingFrame", {Parent = Sidebar, BackgroundTransparency = 1, Size = UDim2.new(1, -16, 1, -56), Position = UDim2.new(0, 8, 0, 56), ScrollBarThickness = 0, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 3})
     Create("UIListLayout", {Parent = TabList, SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4)})
 
-    -- Content
     local Content = Create("Frame", {Parent = Main, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 1, Size = UDim2.new(1, -cfg.SidebarWidth, 1, -56), Position = UDim2.new(0, cfg.SidebarWidth, 0, 56), ZIndex = 2})
 
-    -- Sphere (minimize)
     local Sphere = Create("ImageButton", {Parent = ScreenGui, BackgroundColor3 = Theme.Sidebar, BackgroundTransparency = 0.1, Size = UDim2.new(0, 56, 0, 56), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Visible = false, AutoButtonColor = false, ClipsDescendants = true, ZIndex = 300})
     Create("UICorner", {Parent = Sphere, CornerRadius = UDim.new(1, 0)})
     Create("UIStroke", {Parent = Sphere, Color = AccentColor, Thickness = 2})
@@ -563,7 +499,6 @@ function Library:CreateWindow(options)
     local SphereTxt = Create("TextLabel", {Parent = Sphere, Text = cfg.SphereWords, Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), TextTransparency = 1, Visible = cfg.SphereText})
     MakeDraggable(Sphere, Sphere)
 
-    -- Close popup
     local Popup = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 300, Visible = false, Active = true})
     local PopupCard = Create("Frame", {Parent = Popup, BackgroundColor3 = Theme.Card, Size = UDim2.new(0, 380, 0, 200), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 301, BackgroundTransparency = 1})
     Create("UICorner", {Parent = PopupCard, CornerRadius = UDim.new(0, 14)})
@@ -660,29 +595,39 @@ function Library:CreateWindow(options)
         end
     end)
 
+    -- ============================================================
+    -- SEARCH FIX: chỉ đụng tới page đang active
+    -- ============================================================
     local searchPending = false
     searchInput:GetPropertyChangedSignal("Text"):Connect(function()
         if searchPending then return end
         searchPending = true
         task.defer(function()
             local q = searchInput.Text:lower()
-            if not Window.CurrentTab or not Window.CurrentTab.CurrentPage then
+            local currentTab = Window.CurrentTab
+            if not currentTab or not currentTab.CurrentPage then
                 searchPending = false
                 return
             end
-            local page = Window.CurrentTab.CurrentPage
+            local activePage = currentTab.CurrentPage
 
             if q == "" then
+                -- Reset: bật Visible CHỈ cho card thuộc page đang active
+                -- Các card thuộc page khác (đã mount) phải giữ Visible = false
                 for _, data in ipairs(Window.AllCards) do
-                    if data.Tab == Window.CurrentTab and data.Mounted then
-                        data.Card.Parent = data.OrigParent
-                        data.Card.Visible = true
+                    if data.Tab == currentTab and data.Mounted then
+                        if data.Page == activePage then
+                            data.Card.Parent = data.OrigParent
+                            data.Card.Visible = true
+                        else
+                            data.Card.Visible = false
+                        end
                     end
                 end
             else
                 local placeLeft = true
                 for _, data in ipairs(Window.AllCards) do
-                    if data.Tab == Window.CurrentTab then
+                    if data.Tab == currentTab then
                         if not data.Mounted then
                             data.Card.Visible = false
                         else
@@ -690,7 +635,7 @@ function Library:CreateWindow(options)
                                 data.SearchIndex = BuildSearchIndex(data.Card)
                             end
                             if string.find(data.SearchIndex, q, 1, true) then
-                                data.Card.Parent = placeLeft and page.LeftCol or page.RightCol
+                                data.Card.Parent = placeLeft and activePage.LeftCol or activePage.RightCol
                                 placeLeft = not placeLeft
                                 data.Card.Visible = true
                             else
@@ -728,16 +673,10 @@ function Library:CreateWindow(options)
         local TabContent = Create("Frame", {Parent = Content, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Visible = false})
 
         local PageNav = Create("ScrollingFrame", {
-            Parent = TabContent,
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 46),
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-            ScrollBarThickness = 0,
-            BorderSizePixel = 0,
-            ScrollingDirection = Enum.ScrollingDirection.X,
-            ScrollingEnabled = true,
-            ClipsDescendants = true,
-            AutomaticCanvasSize = Enum.AutomaticSize.X,
+            Parent = TabContent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 46),
+            CanvasSize = UDim2.new(0, 0, 0, 0), ScrollBarThickness = 0, BorderSizePixel = 0,
+            ScrollingDirection = Enum.ScrollingDirection.X, ScrollingEnabled = true,
+            ClipsDescendants = true, AutomaticCanvasSize = Enum.AutomaticSize.X,
         })
         Create("UIPadding", {Parent = PageNav, PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10)})
 
@@ -804,10 +743,11 @@ function Library:CreateWindow(options)
                 end
             end
 
+            -- Chỉ bật Visible cho card thuộc page đang active của tab này
             if TabConfig.CurrentPage then
                 for _, data in ipairs(Window.AllCards) do
-                    if data.Page == TabConfig.CurrentPage and data.Mounted then
-                        data.Card.Visible = true
+                    if data.Tab == TabConfig and data.Mounted then
+                        data.Card.Visible = (data.Page == TabConfig.CurrentPage)
                     end
                 end
             end
@@ -815,16 +755,10 @@ function Library:CreateWindow(options)
 
         function TabConfig:CreatePage(pageName)
             local PageBtn = Create("TextButton", {
-                Parent = PageNavInner,
-                Text = pageName,
-                Font = Enum.Font.GothamBold,
-                TextSize = 13,
-                TextColor3 = SubTextColor,
-                BackgroundColor3 = Color3.fromRGB(22, 22, 28),
-                BackgroundTransparency = 1,
-                Size = UDim2.new(0, 0, 0, 32),
-                AutomaticSize = Enum.AutomaticSize.X,
-                AutoButtonColor = false,
+                Parent = PageNavInner, Text = pageName, Font = Enum.Font.GothamBold,
+                TextSize = 13, TextColor3 = SubTextColor, BackgroundColor3 = Color3.fromRGB(22, 22, 28),
+                BackgroundTransparency = 1, Size = UDim2.new(0, 0, 0, 32),
+                AutomaticSize = Enum.AutomaticSize.X, AutoButtonColor = false,
             })
             Create("UIPadding", {Parent = PageBtn, PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14)})
             Create("UICorner", {Parent = PageBtn, CornerRadius = UDim.new(0, 8)})
@@ -832,15 +766,10 @@ function Library:CreateWindow(options)
             Create("UICorner", {Parent = PageHighlight, CornerRadius = UDim.new(1, 0)})
 
             local PageScroll = Create("ScrollingFrame", {
-                Parent = PageContainer,
-                BackgroundTransparency = 1,
-                Size = UDim2.new(1, -24, 1, -20),
-                Position = UDim2.new(0, 12, 0, 10),
-                ScrollBarThickness = 3,
-                ScrollBarImageColor3 = Color3.fromRGB(70, 70, 85),
-                ScrollBarImageTransparency = 0.4,
-                Visible = false,
-                BorderSizePixel = 0,
+                Parent = PageContainer, BackgroundTransparency = 1, Size = UDim2.new(1, -24, 1, -20),
+                Position = UDim2.new(0, 12, 0, 10), ScrollBarThickness = 3,
+                ScrollBarImageColor3 = Color3.fromRGB(70, 70, 85), ScrollBarImageTransparency = 0.4,
+                Visible = false, BorderSizePixel = 0,
             })
             Create("UIPadding", {Parent = PageScroll, PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4)})
 
@@ -922,14 +851,9 @@ function Library:CreateWindow(options)
                 elseif side == "Right" or side == "right" then targetCol = RightCol
                 else targetCol = PageObj.Left and LeftCol or RightCol; PageObj.Left = not PageObj.Left end
 
-                -- Card với header gradient
                 local CardFrame = Create("Frame", {
-                    Parent = nil,
-                    BackgroundColor3 = CardColor,
-                    Size = UDim2.new(1, 0, 0, 0),
-                    AutomaticSize = Enum.AutomaticSize.Y,
-                    ClipsDescendants = true,
-                    Visible = false,
+                    Parent = nil, BackgroundColor3 = CardColor, Size = UDim2.new(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y, ClipsDescendants = true, Visible = false,
                 })
                 Create("UICorner", {Parent = CardFrame, CornerRadius = UDim.new(0, 10)})
                 Create("UIStroke", {Parent = CardFrame, Color = Color3.fromRGB(42, 42, 54), Thickness = 1})
@@ -939,11 +863,10 @@ function Library:CreateWindow(options)
                     Page = PageObj, Mounted = false, SearchIndex = nil
                 })
 
-                -- Header có accent bar
                 local Header = Create("Frame", {Parent = CardFrame, BackgroundColor3 = Theme.CardHeader, Size = UDim2.new(1, 0, 0, 40)})
                 Create("UICorner", {Parent = Header, CornerRadius = UDim.new(0, 10)})
-                local HeaderFill = Create("Frame", {Parent = Header, BackgroundColor3 = Theme.CardHeader, Size = UDim2.new(1, 0, 1, 10), Position = UDim2.new(0, 0, 0, 0)})
-                local HeaderBottomLine = Create("Frame", {Parent = Header, BackgroundColor3 = Color3.fromRGB(35, 35, 46), Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1)})
+                Create("Frame", {Parent = Header, BackgroundColor3 = Theme.CardHeader, Size = UDim2.new(1, 0, 1, 10), Position = UDim2.new(0, 0, 0, 0)})
+                Create("Frame", {Parent = Header, BackgroundColor3 = Color3.fromRGB(35, 35, 46), Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, -1)})
                 local AccentBar = Create("Frame", {Parent = Header, BackgroundColor3 = AccentColor, Size = UDim2.new(0, 3, 0, 20), Position = UDim2.new(0, 14, 0.5, -10)})
                 Create("UICorner", {Parent = AccentBar, CornerRadius = UDim.new(1, 0)})
                 Create("TextLabel", {Parent = Header, Text = name, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 26, 0, 0), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
@@ -954,7 +877,6 @@ function Library:CreateWindow(options)
 
                 local Elements = {}
 
-                -- ===== BUTTON =====
                 function Elements:AddButton(title, cb, info)
                     local wrap = Create("Frame", {Parent = Items, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 36)})
                     local btn = Create("TextButton", {Parent = wrap, Text = title, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundColor3 = Theme.ElementBg, Size = UDim2.new(1, -28, 1, 0), AutoButtonColor = false})
@@ -986,7 +908,6 @@ function Library:CreateWindow(options)
                     AddInfoIcon(wrap, UDim2.new(1, -24, 0.5, -9), info)
                 end
 
-                -- ===== PARAGRAPH (fix layout) =====
                 function Elements:AddParagraph(title, content, info)
                     local has = title ~= nil and title ~= ""
                     local wrap = Create("Frame", {Parent = Items, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y})
@@ -1014,7 +935,6 @@ function Library:CreateWindow(options)
                     return h
                 end
 
-                -- ===== TOGGLE =====
                 function Elements:AddToggle(title, default, cb, info)
                     local state = default or false
                     local wrap = Create("Frame", {Parent = Items, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 32)})
@@ -1036,7 +956,6 @@ function Library:CreateWindow(options)
                     Window.ConfigElements[title] = {Set = set, Get = function() return state end}
                 end
 
-                -- ===== SLIDER =====
                 function Elements:AddSlider(title, min, max, default, cb, info)
                     local val = default or min
                     local wrap = Create("Frame", {Parent = Items, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 54)})
@@ -1071,7 +990,6 @@ function Library:CreateWindow(options)
                     Window.ConfigElements[title] = {Set = set, Get = function() return val end}
                 end
 
-                -- ===== DROPDOWN =====
                 function Elements:AddDropdown(title, options, isMulti, default, cb, info)
                     local selected
                     if isMulti then selected = (type(default) == "table") and default or {}
@@ -1177,7 +1095,7 @@ function Library:CreateWindow(options)
                     Window.ConfigElements[title] = {Set = setVal, Get = function() return selected end}
 
                     local h = {}
-                    h.Refresh = function(_, o, p) render(o or options); updateText() end
+                    h.Refresh = function(_, o) render(o or options); updateText() end
                     h.RefreshOptions = h.Refresh
                     h.SetOptions = h.Refresh
                     h.Set = setVal
@@ -1185,7 +1103,6 @@ function Library:CreateWindow(options)
                     return h
                 end
 
-                -- ===== TEXTBOX =====
                 function Elements:AddTextbox(title, ph, default, cb, info)
                     local wrap = Create("Frame", {Parent = Items, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 58)})
                     Create("TextLabel", {Parent = wrap, Text = title, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = TextColor, BackgroundTransparency = 1, Size = UDim2.new(1, -28, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd})
@@ -1200,7 +1117,6 @@ function Library:CreateWindow(options)
                     Window.ConfigElements[title] = {Set = set, Get = function() return input.Text end}
                 end
 
-                -- ===== COLOR PICKER =====
                 function Elements:AddColorPicker(title, default, cb, info)
                     local color = Color3.fromRGB(255,255,255)
                     if typeof(default) == "Color3" then color = default
@@ -1294,7 +1210,6 @@ function Library:CreateWindow(options)
                     }
                 end
 
-                -- ===== CONFIG MANAGER =====
                 function Elements:AddConfigManager(folder)
                     folder = folder or "MarvenRizSave"
                     if not _isfolder(folder) then _makefolder(folder) end
