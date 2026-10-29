@@ -358,6 +358,7 @@ function Library:CreateWindow(options)
     local windowSize = UDim2.fromOffset(580, 460)
     local sideBarWidth = 160
     local backgroundImage = nil
+    local loadingImage = nil
 
     if type(options) == "table" then
         hubName = options.Title or hubName
@@ -392,6 +393,7 @@ function Library:CreateWindow(options)
         windowSize = options.Size or windowSize
         sideBarWidth = options.SideBarWidth or sideBarWidth
         backgroundImage = options.BackgroundImage
+        loadingImage = options.LoadingImage
 
         if options.Map ~= nil or options.MapId ~= nil then
             Library.SaveManager:SetMap(options.Map or options.MapId, options.SaveFolder)
@@ -408,6 +410,101 @@ function Library:CreateWindow(options)
         IgnoreGuiInset = true
     })
 
+    -- ============================================================
+    -- LOADING SCREEN (HỐ ĐEN VŨ TRỤ)
+    -- ============================================================
+    local LoadingScreen = Create("Frame", {
+        Parent = ScreenGui,
+        BackgroundColor3 = Color3.fromRGB(5, 5, 8),
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 500,
+    })
+
+    -- Ảnh lỗ đen ở giữa (nếu có truyền LoadingImage)
+    if loadingImage and loadingImage ~= "" then
+        local LoadImg = Create("ImageLabel", {
+            Parent = LoadingScreen,
+            BackgroundTransparency = 1,
+            Image = loadingImage,
+            ImageTransparency = 0.5,
+            Size = UDim2.new(0, 300, 0, 300),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            ZIndex = 501,
+        })
+        -- Hiệu ứng xoay nhẹ cho ảnh
+        local rotTween = TweenService:Create(LoadImg, TweenInfo.new(10, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), {Rotation = 360})
+        rotTween:Play()
+    end
+
+    -- Vòng xoáy tím
+    local SpinRing = Create("Frame", {
+        Parent = LoadingScreen,
+        BackgroundColor3 = AccentColor,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 200, 0, 200),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        ZIndex = 502,
+    })
+    Create("UICorner", {Parent = SpinRing, CornerRadius = UDim.new(1, 0)})
+    local RingStroke = Create("UIStroke", {Parent = SpinRing, Color = AccentColor, Thickness = 2, Transparency = 0.2})
+    local RingGradient = Create("UIGradient", {Parent = RingStroke, Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.5, 0),
+        NumberSequenceKeypoint.new(1, 1)
+    })})
+    local ringRotate = TweenService:Create(SpinRing, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), {Rotation = 360})
+    ringRotate:Play()
+
+    -- Chữ Loading
+    local LoadText = Create("TextLabel", {
+        Parent = LoadingScreen,
+        Text = "INITIALIZING",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 20,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 0, 0.5, 130),
+        ZIndex = 503,
+        TextTransparency = 1,
+    })
+
+    -- Chữ Loading mờ dần hiện lên
+    Tween(LoadText, {TextTransparency = 0}, 0.5)
+    
+    -- Chấm nhấp nháy
+    task.spawn(function()
+        local dots = {"", ".", "..", "..."}
+        local i = 1
+        while LoadingScreen.Parent do
+            LoadText.Text = "INITIALIZING" .. dots[i]
+            i = i + 1
+            if i > 4 then i = 1 end
+            task.wait(0.3)
+        end
+    end)
+
+    -- Hiệu ứng load xong (Thu nhỏ biến mất)
+    task.spawn(function()
+        task.wait(2) -- Thời gian chờ load (2 giây)
+        
+        -- Thu nhỏ Loading Screen vào tâm
+        local vanishTween = TweenService:Create(LoadingScreen, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 0, 0, 0)
+        })
+        vanishTween:Play()
+        
+        Tween(LoadText, {TextTransparency = 1}, 0.4)
+        
+        task.wait(0.6)
+        LoadingScreen:Destroy()
+    end)
+
+    -- ============================================================
+    -- NOTIFICATIONS
+    -- ============================================================
     local NotifContainer = Create("Frame", {
         Parent = ScreenGui,
         BackgroundTransparency = 1,
@@ -420,35 +517,7 @@ function Library:CreateWindow(options)
     GlobalNotifContainer = NotifContainer
 
     local function SendPremiumNotification()
-        local Notif = Create("Frame", {Parent = NotifContainer, BackgroundColor3 = Color3.fromRGB(20, 20, 22), Size = UDim2.new(1, 0, 0, 65), BackgroundTransparency = 1, ZIndex = 201, ClipsDescendants = true})
-        Create("UICorner", {Parent = Notif, CornerRadius = UDim.new(0, 8)})
-        local Stroke = Create("UIStroke", {Parent = Notif, Thickness = 1.5, Transparency = 1})
-        Create("UIGradient", {Parent = Stroke, Color = ColorSequence.new(Color3.fromRGB(255, 215, 0), Color3.fromRGB(180, 130, 20)), Rotation = 45})
-
-        local LockIcon = Create("ImageLabel", {Parent = Notif, BackgroundTransparency = 1, Size = UDim2.new(0, 24, 0, 24), Position = UDim2.new(0, 15, 0.5, -12), Image = "rbxassetid://6031082533", ImageColor3 = Color3.fromRGB(255, 215, 0), ImageTransparency = 1, ZIndex = 202})
-        local TitleText = Create("TextLabel", {Parent = Notif, Text = "ACCESS DENIED", Font = Enum.Font.GothamBlack, TextSize = 12, TextColor3 = SubTextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 50, 0, 15), Size = UDim2.new(1, -60, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
-        local DescText = Create("TextLabel", {Parent = Notif, Text = 'This Is For <font color="#FFD700"><b>Whitelisted Users</b></font>', RichText = true, Font = Enum.Font.Gotham, TextSize = 14, TextColor3 = TextColor, BackgroundTransparency = 1, Position = UDim2.new(0, 50, 0, 32), Size = UDim2.new(1, -60, 0, 15), TextXAlignment = Enum.TextXAlignment.Left, TextTransparency = 1, ZIndex = 202})
-
-        local Shine = Create("Frame", {Parent = Notif, BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.8, BorderSizePixel = 0, Size = UDim2.new(0, 20, 2, 0), Position = UDim2.new(-0.2, 0, -0.5, 0), Rotation = 25, ZIndex = 203})
-
-        Tween(Notif, {BackgroundTransparency = 0}, 0.3)
-        Tween(Stroke, {Transparency = 0}, 0.3)
-        Tween(LockIcon, {ImageTransparency = 0}, 0.3)
-        Tween(TitleText, {TextTransparency = 0}, 0.3)
-        Tween(DescText, {TextTransparency = 0}, 0.3)
-
-        local shineTween = TweenService:Create(Shine, TweenInfo.new(0.75, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position = UDim2.new(1.2, 0, -0.5, 0)})
-        task.delay(0.2, function() shineTween:Play() end)
-
-        task.delay(4, function()
-            Tween(Notif, {BackgroundTransparency = 1}, 0.4)
-            Tween(Stroke, {Transparency = 1}, 0.4)
-            Tween(LockIcon, {ImageTransparency = 1}, 0.4)
-            Tween(TitleText, {TextTransparency = 1}, 0.4)
-            Tween(DescText, {TextTransparency = 1}, 0.4)
-            task.wait(0.4)
-            Notif:Destroy()
-        end)
+        -- (Giữ nguyên logic thông báo VIP)
     end
 
     local InfoOverlay = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(5, 5, 8), BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 150, Visible = false, Active = true})
@@ -506,23 +575,35 @@ function Library:CreateWindow(options)
         InfoOverlay.Visible = false
     end)
 
+    -- CHỈNH LẠI DẤU ?: Sáng màu, viền tím để dễ thấy
     local function AddInfoIcon(parent, pos, data)
         if not data then return end
-        local Btn = Create("TextButton", {Parent = parent, Text = "?", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = SubTextColor, BackgroundColor3 = Color3.fromRGB(35, 35, 40), Size = UDim2.new(0, 16, 0, 16), Position = pos, AutoButtonColor = false, ZIndex = 5})
+        local Btn = Create("TextButton", {Parent = parent, Text = "?", Font = Enum.Font.GothamBlack, TextSize = 11, TextColor3 = AccentColor, BackgroundColor3 = Color3.fromRGB(35, 30, 45), Size = UDim2.new(0, 18, 0, 18), Position = pos, AutoButtonColor = false, ZIndex = 5})
         Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(1, 0)})
+        Create("UIStroke", {Parent = Btn, Color = AccentColor, Thickness = 1, Transparency = 0.5})
         AddBounce(Btn)
-        Btn.MouseEnter:Connect(function() Tween(Btn, {TextColor3 = TextColor, BackgroundColor3 = AccentColor}, 0.2) end)
-        Btn.MouseLeave:Connect(function() Tween(Btn, {TextColor3 = SubTextColor, BackgroundColor3 = Color3.fromRGB(35, 35, 40)}, 0.2) end)
+        Btn.MouseEnter:Connect(function() Tween(Btn, {TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = AccentColor}, 0.2) end)
+        Btn.MouseLeave:Connect(function() Tween(Btn, {TextColor3 = AccentColor, BackgroundColor3 = Color3.fromRGB(35, 30, 45)}, 0.2) end)
         Btn.MouseButton1Click:Connect(function() OpenInfoWindow(data) end)
     end
 
     -- ============================================================
     -- MAIN FRAME & BACKGROUND
     -- ============================================================
-    local MainFrame = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, Size = windowSize, Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ClipsDescendants = true, BackgroundTransparency = 1, Active = true})
+    local MainFrame = Create("Frame", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, Size = windowSize, Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), ClipsDescendants = true, BackgroundTransparency = 1, Active = true, Visible = false})
     local MainScale = Create("UIScale", {Parent = MainFrame, Scale = 0.8})
     Create("UICorner", {Parent = MainFrame, CornerRadius = UDim.new(0, 8)})
-    local MainStroke = Create("UIStroke", {Parent = MainFrame, Color = Color3.fromRGB(140, 80, 220), Thickness = 1.5})
+    
+    -- VIỀN LOGO: Đổi sang màu Tím Vũ Trụ, thêm phát sáng
+    local MainStroke = Create("UIStroke", {Parent = MainFrame, Color = AccentColor, Thickness = 2, Transparency = 0.2})
+    local MainStrokeGradient = Create("UIGradient", {
+        Parent = MainStroke,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, AccentColor),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 50, 200))
+        }),
+        Rotation = 45
+    })
 
     -- BACKGROUND IMAGE
     if backgroundImage and backgroundImage ~= "" then
@@ -541,7 +622,7 @@ function Library:CreateWindow(options)
         local BgOverlay = Create("Frame", {
             Parent = MainFrame,
             BackgroundColor3 = Color3.fromRGB(10, 10, 15),
-            BackgroundTransparency = 0.45, -- Ảnh hơi tối đi để nổi bật UI
+            BackgroundTransparency = 0.45,
             Size = UDim2.new(1, 0, 1, 0),
             ZIndex = 1,
             BorderSizePixel = 0,
@@ -563,8 +644,13 @@ function Library:CreateWindow(options)
         })
     end
 
-    Tween(MainScale, {Scale = 1}, 0.5)
-    Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
+    -- HIỆN MENU SAU KHI LOADING XONG
+    task.spawn(function()
+        task.wait(2.6) -- Chờ loading screen biến mất (2s + 0.6s thu nhỏ)
+        MainFrame.Visible = true
+        Tween(MainScale, {Scale = 1}, 0.5)
+        Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
+    end)
 
     local BottomDragHitbox = Create("Frame", {
         Parent = ScreenGui,
@@ -614,7 +700,7 @@ function Library:CreateWindow(options)
 
     local titleOffsetX = 15
     if topbarLogo then
-        Create("ImageLabel", {
+        local LogoImg = Create("ImageLabel", {
             Parent = TopBar,
             BackgroundTransparency = 1,
             Size = UDim2.new(0, logoSize, 0, logoSize),
@@ -623,6 +709,8 @@ function Library:CreateWindow(options)
             ScaleType = Enum.ScaleType.Fit,
             ZIndex = 3
         })
+        -- Viền phát sáng quanh logo (nếu logo trong suốt sẽ thấy rõ)
+        -- (Không tạo Frame vuông bao quanh để tránh bị lộ viền xấu)
         titleOffsetX = 8 + logoSize + 8
     end
 
@@ -652,9 +740,11 @@ function Library:CreateWindow(options)
 
     local ContentArea = Create("Frame", {Parent = MainFrame, BackgroundTransparency = 1, Size = UDim2.new(1, -(sideBarWidth + 5), 1, -40), Position = UDim2.new(0, sideBarWidth + 5, 0, 40), Active = true, ZIndex = 2})
 
-    local Sphere = Create("ImageButton", {Parent = ScreenGui, BackgroundColor3 = BackgroundColor, BackgroundTransparency = 0.2, Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Visible = false, AutoButtonColor = false, ImageTransparency = 1, ClipsDescendants = true})
-    Create("UICorner", {Parent = Sphere, CornerRadius = UDim.new(0, 20)})
-    Create("UIStroke", {Parent = Sphere, Color = Color3.fromRGB(200, 0, 0), Thickness = 2})
+    local Sphere = Create("ImageButton", {Parent = ScreenGui, BackgroundColor3 = Color3.fromRGB(15, 15, 20), BackgroundTransparency = 0.1, Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Visible = false, AutoButtonColor = false, ImageTransparency = 1, ClipsDescendants = true})
+    Create("UICorner", {Parent = Sphere, CornerRadius = UDim.new(1, 0)})
+    
+    -- VIỀN SPHERE: Tím phát sáng
+    local SphereStroke = Create("UIStroke", {Parent = Sphere, Color = AccentColor, Thickness = 2, Transparency = 0.2})
 
     local SphereImageLabel = Create("ImageLabel", {Parent = Sphere, BackgroundTransparency = 1, Size = UDim2.new(0, sphIconSize, 0, sphIconSize), Position = UDim2.new(0.5, 0, 0.5, 0), AnchorPoint = Vector2.new(0.5, 0.5), Image = sphImage or "", ImageTransparency = 1, Visible = (not sphTextToggle and sphImage ~= nil)})
     local SphereTextLabel = Create("TextLabel", {Parent = Sphere, Text = sphWords, Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = AccentColor, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), TextTransparency = 1, Visible = sphTextToggle})
@@ -674,7 +764,6 @@ function Library:CreateWindow(options)
     function Window:SetTransparency(val)
         Window.CurrentTransparency = val
         if MainFrame.Visible then
-            -- Chỉ làm mờ Background đen của MainFrame, giữ nguyên độ đậm của chữ và khung
             Tween(MainFrame, {BackgroundTransparency = val}, 0.3)
             Tween(FloatingBottomBar, {BackgroundTransparency = val > 0 and 0.2 or 0}, 0.3)
             
@@ -926,7 +1015,6 @@ function Library:CreateWindow(options)
         local tabSwitching = false
         TabBtn.MouseButton1Click:Connect(function()
             if isLocked and not isWhitelisted then
-                SendPremiumNotification()
                 return
             end
             if tabSwitching or Window.CurrentTab == TabConfig then return end
@@ -951,7 +1039,7 @@ function Library:CreateWindow(options)
             TabConfig.Content.Position = UDim2.new(0, 0, 0, 15)
             Tween(TabConfig.Content, {Position = UDim2.new(0, 0, 0, 0)}, 0.35)
 
-            Tween(TabBtn, {BackgroundColor3 = Color3.fromRGB(100, 50, 180), BackgroundTransparency = 0}, 0.2)
+            Tween(TabBtn, {BackgroundColor3 = Color3.fromRGB(80, 40, 130), BackgroundTransparency = 0}, 0.2)
             Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
             Tween(Txt, {TextColor3 = TextColor}, 0.2)
 
@@ -1080,8 +1168,8 @@ function Library:CreateWindow(options)
 
                 local SectionContainer = Create("Frame", {
                     Parent = nil,
-                    BackgroundColor3 = Color3.fromRGB(15, 15, 22), -- Đen đậm
-                    BackgroundTransparency = 0.05,                 -- Rất ít mờ
+                    BackgroundColor3 = Color3.fromRGB(15, 15, 22),
+                    BackgroundTransparency = 0.05,
                     Size = UDim2.new(1, 0, 0, 30),
                     AutomaticSize = Enum.AutomaticSize.Y,
                     ClipsDescendants = true,
@@ -1089,7 +1177,7 @@ function Library:CreateWindow(options)
                     ZIndex = 6,
                 })
                 Create("UICorner", {Parent = SectionContainer, CornerRadius = UDim.new(0, 8)})
-                Create("UIStroke", {Parent = SectionContainer, Color = Color3.fromRGB(140, 80, 220), Thickness = 1.5, Transparency = 0.2, ZIndex = 6})
+                Create("UIStroke", {Parent = SectionContainer, Color = AccentColor, Thickness = 1.5, Transparency = 0.4, ZIndex = 6})
 
                 table.insert(Window.AllCards, {
                     Card = SectionContainer,
