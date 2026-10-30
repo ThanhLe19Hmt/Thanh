@@ -698,6 +698,54 @@ function Library:CreateWindow(options)
 
     local TopBar = Create("Frame", {Parent = MainFrame, BackgroundColor3 = Color3.fromRGB(10, 10, 14), BackgroundTransparency = 0.4, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 0), Active = true, ZIndex = 2})
     MakeDraggable(TopBar, MainFrame)
+	
+    local ResizeHandle = Create("TextButton", {
+        Parent = MainFrame,
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 20, 0, 20),
+        Position = UDim2.new(1, -20, 1, -20),
+        ZIndex = 10,
+        Text = "◢",
+        TextColor3 = AccentColor,
+        TextTransparency = 0.5,
+        TextSize = 14,
+        AutoButtonColor = false,
+    })
+    Create("UICorner", {Parent = ResizeHandle, CornerRadius = UDim.new(0, 8)})
+    TrackConnection(ResizeHandle.MouseEnter:Connect(function()
+        Tween(ResizeHandle, {TextTransparency = 0, BackgroundTransparency = 0.8}, 0.2)
+    end))
+    TrackConnection(ResizeHandle.MouseLeave:Connect(function()
+        Tween(ResizeHandle, {TextTransparency = 0.5, BackgroundTransparency = 1}, 0.2)
+    end))
+	
+    local resizing = false
+    local resizeStart = nil
+    local startSize = nil
+
+    TrackConnection(ResizeHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            resizing = true
+            resizeStart = input.Position
+            startSize = MainFrame.AbsoluteSize
+            
+            TrackConnection(input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    resizing = false
+                end
+            end))
+        end
+    end))
+
+    TrackConnection(UserInputService.InputChanged:Connect(function(input)
+        if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - resizeStart
+            local newX = math.clamp(startSize.X + delta.X, 450, 1200) 
+            local newY = math.clamp(startSize.Y + delta.Y, 300, 800)
+            MainFrame.Size = UDim2.fromOffset(newX / MainScale.Scale, newY / MainScale.Scale)
+        end
+    end))
 
     local titleOffsetX = 15
     if topbarLogo then
