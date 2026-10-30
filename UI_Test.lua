@@ -595,7 +595,7 @@ function Library:CreateWindow(options)
         InfoOverlay.Visible = false
     end)
 
-    -- DẤU ? ĐÃ ĐƯỢC FIX SÁNG RÕ, DỄ NHÌN
+        -- DẤU ? ĐÃ ĐƯỢC FIX: NỀN TRẮNG, CHỮ ĐEN, TỎA SÁNG RỰC RỠ
     local function AddInfoIcon(parent, pos, data)
         if not data then return end
         
@@ -604,9 +604,9 @@ function Library:CreateWindow(options)
             Text = "?", 
             Font = Enum.Font.GothamBlack, 
             TextSize = 12, 
-            TextColor3 = Color3.fromRGB(255, 255, 255), -- Chữ màu Trắng sáng
-            BackgroundColor3 = AccentColor,              -- Nền màu Tím
-            Size = UDim2.new(0, 18, 0, 18), 
+            TextColor3 = Color3.fromRGB(20, 20, 25), -- Chữ màu đen đậm
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255), -- Nền màu trắng tinh
+            Size = UDim2.new(0, 20, 0, 20), -- To hơn một chút (20x20)
             Position = pos, 
             AutoButtonColor = false, 
             ZIndex = 5
@@ -614,17 +614,22 @@ function Library:CreateWindow(options)
         
         Create("UICorner", {Parent = Btn, CornerRadius = UDim.new(1, 0)})
         
-        -- Viền trắng mờ bao quanh để tách biệt hoàn toàn khỏi nền đen
-        Create("UIStroke", {Parent = Btn, Color = Color3.fromRGB(255, 255, 255), Thickness = 1, Transparency = 0.3})
+        -- Viền phát sáng màu Tím bao quanh nút trắng
+        local GlowStroke = Create("UIStroke", {
+            Parent = Btn, 
+            Color = AccentColor, 
+            Thickness = 2, 
+            Transparency = 0
+        })
         
         AddBounce(Btn)
         
-        -- Hiệu ứng Hover (Rê chuột vào thì sáng rực lên)
+        -- Hiệu ứng Hover: Đổi sang màu Tím, chữ Trắng
         Btn.MouseEnter:Connect(function() 
-            Tween(Btn, {TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = Color3.fromRGB(200, 100, 255)}, 0.2) 
+            Tween(Btn, {TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = AccentColor}, 0.2) 
         end)
         Btn.MouseLeave:Connect(function() 
-            Tween(Btn, {TextColor3 = Color3.fromRGB(255, 255, 255), BackgroundColor3 = AccentColor}, 0.2) 
+            Tween(Btn, {TextColor3 = Color3.fromRGB(20, 20, 25), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.2) 
         end)
         
         Btn.MouseButton1Click:Connect(function() OpenInfoWindow(data) end)
