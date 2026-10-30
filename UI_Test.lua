@@ -351,8 +351,10 @@ function Library:CreateWindow(options)
     local topbarLogo = nil
     local logoSize = 32
     local sphIconSize = 26
-    local windowSize = UDim2.fromOffset(580, 460)
-    local sideBarWidth = 160
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local windowSize = isMobile and UDim2.fromOffset(420, 340) or UDim2.fromOffset(580, 460)
+    local sideBarWidth = isMobile and 110 or 160
+    
     local backgroundImage = nil
     local loadingImage = nil
 
@@ -649,7 +651,8 @@ function Library:CreateWindow(options)
     task.spawn(function()
         task.wait(5.6)
         MainFrame.Visible = true
-        Tween(MainScale, {Scale = 1}, 0.5)
+        local targetScale = isMobile and 0.85 or 1
+        Tween(MainScale, {Scale = targetScale}, 0.5)
         Tween(MainFrame, {BackgroundTransparency = 0}, 0.5)
     end)
 
@@ -849,7 +852,7 @@ function Library:CreateWindow(options)
         Sphere.Visible = false
         MainFrame.Visible = true
         BottomDragHitbox.Visible = true
-        Tween(MainScale, {Scale = 1}, 0.4)
+        Tween(MainScale, {Scale = (isMobile and 0.85 or 1)}, 0.4)
         Tween(MainFrame, {BackgroundTransparency = Window.CurrentTransparency}, 0.4)
         Tween(FloatingBottomBar, {BackgroundTransparency = Window.CurrentTransparency > 0 and 0.2 or 0}, 0.4)
         Tween(BottomBarStroke, {Transparency = 0}, 0.4)
