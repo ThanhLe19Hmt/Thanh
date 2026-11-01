@@ -1512,20 +1512,36 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
         Content = "Please choose a Boss Raid!!",
         TitleSize = 18, ContentSize = 16, TextSize = 16,
     })
+	
+	local PortalGunPara = RaidBossInfoCard:Paragraph({
+    Title = "🔫 Portal Gun: ---",
+    Content = "Loading...",
+    TitleSize = 18, ContentSize = 16, TextSize = 16,
+    })
 
     RaidBossCard:Dropdown({
-        Title = "Choose a boss to raid",
-        Options = {"Bacon of Grudge", "Dragon", "Lava Titan"},
-        Multi = false,
-        Callback = function(Value)
-            _G.AutoRaidWho = Value
-            local Data = RaidBossData[Value]
-            if Data then
-                RaidBossInfoPara:SetTitle("Name: " .. Data.Name)
-                RaidBossInfoPara:SetContent("Reward: " .. Data.Reward .. "\n- " .. Data.PortalCost .. " Portal Gun")
-            end
+    Title = "Choose a boss to raid",
+    Options = {"Bacon of Grudge", "Dragon", "Lava Titan"},
+    Multi = false,
+    Callback = function(Value)
+        _G.AutoRaidWho = Value
+        local Data = RaidBossData[Value]
+        if Data then
+            RaidBossInfoPara:SetTitle("Name: " .. Data.Name)
+            RaidBossInfoPara:SetContent("Reward: " .. Data.Reward .. "\n- " .. Data.PortalCost .. " Portal Gun")
+
+            local Inv = GetInventory()
+            local portalGun = (Inv["Portal Gun"] and Inv["Portal Gun"].amount) or 0
+            local cost = Data.PortalCost or 1
+            local canRun = math.floor(portalGun / cost)
+            PortalGunPara:SetTitle("🔫 Portal Gun: " .. FormatNumber(portalGun))
+            PortalGunPara:SetContent(string.format(
+                "🎯 %s — %d/raid session\n✅ Can be raided: %d time",
+                Value, cost, canRun
+            ))
         end
-    })
+    end
+})
 
     RaidBossCard:Button({
         Title = "Start Raid Now!!",
@@ -3288,6 +3304,35 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
             end)
         end
     end)
+	
+	-- ===== Update Portal Gun info =====
+    task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            local Inv = GetInventory()
+            local portalGun = (Inv["Portal Gun"] and Inv["Portal Gun"].amount) or 0
+            local selectedBoss = _G.AutoRaidWho
+            local needPerRaid = 1
+            if selectedBoss and RaidBossData[selectedBoss] then
+                needPerRaid = RaidBossData[selectedBoss].PortalCost or 1
+            end
+            local canRun = math.floor(portalGun / needPerRaid)
+
+            PortalGunPara:SetTitle("🔫 Portal Gun: " .. FormatNumber(portalGun))
+            if selectedBoss then
+                PortalGunPara:SetContent(string.format(
+                    "🎯 %s — %d/raid session\n✅ Can raid: %d times",
+                    selectedBoss, needPerRaid, canRun
+                ))
+            else
+                PortalGunPara:SetContent(string.format(
+                    "No boss selected\n✅ Raids available: %d times (1 per raid)",
+                    portalGun
+                ))
+            end
+        end)
+    end
+end)
 	
     -- ===== Auto Farm Level =====
     task.spawn(function()
