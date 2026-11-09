@@ -28,7 +28,7 @@ _G.SH_Runtime = _G.SH_Runtime or {
 }
 
 _G.SH_RecentlyDead = _G.SH_RecentlyDead or {}
-_G.SH_AUTOLOAD_URL = _G.SH_AUTOLOAD_URL or ""
+_G.SH_AUTOLOAD_URL = _G.SH_AUTOLOAD_URL or "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Script/MAINMENUBLACKHOLE.lua"
 
 local SH_Teleport = game:GetService("TeleportService")
 local SH_Http     = game:GetService("HttpService")
