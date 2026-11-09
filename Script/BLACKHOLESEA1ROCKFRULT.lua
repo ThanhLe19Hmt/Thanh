@@ -1,17 +1,19 @@
+print("[Sea 1] ▶️ Loading...")
+
 -- ══════════════════════════════════════════════════════════
--- [PHẦN 0A] CONFIG & RUNTIME — chèn ngay dưới print Loading
+-- [SH-A] SERVER HOP — CONFIG + UTIL
 -- ══════════════════════════════════════════════════════════
 
 _G.SH_Config = _G.SH_Config or {
     PriorityMobs    = {"Bacon Thief"},
-    TargetCount     = 1,        -- chỉ cần 1 mob là đủ
+    TargetCount     = 1,
     MinMobCount     = 1,
     ScanLimit       = 100,
-    JoinWaitTime    = 8,        -- 8s đủ load server
+    JoinWaitTime    = 8,
     MaxAttempts     = 50,
-    AutoMode        = true,     -- mặc định BẬT
-    CheckInterval   = 8,        -- check mỗi 8s
-    EmptyChecks     = 3,        -- cần 3 lần liên tiếp count=0 mới hop
+    AutoMode        = false,
+    CheckInterval   = 8,
+    EmptyChecks     = 3,
     NotifyEnabled   = true,
 }
 
@@ -22,13 +24,11 @@ _G.SH_Runtime = _G.SH_Runtime or {
     BestJob      = nil,
     BestCount    = 0,
     AttemptCount = 0,
+    EmptyCount   = 0,
 }
 
-_G.SH_AUTOLOAD_URL = _G.SH_AUTOLOAD_URL or "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Script/MAINMENUBLACKHOLE.lua"
-
--- ══════════════════════════════════════════════════════════
--- [PHẦN 0B] HÀM UTIL — chèn ngay dưới PHẦN 0A
--- ══════════════════════════════════════════════════════════
+_G.SH_RecentlyDead = _G.SH_RecentlyDead or {}
+_G.SH_AUTOLOAD_URL = _G.SH_AUTOLOAD_URL or ""
 
 local SH_Teleport = game:GetService("TeleportService")
 local SH_Http     = game:GetService("HttpService")
@@ -56,17 +56,54 @@ function _G.SH_CountMobs(mobList)
     local count, found = 0, {}
     for _, v in ipairs(folder:GetChildren()) do
         if v:IsA("Model") then
-            for _, name in ipairs(mobList) do
-                if v.Name == name and v:FindFirstChild("Humanoid")
-                    and v.Humanoid.Health > 0 then
-                    count = count + 1
-                    found[name] = (found[name] or 0) + 1
-                    break
+            local hum = v:FindFirstChild("Humanoid")
+            local hrp = v:FindFirstChild("HumanoidRootPart")
+            local alive = false
+            if hum and hrp and hrp.Parent then
+                local hp = hum.Health or 0
+                local maxHp = hum.MaxHealth or 1
+                local deadState = hum:GetState() == Enum.HumanoidStateType.Dead
+                if hp > 0 and not deadState and maxHp > 0 then
+                    alive = true
+                end
+            end
+            if alive then
+                for _, name in ipairs(mobList) do
+                    if v.Name == name then
+                        count = count + 1
+                        found[name] = (found[name] or 0) + 1
+                        break
+                    end
                 end
             end
         end
     end
     return count, found
+end
+
+function _G.SH_TrackDeadMobs(mobList)
+    mobList = mobList or _G.SH_Config.PriorityMobs
+    local folder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
+    if not folder then return end
+    for _, v in ipairs(folder:GetChildren()) do
+        if v:IsA("Model") then
+            for _, name in ipairs(mobList) do
+                if v.Name == name then
+                    local hum = v:FindFirstChild("Humanoid")
+                    local dead = not hum or hum.Health <= 0
+                        or hum:GetState() == Enum.HumanoidStateType.Dead
+                    if dead and not _G.SH_RecentlyDead[v] then
+                        _G.SH_RecentlyDead[v] = tick()
+                        print("[SH] 💀 " .. name .. " đã chết — đánh dấu")
+                    end
+                    break
+                end
+            end
+        end
+    end
+    for mob, _ in pairs(_G.SH_RecentlyDead) do
+        if not mob.Parent then _G.SH_RecentlyDead[mob] = nil end
+    end
 end
 
 local function SH_GetServers()
@@ -93,6 +130,10 @@ local function SH_GetServers()
 end
 
 local function SH_QueueRejoin()
+    if _G.SH_Config.AutoMode ~= true then
+        print("[SH] ⏸️ AutoMode TẮT — không queue rejoin")
+        return false
+    end
     local url = _G.SH_AUTOLOAD_URL
     if not url or url == "" then
         warn("[SH] ⚠️ _G.SH_AUTOLOAD_URL rỗng — script sẽ KHÔNG tự chạy lại sau teleport")
@@ -101,6 +142,7 @@ local function SH_QueueRejoin()
     local safeUrl = url:gsub("\\", "\\\\"):gsub('"', '\\"')
     local payload = string.format([[
 task.wait(2)
+if getgenv and getgenv().SH_MANUAL_STOP == true then return end
 pcall(function()
     local src = game:HttpGet("%s")
     if src then loadstring(src)() end
@@ -128,10 +170,7 @@ local function SH_PickNextServer(state)
         state.Attempted = {}
         for _, s in ipairs(servers) do table.insert(candidates, s) end
     end
-    -- Ưu tiên server ít người (dễ có boss sống) hơn là đông người
     table.sort(candidates, function(a, b)
-        -- Ưu tiên server có playing thấp (boss chưa bị giết)
-        -- Nhưng không quá trống (playing >= 2 để chắc server alive)
         local sa = a.playing or 0
         local sb = b.playing or 0
         if sa < 2 then sa = 999 end
@@ -142,7 +181,7 @@ local function SH_PickNextServer(state)
 end
 
 -- ══════════════════════════════════════════════════════════
--- [PHẦN 0C] HÀM CHÍNH — chèn ngay dưới PHẦN 0B
+-- [SH-B] SERVER HOP — HÀM CHÍNH
 -- ══════════════════════════════════════════════════════════
 
 function _G.SH_HopOnce()
@@ -150,12 +189,17 @@ function _G.SH_HopOnce()
         SH_Notify("⚠️ Đang chạy", "Đang hop rồi", 2)
         return
     end
+    if getgenv and getgenv().SH_MANUAL_STOP == true
+        and _G.SH_Config.AutoMode ~= true then
+        print("[SH] 🛑 Bị chặn — MANUAL_STOP đang bật")
+        return
+    end
+    _G.SH_RecentlyDead = {}
     _G.SH_Runtime.Running = true
     task.spawn(function()
         local R = _G.SH_Runtime
         local C = _G.SH_Config
 
-        -- LOG CONFIG ĐANG TÌM GÌ
         local mobListStr = table.concat(C.PriorityMobs, ", ")
         print(string.format("[SH] 🎯 Đang tìm: %s | Cần đạt: %d", mobListStr, C.TargetCount))
         SH_Notify("🎯 Đang tìm", mobListStr, 3)
@@ -228,38 +272,41 @@ end
 
 function _G.SH_StartAuto()
     if _G.SH_Runtime.AutoRunning then return end
+    if getgenv then getgenv().SH_MANUAL_STOP = false end
+    _G.SH_MANUAL_STOP = false
+    _G.SH_Config.AutoMode = true
     _G.SH_Runtime.AutoRunning = true
     _G.SH_Runtime.EmptyCount = 0
-    SH_Notify("🤖 Auto Join BẬT", "Chờ mob xuất hiện...", 3)
+    SH_Notify("🤖 Auto Join BẬT", "Theo dõi mob mỗi " .. _G.SH_Config.CheckInterval .. "s", 3)
 
     task.spawn(function()
         while _G.SH_Runtime.AutoRunning do
             task.wait(_G.SH_Config.CheckInterval)
             if not _G.SH_Runtime.AutoRunning then break end
             if _G.SH_Runtime.Running then
-                -- đang hop, bỏ qua check
                 _G.SH_Runtime.EmptyCount = 0
             else
+                _G.SH_TrackDeadMobs()
                 local count = select(1, _G.SH_CountMobs())
                 local mobStr = table.concat(_G.SH_Config.PriorityMobs, ", ")
 
                 if count > 0 then
-                    -- CÒN MOB → reset đếm, KHÔNG hop
                     if _G.SH_Runtime.EmptyCount > 0 then
-                        print(string.format("[SH] ✅ Có mob trở lại (%d) — không hop", count))
+                        print(string.format("[SH] ✅ Có mob lại (%d) — hủy đếm", count))
                     end
                     _G.SH_Runtime.EmptyCount = 0
+                    print(string.format("[SH] 📊 %s còn sống: %d — không hop", mobStr, count))
                 else
-                    -- KHÔNG CÓ MOB → tăng đếm
                     _G.SH_Runtime.EmptyCount = (_G.SH_Runtime.EmptyCount or 0) + 1
-                    print(string.format("[SH] ⏳ Không có %s (%d/%d) — chờ thêm...",
+                    print(string.format("[SH] ⏳ Không có %s sống (%d/%d) — chờ...",
                         mobStr, _G.SH_Runtime.EmptyCount, _G.SH_Config.EmptyChecks))
 
                     if _G.SH_Runtime.EmptyCount >= _G.SH_Config.EmptyChecks then
-                        SH_Notify("🚨 Hết mob " .. mobStr, "Tìm server khác...", 3)
+                        SH_Notify("🚨 " .. mobStr .. " đã hết",
+                            "Chuyển server khác...", 4)
                         _G.SH_Runtime.EmptyCount = 0
                         _G.SH_HopOnce()
-                        task.wait(15)
+                        task.wait(20)
                     end
                 end
             end
@@ -270,7 +317,13 @@ end
 function _G.SH_StopAuto()
     _G.SH_Runtime.AutoRunning = false
     _G.SH_Runtime.EmptyCount = 0
-    SH_Notify("⏹️ Auto Join TẮT", "Đã dừng theo dõi", 2)
+    _G.SH_Config.AutoMode = false
+    if getgenv then getgenv().SH_MANUAL_STOP = true end
+    _G.SH_MANUAL_STOP = true
+    pcall(function()
+        if queue_on_teleport then queue_on_teleport("") end
+    end)
+    SH_Notify("⏹️ Auto Join TẮT", "Đã dừng + hủy queue", 2)
 end
 
 function _G.SH_ResetRuntime()
@@ -278,18 +331,32 @@ function _G.SH_ResetRuntime()
     _G.SH_Runtime.BestJob = nil
     _G.SH_Runtime.BestCount = 0
     _G.SH_Runtime.AttemptCount = 0
-    SH_Notify("🔄 Reset", "Đã xóa lịch sử", 2)
+    _G.SH_Runtime.EmptyCount = 0
+    _G.SH_RecentlyDead = {}
+    SH_Notify("🔄 Reset", "Đã xóa lịch sử + tracking", 2)
 end
 
--- Tự bật Auto Join sau khi UI load xong
+-- Khởi động Auto (nếu AutoMode = true trong config)
 task.spawn(function()
-    task.wait(10)
-    if _G.SH_Config.AutoMode and not _G.SH_Runtime.AutoRunning then
+    task.wait(8)
+    pcall(function() _G.SH_TrackDeadMobs() end)
+    if _G.SH_Config.AutoMode == true and not _G.SH_Runtime.AutoRunning then
         _G.SH_StartAuto()
+    else
+        print("[SH] ⏸️ Auto Join TẮT — không tự bật")
     end
 end)
 
-print("[Sea 1] ▶️ Loading...")
+-- Vòng lặp tracking mob chết (mỗi 1s)
+task.spawn(function()
+    while task.wait(1) do
+        pcall(function()
+            if _G.SH_Runtime.AutoRunning then
+                _G.SH_TrackDeadMobs()
+            end
+        end)
+    end
+end)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -2182,14 +2249,14 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
     local GokuPage = Tab3:CreatePage("Npc Goku Gods")
 	
 	    -- ══════════════════════════════════════════════════════
-    -- [PHẦN UI] SERVER HOP — chèn sau GokuPage
+    -- [SH-C] SERVER HOP — UI
     -- ══════════════════════════════════════════════════════
 
     local SH_Page = Tab3:CreatePage("Server Hop")
     local SH_Section = SH_Page:CreateSection("🌀 Server Hop", "Left")
     local SH_StatusSec = SH_Page:CreateSection("📊 Status", "Right")
 
-    local SH_MobOptions = {"Bacon Thief", "Devil Boat", "Kraken", "Piccolo", "Duck Monster"}
+    local SH_MobOptions = {"Bacon Thief", "Devil Boat", "DevilBoat", "Kraken", "Piccolo", "Duck Monster"}
 
     local SH_StatusPara = SH_StatusSec:Paragraph({
         Title = "🎯 Đang chờ",
@@ -2218,7 +2285,7 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
     })
 
     SH_Section:Button({
-        Title = "🚀 HOP NGAY",
+        Title = "🚀 HOP NGAY (1 lần)",
         Callback = function()
             SH_StatusPara:SetTitle("🚀 Đang hop")
             SH_StatusPara:SetContent("Đang đếm mob...")
@@ -2236,10 +2303,14 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
 
     SH_Section:Toggle({
         Title = "🤖 Auto Join khi hết mob",
-        Value = true,
+        Value = _G.SH_Config.AutoMode,
         Callback = function(v)
-            if v then _G.SH_StartAuto()
-            else _G.SH_StopAuto() end
+            _G.SH_Config.AutoMode = v
+            if v then
+                _G.SH_StartAuto()
+            else
+                _G.SH_StopAuto()
+            end
         end
     })
 
@@ -2250,13 +2321,18 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
                 local count, found = _G.SH_CountMobs()
                 local names = {}
                 for n, c in pairs(found) do table.insert(names, n .. " x" .. c) end
+                local deadCount = 0
+                for mob, _ in pairs(_G.SH_RecentlyDead or {}) do
+                    if mob and mob.Parent then deadCount = deadCount + 1 end
+                end
                 local status = ""
                 if _G.SH_Runtime.AutoRunning then status = " [AUTO]"
                 elseif _G.SH_Runtime.Running then status = " [HOPPING]" end
-                SH_StatusPara:SetTitle(string.format("📊 Hiện tại: %d mob%s", count, status))
+                SH_StatusPara:SetTitle(string.format("📊 Sống: %d | Chết: %d%s",
+                    count, deadCount, status))
                 SH_StatusPara:SetContent(
-                    ((#names > 0) and table.concat(names, ", ") or "Không có mob chọn")
-                    .. "\nChờ thêm: " .. (_G.SH_Runtime.EmptyCount or 0)
+                    ((#names > 0) and table.concat(names, ", ") or "Không có mob sống")
+                    .. "\nĐếm trống: " .. (_G.SH_Runtime.EmptyCount or 0)
                     .. "/" .. _G.SH_Config.EmptyChecks
                     .. " | Kỷ lục: " .. _G.SH_Runtime.BestCount
                     .. " | Đã thử: " .. _G.SH_Runtime.AttemptCount
