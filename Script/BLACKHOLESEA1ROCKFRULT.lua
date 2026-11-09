@@ -4,13 +4,14 @@
 
 _G.SH_Config = _G.SH_Config or {
     PriorityMobs    = {"Bacon Thief"},
-    TargetCount     = 3,
+    TargetCount     = 1,        -- chỉ cần 1 mob là đủ
     MinMobCount     = 1,
     ScanLimit       = 100,
-    JoinWaitTime    = 10,
-    MaxAttempts     = 30,
-    AutoMode        = false,
-    CheckInterval   = 5,
+    JoinWaitTime    = 8,        -- 8s đủ load server
+    MaxAttempts     = 50,
+    AutoMode        = true,     -- mặc định BẬT
+    CheckInterval   = 8,        -- check mỗi 8s
+    EmptyChecks     = 3,        -- cần 3 lần liên tiếp count=0 mới hop
     NotifyEnabled   = true,
 }
 
@@ -127,7 +128,16 @@ local function SH_PickNextServer(state)
         state.Attempted = {}
         for _, s in ipairs(servers) do table.insert(candidates, s) end
     end
-    table.sort(candidates, function(a, b) return a.playing > b.playing end)
+    -- Ưu tiên server ít người (dễ có boss sống) hơn là đông người
+    table.sort(candidates, function(a, b)
+        -- Ưu tiên server có playing thấp (boss chưa bị giết)
+        -- Nhưng không quá trống (playing >= 2 để chắc server alive)
+        local sa = a.playing or 0
+        local sb = b.playing or 0
+        if sa < 2 then sa = 999 end
+        if sb < 2 then sb = 999 end
+        return sa < sb
+    end)
     return candidates[1]
 end
 
@@ -145,12 +155,20 @@ function _G.SH_HopOnce()
         local R = _G.SH_Runtime
         local C = _G.SH_Config
 
+        -- LOG CONFIG ĐANG TÌM GÌ
+        local mobListStr = table.concat(C.PriorityMobs, ", ")
+        print(string.format("[SH] 🎯 Đang tìm: %s | Cần đạt: %d", mobListStr, C.TargetCount))
+        SH_Notify("🎯 Đang tìm", mobListStr, 3)
+
         SH_Notify("🔎 Đang đếm mob", "Chờ " .. C.JoinWaitTime .. "s...", 2)
         task.wait(C.JoinWaitTime)
 
         local count, found = _G.SH_CountMobs()
         local list = {}
         for n, c in pairs(found) do table.insert(list, n .. " x" .. c) end
+
+        print(string.format("[SH] 📊 Server hiện tại: %d/%d mob cần | Có: %s",
+            count, C.TargetCount, (#list > 0) and table.concat(list, ", ") or "KHÔNG"))
 
         if count > R.BestCount then
             R.BestCount = count
@@ -194,8 +212,8 @@ function _G.SH_HopOnce()
 
         SH_Notify(
             string.format("🌀 Join server #%d", R.AttemptCount),
-            string.format("Players: %d/%d | Kỷ lục: %d mob",
-                nextSrv.playing, nextSrv.maxPlayers, R.BestCount),
+            string.format("Players: %d/%d | Tìm: %s | Kỷ lục: %d",
+                nextSrv.playing, nextSrv.maxPlayers, mobListStr, R.BestCount),
             3
         )
 
@@ -211,16 +229,39 @@ end
 function _G.SH_StartAuto()
     if _G.SH_Runtime.AutoRunning then return end
     _G.SH_Runtime.AutoRunning = true
-    SH_Notify("🤖 Auto BẬT", "Check mỗi " .. _G.SH_Config.CheckInterval .. "s", 3)
+    _G.SH_Runtime.EmptyCount = 0
+    SH_Notify("🤖 Auto Join BẬT", "Chờ mob xuất hiện...", 3)
+
     task.spawn(function()
         while _G.SH_Runtime.AutoRunning do
             task.wait(_G.SH_Config.CheckInterval)
             if not _G.SH_Runtime.AutoRunning then break end
-            local count = select(1, _G.SH_CountMobs())
-            if count < _G.SH_Config.MinMobCount and not _G.SH_Runtime.Running then
-                SH_Notify("🚨 Mất mob", "Tìm server khác...", 3)
-                _G.SH_HopOnce()
-                task.wait(15)
+            if _G.SH_Runtime.Running then
+                -- đang hop, bỏ qua check
+                _G.SH_Runtime.EmptyCount = 0
+            else
+                local count = select(1, _G.SH_CountMobs())
+                local mobStr = table.concat(_G.SH_Config.PriorityMobs, ", ")
+
+                if count > 0 then
+                    -- CÒN MOB → reset đếm, KHÔNG hop
+                    if _G.SH_Runtime.EmptyCount > 0 then
+                        print(string.format("[SH] ✅ Có mob trở lại (%d) — không hop", count))
+                    end
+                    _G.SH_Runtime.EmptyCount = 0
+                else
+                    -- KHÔNG CÓ MOB → tăng đếm
+                    _G.SH_Runtime.EmptyCount = (_G.SH_Runtime.EmptyCount or 0) + 1
+                    print(string.format("[SH] ⏳ Không có %s (%d/%d) — chờ thêm...",
+                        mobStr, _G.SH_Runtime.EmptyCount, _G.SH_Config.EmptyChecks))
+
+                    if _G.SH_Runtime.EmptyCount >= _G.SH_Config.EmptyChecks then
+                        SH_Notify("🚨 Hết mob " .. mobStr, "Tìm server khác...", 3)
+                        _G.SH_Runtime.EmptyCount = 0
+                        _G.SH_HopOnce()
+                        task.wait(15)
+                    end
+                end
             end
         end
     end)
@@ -228,7 +269,8 @@ end
 
 function _G.SH_StopAuto()
     _G.SH_Runtime.AutoRunning = false
-    SH_Notify("⏹️ Auto TẮT", "Đã dừng", 2)
+    _G.SH_Runtime.EmptyCount = 0
+    SH_Notify("⏹️ Auto Join TẮT", "Đã dừng theo dõi", 2)
 end
 
 function _G.SH_ResetRuntime()
@@ -238,6 +280,14 @@ function _G.SH_ResetRuntime()
     _G.SH_Runtime.AttemptCount = 0
     SH_Notify("🔄 Reset", "Đã xóa lịch sử", 2)
 end
+
+-- Tự bật Auto Join sau khi UI load xong
+task.spawn(function()
+    task.wait(10)
+    if _G.SH_Config.AutoMode and not _G.SH_Runtime.AutoRunning then
+        _G.SH_StartAuto()
+    end
+end)
 
 print("[Sea 1] ▶️ Loading...")
 
@@ -2139,11 +2189,11 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
     local SH_Section = SH_Page:CreateSection("🌀 Server Hop", "Left")
     local SH_StatusSec = SH_Page:CreateSection("📊 Status", "Right")
 
-    local SH_MobOptions = {"Bacon Thief", "Devil Boat", "DevilBoat", "Kraken", "Piccolo", "Duck Monster"}
+    local SH_MobOptions = {"Bacon Thief", "Devil Boat", "Kraken", "Piccolo", "Duck Monster"}
 
     local SH_StatusPara = SH_StatusSec:Paragraph({
         Title = "🎯 Đang chờ",
-        Content = "Chọn mob và bấm HOP"
+        Content = "Chọn mob và bật Auto Join"
     })
 
     SH_Section:Dropdown({
@@ -2161,26 +2211,10 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
             end
             if #list == 0 then list = {"Bacon Thief"} end
             _G.SH_Config.PriorityMobs = list
-            SH_StatusPara:SetContent("Đã chọn: " .. table.concat(list, ", "))
+            local str = table.concat(list, ", ")
+            SH_StatusPara:SetContent("Đã chọn: " .. str)
+            print("[SH] ✅ Đã set PriorityMobs = {" .. str .. "}")
         end
-    })
-
-    SH_Section:Slider({
-        Title = "📊 Số mob cần đạt",
-        Min = 1, Max = 20, Value = 3,
-        Callback = function(v) _G.SH_Config.TargetCount = math.floor(v) end
-    })
-
-    SH_Section:Slider({
-        Title = "⏱️ Chờ server load (giây)",
-        Min = 5, Max = 30, Value = 10,
-        Callback = function(v) _G.SH_Config.JoinWaitTime = math.floor(v) end
-    })
-
-    SH_Section:Slider({
-        Title = "🔁 Giới hạn thử (server)",
-        Min = 5, Max = 100, Value = 30,
-        Callback = function(v) _G.SH_Config.MaxAttempts = math.floor(v) end
     })
 
     SH_Section:Button({
@@ -2201,8 +2235,8 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
     })
 
     SH_Section:Toggle({
-        Title = "🤖 Auto Hop khi mất mob",
-        Value = false,
+        Title = "🤖 Auto Join khi hết mob",
+        Value = true,
         Callback = function(v)
             if v then _G.SH_StartAuto()
             else _G.SH_StopAuto() end
@@ -2221,8 +2255,10 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
                 elseif _G.SH_Runtime.Running then status = " [HOPPING]" end
                 SH_StatusPara:SetTitle(string.format("📊 Hiện tại: %d mob%s", count, status))
                 SH_StatusPara:SetContent(
-                    ((#names > 0) and table.concat(names, ", ") or "Không có")
-                    .. "\nKỷ lục: " .. _G.SH_Runtime.BestCount
+                    ((#names > 0) and table.concat(names, ", ") or "Không có mob chọn")
+                    .. "\nChờ thêm: " .. (_G.SH_Runtime.EmptyCount or 0)
+                    .. "/" .. _G.SH_Config.EmptyChecks
+                    .. " | Kỷ lục: " .. _G.SH_Runtime.BestCount
                     .. " | Đã thử: " .. _G.SH_Runtime.AttemptCount
                 )
             end)
