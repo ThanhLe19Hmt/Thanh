@@ -27,6 +27,38 @@ _G.SH_Runtime = _G.SH_Runtime or {
     EmptyCount   = 0,
 }
 
+-- KHÔI PHỤC STATE từ queue_on_teleport (nếu có)
+do
+    local saved = (getgenv and getgenv().SH_SAVED_STATE) or _G.SH_SAVED_STATE
+    if saved and type(saved) == "string" and saved ~= "" then
+        local ok, data = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(saved)
+        end)
+        if ok and data then
+            if data.BestJob and data.BestJob ~= "" then
+                _G.SH_Runtime.BestJob = data.BestJob
+            end
+            if data.BestCount then _G.SH_Runtime.BestCount = data.BestCount end
+            if data.AttemptCount then _G.SH_Runtime.AttemptCount = data.AttemptCount end
+            if data.Attempted then
+                for _, id in ipairs(data.Attempted) do
+                    if type(id) == "string" then
+                        _G.SH_Runtime.Attempted[id] = true
+                    end
+                end
+            end
+            -- Bật lại Auto nếu trước đó đang bật
+            if _G.SH_Config.AutoMode == true then
+                print(string.format("[SH] ♻️ Khôi phục: đã thử %d server | Kỷ lục: %d mob",
+                    _G.SH_Runtime.AttemptCount, _G.SH_Runtime.BestCount))
+            end
+        end
+        -- Xóa state sau khi khôi phục để tránh dùng lại
+        if getgenv then getgenv().SH_SAVED_STATE = nil end
+        _G.SH_SAVED_STATE = nil
+    end
+end
+
 _G.SH_RecentlyDead = _G.SH_RecentlyDead or {}
 _G.SH_AUTOLOAD_URL = _G.SH_AUTOLOAD_URL or "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Script/MAINMENUBLACKHOLE.lua"
 
@@ -139,15 +171,41 @@ local function SH_QueueRejoin()
         warn("[SH] ⚠️ _G.SH_AUTOLOAD_URL rỗng — script sẽ KHÔNG tự chạy lại sau teleport")
         return false
     end
+    -- LƯU Attempted + BestCount + BestJob + AttemptCount qua teleport
+    local R = _G.SH_Runtime
+    local saveData = {
+        Attempted    = {},
+        BestJob      = R.BestJob or "",
+        BestCount    = R.BestCount or 0,
+        AttemptCount = R.AttemptCount or 0,
+    }
+    -- Chỉ lưu danh sách job id (string) — không lưu table phức tạp
+    local ids = {}
+    for id, _ in pairs(R.Attempted or {}) do
+        if type(id) == "string" then table.insert(ids, id) end
+    end
+    saveData.Attempted = ids
+
+    -- Encode JSON AN TOÀN (chỉ string + number)
+    local okEnc, json = pcall(function() return SH_Http:JSONEncode(saveData) end)
+    if not okEnc then json = "{}" end
+    -- Escape chuỗi JSON để nhúng vào Lua string
+    local safeJson = json:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "")
+
     local safeUrl = url:gsub("\\", "\\\\"):gsub('"', '\\"')
     local payload = string.format([[
 task.wait(2)
 if getgenv and getgenv().SH_MANUAL_STOP == true then return end
 pcall(function()
+    if getgenv then getgenv().SH_SAVED_STATE = "%s" end
+    _G.SH_SAVED_STATE = "%s"
+end)
+pcall(function()
     local src = game:HttpGet("%s")
     if src then loadstring(src)() end
 end)
-]], safeUrl)
+]], safeJson, safeJson, safeUrl)
+
     local ok = pcall(function()
         if queue_on_teleport then queue_on_teleport(payload)
         elseif syn and syn.queue_on_teleport then syn.queue_on_teleport(payload)
@@ -167,17 +225,26 @@ local function SH_PickNextServer(state)
         end
     end
     if #candidates == 0 then
+        print("[SH] 🔄 Đã thử hết server trong list — reset & thử lại")
         state.Attempted = {}
         for _, s in ipairs(servers) do table.insert(candidates, s) end
     end
+    -- ƯU TIÊN server ĐÔNG NGƯỜI (dễ có boss/nhiều mob)
+    -- Không ưu tiên server vắng (thường là server chết, không có boss)
     table.sort(candidates, function(a, b)
-        local sa = a.playing or 0
-        local sb = b.playing or 0
-        if sa < 2 then sa = 999 end
-        if sb < 2 then sb = 999 end
-        return sa < sb
+        local pa = a.playing or 0
+        local pb = b.playing or 0
+        -- Server >= 3 người được ưu tiên
+        if pa >= 3 and pb < 3 then return true end
+        if pb >= 3 and pa < 3 then return false end
+        -- Cùng nhóm → chọn đông hơn
+        return pa > pb
     end)
-    return candidates[1]
+    -- Log server sắp chọn
+    local pick = candidates[1]
+    print(string.format("[SH] 🎯 Chọn server tiếp: playing=%d/%d (đã thử %d)",
+        pick.playing or 0, pick.maxPlayers or 0, state.AttemptCount or 0))
+    return pick
 end
 
 -- ══════════════════════════════════════════════════════════
@@ -244,6 +311,11 @@ function _G.SH_HopOnce()
             return
         end
 
+        -- Đánh dấu server HIỆN TẠI là đã thử (tránh quay lại nó)
+        if SH_JobId and SH_JobId ~= "" then
+            R.Attempted[SH_JobId] = true
+        end
+
         local nextSrv = SH_PickNextServer(R)
         if not nextSrv then
             SH_Notify("❌ Không có server", "List rỗng", 3)
@@ -253,6 +325,8 @@ function _G.SH_HopOnce()
 
         R.Attempted[nextSrv.id] = true
         R.AttemptCount = R.AttemptCount + 1
+        print(string.format("[SH] 📝 Đã đánh dấu server hiện tại (%s) + server mới (%s)",
+            SH_JobId, nextSrv.id))
 
         SH_Notify(
             string.format("🌀 Join server #%d", R.AttemptCount),
@@ -333,6 +407,8 @@ function _G.SH_ResetRuntime()
     _G.SH_Runtime.AttemptCount = 0
     _G.SH_Runtime.EmptyCount = 0
     _G.SH_RecentlyDead = {}
+    if getgenv then getgenv().SH_SAVED_STATE = nil end
+    _G.SH_SAVED_STATE = nil
     SH_Notify("🔄 Reset", "Đã xóa lịch sử + tracking", 2)
 end
 
