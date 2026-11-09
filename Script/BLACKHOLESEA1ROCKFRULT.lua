@@ -12,7 +12,7 @@ _G.SH_Config = _G.SH_Config or {
     JoinWaitTime    = 8,
     MaxAttempts     = 50,
     AutoMode        = false,
-    CheckInterval   = 8,
+    CheckInterval   = 3,
     EmptyChecks     = 3,
     NotifyEnabled   = true,
 }
@@ -2332,7 +2332,7 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
     local SH_Section = SH_Page:CreateSection("🌀 Server Hop", "Left")
     local SH_StatusSec = SH_Page:CreateSection("📊 Status", "Right")
 
-    local SH_MobOptions = {"Bacon Thief", "Devil Boat", "DevilBoat", "Kraken", "Piccolo", "Duck Monster"}
+    local SH_MobOptions = {"Bacon Thief", "DevilBoat", "Kraken", "Piccolo", "Duck Monster"}
 
     local SH_StatusPara = SH_StatusSec:Paragraph({
         Title = "🎯 Đang chờ",
@@ -2357,23 +2357,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
             local str = table.concat(list, ", ")
             SH_StatusPara:SetContent("Đã chọn: " .. str)
             print("[SH] ✅ Đã set PriorityMobs = {" .. str .. "}")
-        end
-    })
-
-    SH_Section:Button({
-        Title = "🚀 HOP NGAY (1 lần)",
-        Callback = function()
-            SH_StatusPara:SetTitle("🚀 Đang hop")
-            SH_StatusPara:SetContent("Đang đếm mob...")
-            _G.SH_HopOnce()
-        end
-    })
-
-    SH_Section:Button({
-        Title = "🔄 Reset lịch sử",
-        Callback = function()
-            _G.SH_ResetRuntime()
-            SH_StatusPara:SetTitle("🔄 Reset xong")
         end
     })
 
