@@ -1,3 +1,244 @@
+-- ══════════════════════════════════════════════════════════
+-- [PHẦN 0A] CONFIG & RUNTIME — chèn ngay dưới print Loading
+-- ══════════════════════════════════════════════════════════
+
+_G.SH_Config = _G.SH_Config or {
+    PriorityMobs    = {"Bacon Thief"},
+    TargetCount     = 3,
+    MinMobCount     = 1,
+    ScanLimit       = 100,
+    JoinWaitTime    = 10,
+    MaxAttempts     = 30,
+    AutoMode        = false,
+    CheckInterval   = 5,
+    NotifyEnabled   = true,
+}
+
+_G.SH_Runtime = _G.SH_Runtime or {
+    Running      = false,
+    AutoRunning  = false,
+    Attempted    = {},
+    BestJob      = nil,
+    BestCount    = 0,
+    AttemptCount = 0,
+}
+
+_G.SH_AUTOLOAD_URL = _G.SH_AUTOLOAD_URL or "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Script/MAINMENUBLACKHOLE.lua"
+
+-- ══════════════════════════════════════════════════════════
+-- [PHẦN 0B] HÀM UTIL — chèn ngay dưới PHẦN 0A
+-- ══════════════════════════════════════════════════════════
+
+local SH_Teleport = game:GetService("TeleportService")
+local SH_Http     = game:GetService("HttpService")
+local SH_Players  = game:GetService("Players")
+local SH_PlaceId  = game.PlaceId
+local SH_JobId    = game.JobId
+
+local function SH_Notify(title, desc, dur)
+    if not _G.SH_Config.NotifyEnabled then return end
+    pcall(function()
+        if _G.SeaNotify then _G.SeaNotify(title, desc, dur)
+        else print(string.format("[SH] %s — %s", title or "", desc or "")) end
+    end)
+end
+
+local function SH_HttpGet(url)
+    local ok, res = pcall(function() return game:HttpGet(url, true) end)
+    return ok and res or nil
+end
+
+function _G.SH_CountMobs(mobList)
+    mobList = mobList or _G.SH_Config.PriorityMobs
+    local folder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
+    if not folder then return 0, {} end
+    local count, found = 0, {}
+    for _, v in ipairs(folder:GetChildren()) do
+        if v:IsA("Model") then
+            for _, name in ipairs(mobList) do
+                if v.Name == name and v:FindFirstChild("Humanoid")
+                    and v.Humanoid.Health > 0 then
+                    count = count + 1
+                    found[name] = (found[name] or 0) + 1
+                    break
+                end
+            end
+        end
+    end
+    return count, found
+end
+
+local function SH_GetServers()
+    local cursor, all = "", {}
+    while #all < _G.SH_Config.ScanLimit do
+        local url = string.format(
+            "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100&cursor=%s",
+            SH_PlaceId, cursor or ""
+        )
+        local body = SH_HttpGet(url)
+        if not body then break end
+        local ok, data = pcall(function() return SH_Http:JSONDecode(body) end)
+        if not ok or not data or not data.data then break end
+        for _, s in ipairs(data.data) do
+            if s.playing and s.maxPlayers and s.playing < s.maxPlayers
+                and s.id ~= SH_JobId then
+                table.insert(all, s)
+            end
+        end
+        cursor = data.nextPageCursor
+        if not cursor or cursor == "" then break end
+    end
+    return all
+end
+
+local function SH_QueueRejoin()
+    local url = _G.SH_AUTOLOAD_URL
+    if not url or url == "" then
+        warn("[SH] ⚠️ _G.SH_AUTOLOAD_URL rỗng — script sẽ KHÔNG tự chạy lại sau teleport")
+        return false
+    end
+    local safeUrl = url:gsub("\\", "\\\\"):gsub('"', '\\"')
+    local payload = string.format([[
+task.wait(2)
+pcall(function()
+    local src = game:HttpGet("%s")
+    if src then loadstring(src)() end
+end)
+]], safeUrl)
+    local ok = pcall(function()
+        if queue_on_teleport then queue_on_teleport(payload)
+        elseif syn and syn.queue_on_teleport then syn.queue_on_teleport(payload)
+        elseif fluxus and fluxus.queue_on_teleport then fluxus.queue_on_teleport(payload)
+        end
+    end)
+    return ok
+end
+
+local function SH_PickNextServer(state)
+    local servers = SH_GetServers()
+    if #servers == 0 then return nil end
+    local candidates = {}
+    for _, s in ipairs(servers) do
+        if not state.Attempted[s.id] then
+            table.insert(candidates, s)
+        end
+    end
+    if #candidates == 0 then
+        state.Attempted = {}
+        for _, s in ipairs(servers) do table.insert(candidates, s) end
+    end
+    table.sort(candidates, function(a, b) return a.playing > b.playing end)
+    return candidates[1]
+end
+
+-- ══════════════════════════════════════════════════════════
+-- [PHẦN 0C] HÀM CHÍNH — chèn ngay dưới PHẦN 0B
+-- ══════════════════════════════════════════════════════════
+
+function _G.SH_HopOnce()
+    if _G.SH_Runtime.Running then
+        SH_Notify("⚠️ Đang chạy", "Đang hop rồi", 2)
+        return
+    end
+    _G.SH_Runtime.Running = true
+    task.spawn(function()
+        local R = _G.SH_Runtime
+        local C = _G.SH_Config
+
+        SH_Notify("🔎 Đang đếm mob", "Chờ " .. C.JoinWaitTime .. "s...", 2)
+        task.wait(C.JoinWaitTime)
+
+        local count, found = _G.SH_CountMobs()
+        local list = {}
+        for n, c in pairs(found) do table.insert(list, n .. " x" .. c) end
+
+        if count > R.BestCount then
+            R.BestCount = count
+            R.BestJob = SH_JobId
+            SH_Notify("🏆 Kỷ lục mới", string.format("%d mob — %s",
+                count, table.concat(list, ", ")), 3)
+        end
+
+        if count >= C.TargetCount then
+            SH_Notify("✅ Đã đủ mob", string.format("%d/%d — giữ server",
+                count, C.TargetCount), 5)
+            R.Running = false
+            return
+        end
+
+        if R.AttemptCount >= C.MaxAttempts then
+            if R.BestJob and R.BestJob ~= SH_JobId and R.BestCount > count then
+                SH_Notify("↩️ Về server tốt nhất",
+                    string.format("Kỷ lục %d mob", R.BestCount), 4)
+                SH_QueueRejoin()
+                task.wait(1)
+                pcall(function()
+                    SH_Teleport:TeleportToPlaceInstance(SH_PlaceId, R.BestJob, SH_Players.LocalPlayer)
+                end)
+            else
+                SH_Notify("⏹️ Hết lượt", "Không tìm server tốt hơn", 4)
+            end
+            R.Running = false
+            return
+        end
+
+        local nextSrv = SH_PickNextServer(R)
+        if not nextSrv then
+            SH_Notify("❌ Không có server", "List rỗng", 3)
+            R.Running = false
+            return
+        end
+
+        R.Attempted[nextSrv.id] = true
+        R.AttemptCount = R.AttemptCount + 1
+
+        SH_Notify(
+            string.format("🌀 Join server #%d", R.AttemptCount),
+            string.format("Players: %d/%d | Kỷ lục: %d mob",
+                nextSrv.playing, nextSrv.maxPlayers, R.BestCount),
+            3
+        )
+
+        SH_QueueRejoin()
+        task.wait(1)
+        pcall(function()
+            SH_Teleport:TeleportToPlaceInstance(SH_PlaceId, nextSrv.id, SH_Players.LocalPlayer)
+        end)
+        R.Running = false
+    end)
+end
+
+function _G.SH_StartAuto()
+    if _G.SH_Runtime.AutoRunning then return end
+    _G.SH_Runtime.AutoRunning = true
+    SH_Notify("🤖 Auto BẬT", "Check mỗi " .. _G.SH_Config.CheckInterval .. "s", 3)
+    task.spawn(function()
+        while _G.SH_Runtime.AutoRunning do
+            task.wait(_G.SH_Config.CheckInterval)
+            if not _G.SH_Runtime.AutoRunning then break end
+            local count = select(1, _G.SH_CountMobs())
+            if count < _G.SH_Config.MinMobCount and not _G.SH_Runtime.Running then
+                SH_Notify("🚨 Mất mob", "Tìm server khác...", 3)
+                _G.SH_HopOnce()
+                task.wait(15)
+            end
+        end
+    end)
+end
+
+function _G.SH_StopAuto()
+    _G.SH_Runtime.AutoRunning = false
+    SH_Notify("⏹️ Auto TẮT", "Đã dừng", 2)
+end
+
+function _G.SH_ResetRuntime()
+    _G.SH_Runtime.Attempted = {}
+    _G.SH_Runtime.BestJob = nil
+    _G.SH_Runtime.BestCount = 0
+    _G.SH_Runtime.AttemptCount = 0
+    SH_Notify("🔄 Reset", "Đã xóa lịch sử", 2)
+end
+
 print("[Sea 1] ▶️ Loading...")
 
 local Players = game:GetService("Players")
@@ -1889,6 +2130,104 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
     local RandomM = Tab3:CreatePage("Random Chest")
     local CraftTablePage = Tab3:CreatePage("Craft Table")
     local GokuPage = Tab3:CreatePage("Npc Goku Gods")
+	
+	    -- ══════════════════════════════════════════════════════
+    -- [PHẦN UI] SERVER HOP — chèn sau GokuPage
+    -- ══════════════════════════════════════════════════════
+
+    local SH_Page = Tab3:CreatePage("Server Hop")
+    local SH_Section = SH_Page:CreateSection("🌀 Server Hop", "Left")
+    local SH_StatusSec = SH_Page:CreateSection("📊 Status", "Right")
+
+    local SH_MobOptions = {"Bacon Thief", "Devil Boat", "DevilBoat", "Kraken", "Piccolo", "Duck Monster"}
+
+    local SH_StatusPara = SH_StatusSec:Paragraph({
+        Title = "🎯 Đang chờ",
+        Content = "Chọn mob và bấm HOP"
+    })
+
+    SH_Section:Dropdown({
+        Title = "🎯 Chọn Mob ưu tiên",
+        Options = SH_MobOptions,
+        Multi = true,
+        Callback = function(v)
+            local list = {}
+            if type(v) == "table" then
+                for _, item in pairs(v) do
+                    if type(item) == "string" then table.insert(list, item) end
+                end
+            elseif type(v) == "string" then
+                table.insert(list, v)
+            end
+            if #list == 0 then list = {"Bacon Thief"} end
+            _G.SH_Config.PriorityMobs = list
+            SH_StatusPara:SetContent("Đã chọn: " .. table.concat(list, ", "))
+        end
+    })
+
+    SH_Section:Slider({
+        Title = "📊 Số mob cần đạt",
+        Min = 1, Max = 20, Value = 3,
+        Callback = function(v) _G.SH_Config.TargetCount = math.floor(v) end
+    })
+
+    SH_Section:Slider({
+        Title = "⏱️ Chờ server load (giây)",
+        Min = 5, Max = 30, Value = 10,
+        Callback = function(v) _G.SH_Config.JoinWaitTime = math.floor(v) end
+    })
+
+    SH_Section:Slider({
+        Title = "🔁 Giới hạn thử (server)",
+        Min = 5, Max = 100, Value = 30,
+        Callback = function(v) _G.SH_Config.MaxAttempts = math.floor(v) end
+    })
+
+    SH_Section:Button({
+        Title = "🚀 HOP NGAY",
+        Callback = function()
+            SH_StatusPara:SetTitle("🚀 Đang hop")
+            SH_StatusPara:SetContent("Đang đếm mob...")
+            _G.SH_HopOnce()
+        end
+    })
+
+    SH_Section:Button({
+        Title = "🔄 Reset lịch sử",
+        Callback = function()
+            _G.SH_ResetRuntime()
+            SH_StatusPara:SetTitle("🔄 Reset xong")
+        end
+    })
+
+    SH_Section:Toggle({
+        Title = "🤖 Auto Hop khi mất mob",
+        Value = false,
+        Callback = function(v)
+            if v then _G.SH_StartAuto()
+            else _G.SH_StopAuto() end
+        end
+    })
+
+    task.spawn(function()
+        while task.wait(2) do
+            pcall(function()
+                if not SH_StatusPara then return end
+                local count, found = _G.SH_CountMobs()
+                local names = {}
+                for n, c in pairs(found) do table.insert(names, n .. " x" .. c) end
+                local status = ""
+                if _G.SH_Runtime.AutoRunning then status = " [AUTO]"
+                elseif _G.SH_Runtime.Running then status = " [HOPPING]" end
+                SH_StatusPara:SetTitle(string.format("📊 Hiện tại: %d mob%s", count, status))
+                SH_StatusPara:SetContent(
+                    ((#names > 0) and table.concat(names, ", ") or "Không có")
+                    .. "\nKỷ lục: " .. _G.SH_Runtime.BestCount
+                    .. " | Đã thử: " .. _G.SH_Runtime.AttemptCount
+                )
+            end)
+        end
+    end)
 
     local DiamondChest = RandomM:CreateSection("💎 Diamond Chest", "Right")
     local MoonChest = RandomM:CreateSection("🌙 Moon Chest", "Left")
@@ -3334,72 +3673,197 @@ if not IS_MOON_MAP and not IS_SEA2_MAP then
     end
 end)
 	
-    -- ===== Auto Farm Level =====
-    task.spawn(function()
-        while wait() do
-            xpcall(function()
-                if not _G.Auto_Farm_Level then return end
+-- ===== Auto Farm Level (NO SKILL → CANCEL) =====
+-- Thay toàn bộ task.spawn cũ của "Auto Farm Level".
+-- Thêm: 15 giây không fire skill nào → huỷ quest.
+-- Track: AutoSkill() có fire không (dùng _G.LastSkillTime / _G.LastSkillKey có sẵn).
 
-                local quest = GetQuest_Level(tonumber(LocalPlayer:GetAttribute("Level")))
-                if not quest then return end
+_G.LVL_NoDmgTime    = 4
+_G.LVL_NoMobTimeout = 5
+_G.LVL_NoSkillTimeout = 15    -- giây không fire skill → huỷ quest
+_G.LVL_MaxY         = 300
+_G.LVL_MinY         = -80
+_G.LVL_MaxDist      = 2000
+_G.LVL_Skip         = {}
 
-                local Frame = GetQuestFrame()
-                local Text = Frame.Title.Text or ""
+local function LVL_Valid(mob, myHrp)
+    if not mob or not mob.Parent then return false end
+    local hrp, hum = mob:FindFirstChild("HumanoidRootPart"), mob:FindFirstChild("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return false end
+    local y = hrp.Position.Y
+    if y > _G.LVL_MaxY or y < _G.LVL_MinY then return false end
+    if myHrp and (myHrp.Position - hrp.Position).Magnitude > _G.LVL_MaxDist then return false end
+    return true
+end
 
-                if LocalPlayer.PlayerGui.HUD.Main.Frame_Quest.Title.Text ~= quest.Monster then
-                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
-                end
-
-                if Frame.Visible and not string.find(Text, quest.Monster) then
-                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
-                    repeat task.wait() until not Frame.Visible
-                end
-
-                if not Frame.Visible then
-                    _G.CanAutoSkill = false
-                    local npc = quest.Quest:FindFirstChild("HumanoidRootPart")
-                    if npc then
-                        local char = LocalPlayer.Character
-                        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                        if hrp then
-                            hrp.CFrame = CFrame.new(npc.Position + Vector3.new(0, 3, 0))
-                            hrp.AssemblyLinearVelocity = Vector3.zero
-                            hrp.AssemblyAngularVelocity = Vector3.zero
-                        end
-                        task.wait(0.4)
-                        local prompt = npc:FindFirstChildOfClass("ProximityPrompt")
-                        if prompt then
-                            pcall(function() fireproximityprompt(prompt, prompt.HoldDuration + 0.1) end)
-                            task.wait(0.2)
-                            pcall(function() fireproximityprompt(prompt, prompt.HoldDuration + 0.1) end)
-                        end
-                    end
-                else
-                    for _, v in pairs(workspace.Mob:GetChildren()) do
-                        if v:IsA("Model") and v.Name == quest.Monster
-                            and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                            local hrp = v:FindFirstChild("HumanoidRootPart")
-                            if hrp then
-                                v.Humanoid.WalkSpeed = 0
-                                v.Humanoid.JumpPower = 0
-                                _G.CurrentFarmTarget = v
-                                _G.CanAutoSkill = true
-                                repeat
-                                    task.wait()
-                                    EquipWeapon()
-                                    AutoSkill()
-                                    Attack()
-                                    Teleport(hrp.CFrame * MethodFarm)
-                                until not _G.Auto_Farm_Level or v.Humanoid.Health <= 0
-                                _G.CanAutoSkill = false
-                            end
-                            break
-                        end
-                    end
-                end
-            end, print)
+local function LVL_PickMob(monster, myHrp)
+    local best, bestD = nil, math.huge
+    for _, v in pairs(workspace.Mob:GetChildren()) do
+        if v:IsA("Model") and v.Name == monster
+            and not _G.LVL_Skip[v] and LVL_Valid(v, myHrp) then
+            local d = (myHrp.Position - v.HumanoidRootPart.Position).Magnitude
+            if d < bestD then bestD = d; best = v end
         end
-    end)
+    end
+    return best
+end
+
+local function LVL_GotoNPC(npcModel, myHrp)
+    local npc = npcModel and npcModel:FindFirstChild("HumanoidRootPart")
+    if not npc or not myHrp then return end
+    myHrp.CFrame = CFrame.new(npc.Position + Vector3.new(0, 3, 0))
+    myHrp.AssemblyLinearVelocity = Vector3.zero
+    myHrp.AssemblyAngularVelocity = Vector3.zero
+    task.wait(0.4)
+    local p = npc:FindFirstChildOfClass("ProximityPrompt")
+    if p then
+        pcall(function() fireproximityprompt(p, p.HoldDuration + 0.1) end)
+        task.wait(0.2)
+        pcall(function() fireproximityprompt(p, p.HoldDuration + 0.1) end)
+    end
+end
+
+task.spawn(function()
+    local target, hpMark, hpTime, lastQuest = nil, 0, 0, nil
+    local lastMobSeen = tick()
+    local lastSkillTick = 0
+
+    while task.wait() do
+        xpcall(function()
+            if not _G.Auto_Farm_Level then
+                _G.CanAutoSkill = false
+                target = nil
+                _G.LVL_Skip = {}
+                lastMobSeen = tick()
+                lastSkillTick = 0
+                return
+            end
+
+            local level = tonumber(LocalPlayer:GetAttribute("Level")) or 1
+            local quest = GetQuest_Level(level)
+            if not quest then return end
+
+            if lastQuest ~= quest.Monster then
+                lastQuest = quest.Monster
+                _G.LVL_Skip = {}
+                target = nil
+                lastMobSeen = tick()
+                lastSkillTick = 0
+            end
+
+            local Frame = GetQuestFrame()
+            local Text = Frame.Title.Text or ""
+            local char = LocalPlayer.Character
+            local myHrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not myHrp then return end
+
+            local showingQuest = Frame.Visible and string.find(Text, quest.Monster) ~= nil
+            local hasNewerQuest = false
+            for _, q in ipairs(Quest_List) do
+                if q.Level > quest.Level and level >= q.Level then
+                    hasNewerQuest = true
+                    break
+                end
+            end
+
+            if not showingQuest or hasNewerQuest then
+                if Frame.Visible and not showingQuest then
+                    ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                    task.wait(0.3)
+                end
+                _G.CanAutoSkill = false
+                target = nil
+                lastMobSeen = tick()
+                lastSkillTick = 0
+                if not Frame.Visible then
+                    LVL_GotoNPC(quest.Quest, myHrp)
+                end
+                return
+            end
+
+            -- Theo dõi skill fire (AutoSkill cập nhật _G.LastSkillTime)
+            local curSkill = _G.LastSkillTime or 0
+            if lastSkillTick == 0 then lastSkillTick = curSkill end
+            if curSkill > lastSkillTick then
+                lastSkillTick = curSkill
+            elseif lastSkillTick > 0 and curSkill - lastSkillTick >= _G.LVL_NoSkillTimeout then
+                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                _G.CanAutoSkill = false
+                target = nil
+                _G.LVL_Skip = {}
+                lastMobSeen = tick()
+                lastSkillTick = 0
+                task.wait(0.5)
+                return
+            end
+
+            -- Theo dõi mob quest tồn tại
+            local anyMobExists = false
+            for _, v in pairs(workspace.Mob:GetChildren()) do
+                if v:IsA("Model") and v.Name == quest.Monster then
+                    local hum = v:FindFirstChild("Humanoid")
+                    if hum and hum.Health > 0 then
+                        anyMobExists = true
+                        break
+                    end
+                end
+            end
+
+            if anyMobExists then
+                lastMobSeen = tick()
+            elseif tick() - lastMobSeen >= _G.LVL_NoMobTimeout then
+                ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
+                _G.CanAutoSkill = false
+                target = nil
+                _G.LVL_Skip = {}
+                lastMobSeen = tick()
+                lastSkillTick = 0
+                task.wait(0.5)
+                return
+            end
+
+            if target and not LVL_Valid(target, myHrp) then target = nil end
+
+            if not target then
+                target = LVL_PickMob(quest.Monster, myHrp)
+                if target then
+                    hpMark = target.Humanoid.Health
+                    hpTime = tick()
+                else
+                    _G.CanAutoSkill = false
+                    myHrp.AssemblyLinearVelocity = Vector3.zero
+                    myHrp.AssemblyAngularVelocity = Vector3.zero
+                    return
+                end
+            end
+
+            local hum, tHrp = target.Humanoid, target.HumanoidRootPart
+
+            if hum.Health < hpMark then
+                hpMark = hum.Health
+                hpTime = tick()
+            elseif tick() - hpTime >= _G.LVL_NoDmgTime then
+                _G.LVL_Skip[target] = true
+                target = nil
+                _G.CanAutoSkill = false
+                return
+            end
+
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+            _G.CurrentFarmTarget = target
+            _G.CanAutoSkill = true
+            EquipWeapon()
+            AutoSkill()
+            Attack()
+            Teleport(tHrp.CFrame * MethodFarm)
+
+            -- Cập nhật skill tick nếu vừa fire
+            local afterSkill = _G.LastSkillTime or 0
+            if afterSkill > lastSkillTick then lastSkillTick = afterSkill end
+        end, print)
+    end
+end)
 
     -- ===== Auto Farm Material =====
     task.spawn(function()
