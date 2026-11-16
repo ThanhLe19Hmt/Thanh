@@ -1,6 +1,6 @@
 -- ============================================
--- SURVIVE YOUR IDEAS - COMMAND BROWSER UI
--- + Minimize to floating icon / restore
+-- SURVIVE YOUR IDEAS - COMMAND BROWSER (MODERN UI)
+-- + Fix triệt để lỗi xuống dòng & đè chữ Dropdown
 -- ============================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,51 +15,168 @@ local SubmitWord = WriterRemotes and WriterRemotes:FindFirstChild("SubmitWord")
 local WriterChosen = WriterRemotes and WriterRemotes:FindFirstChild("WriterChosen")
 
 local IsMyTurn = false
+local AutoEnabled = false
+local AutoWord = nil
+
 if WriterChosen then
     WriterChosen.OnClientEvent:Connect(function(name)
         IsMyTurn = (name == LocalPlayer.Name)
+        if IsMyTurn and AutoEnabled and AutoWord then
+            task.wait(0.5)
+            if IsMyTurn and AutoEnabled and SubmitWord then
+                pcall(function() SubmitWord:FireServer(AutoWord) end)
+                IsMyTurn = false
+            end
+        end
     end)
 end
+
+-- ⚠️ THAY ID ẢNH VÀO ĐÂY
+local MAHORAGA_IMAGE_ID = "rbxassetid://106783163967957"
+local NUKE_IMAGE_ID = "rbxassetid://105196171886899"
 
 -- ============================================
 -- DATA LỆNH
 -- ============================================
 local CommandData = {
-    { word = "Atomic",      effect = "danger",  info = "Thả bom hạt nhân. Toàn bộ người chơi phải vào bunker để sống sót. Sát thương cực lớn ngoài trời." },
-    { word = "Mahoraga",    effect = "danger",  info = "Triệu hồi Mahoraga - nó thích nghi với mọi đòn đánh. Mỗi lần bị hit bởi chiêu mới, nó kháng lại chiêu đó." },
-    { word = "godzilla",    effect = "danger",  info = "Kaiju khổng lồ nổi lên từ biển. Né chân nó và tia laze xanh. Sát thương diện rộng." },
-    { word = "supernova",   effect = "danger",  info = "Mặt trời phát nổ! Tìm bóng râm ngay lập tức nếu không muốn chết cháy." },
-    { word = "tornado",     effect = "danger",  info = "Lốc xoáy lang thang khắp map. Tránh xa hoặc trốn trong shelter." },
-    { word = "zombie",      effect = "danger",  info = "Zombie săn đuổi không ngừng. Leo lên chỗ cao và di chuyển liên tục." },
-    { word = "storm",       effect = "danger",  info = "Bão lớn: mưa, sét, gió. Trốn sau vật thể rắn." },
-    { word = "frog",        effect = "danger",  info = "Ếch khổng lồ! Tránh xa tầm lưỡi của chúng." },
-    { word = "Zombiedan",   effect = "danger",  info = "Đại dịch apocalypse! Chạy ra khỏi bóng của thiên thạch khổng lồ." },
-    { word = "safety",      effect = "help",    info = "Safe house mở ra! Chạy vào trong - nó không tồn tại mãi đâu." },
-    { word = "heal",        effect = "help",    info = "Medkit rơi xuống! Theo tín hiệu pháo đỏ - ai đến trước được trước." },
-    { word = "honoredone",  effect = "help",    info = "INFINITY! Không ai đến được writer trong 30 giây... càng gần càng chậm." },
-    { word = "time",        effect = "neutral", info = "Thời gian ngừng trôi với mọi người khác! 5 giây... hy vọng họ thân thiện." },
-    { word = "jesus",       effect = "neutral", info = "JESUS xuất hiện ở trận chung kết!" },
-    { word = "immortality", effect = "neutral", info = "FORCEFIELD bị tắt trong trận chung kết!" },
-    { word = "jumps",       effect = "neutral", info = "Mọi người nhảy không ngừng! Gõ 'idle' để dừng lại." },
+    -- Vũ Khí
+    { word = "Minigun", effect = "danger", info = "Một khẩu minigun quay lên và bắn." },
+    { word = "Airstrike", effect = "danger", info = "Một chiếc máy bay thả bom xuống đảo." },
+    { word = "Tank", effect = "danger", info = "Một chiếc xe tăng quân đội bắn vào người chơi." },
+    { word = "Laser", effect = "danger", info = "Các tia laser quét ngang sàn nhà." },
+    { word = "Gun", effect = "help", info = "Thả một khẩu súng ngẫu nhiên, với khói đỏ đánh dấu vị trí của nó." },
+    { word = "Bomb", effect = "danger", info = "Một quả bom theo dõi bám theo người chơi trước khi phát nổ." },
+    { word = "Knife", effect = "help", info = "Cung cấp một vũ khí cận chiến để tấn công người chơi khác." },
+    { word = "Baseball Bat", effect = "help", info = "Tạo ra những cây gậy bóng chày có thể sử dụng với âm thanh 'bonk'." },
+    -- Quái vật
+    { word = "Robot", effect = "neutral", info = "Bắt đầu một cuộc chạm trán đèn đỏ, đèn xanh." },
+    { word = "Mahoraga", effect = "danger", image = MAHORAGA_IMAGE_ID, info = "Triệu hồi Mahoraga - nó thích nghi với mọi đòn đánh." },
+    { word = "Wizard", effect = "neutral", info = "Ban cho phép thuật thu nhỏ trong 30 giây." },
+    { word = "Mummy", effect = "danger", info = "Tạo ra những xác ướp có thể quấn người chơi lại." },
+    { word = "godzilla", effect = "danger", info = "Một sinh vật khổng lồ trồi lên từ biển và bắn một tia sáng xanh." },
+    { word = "Angel", effect = "danger", info = "Triệu hồi một thiên thần khổng lồ tấn công những người chơi còn sống." },
+    { word = "Giant", effect = "danger", info = "Một người khổng lồ noob đi quanh đảo và có thể giẫm lên người chơi." },
+    { word = "zombie", effect = "danger", info = "Một đám zombie liên tục săn lùng người chơi." },
+    { word = "Slenderman", effect = "danger", info = "Tránh nhìn vào Slenderman." },
+    { word = "Skeleton", effect = "danger", info = "Những bộ xương ném xương vào người chơi." },
+    { word = "Pirate", effect = "danger", info = "Một con tàu cướp biển bắn đại bác vào đảo." },
+    { word = "Invisible", effect = "danger", info = "Một sự hiện diện vô hình ám ảnh người chơi." },
+    { word = "Aliens", effect = "danger", info = "Người ngoài hành tinh bắt cóc người chơi bằng ánh sáng." },
+    { word = "Slime", effect = "danger", info = "Những con slime bật nhảy có thể nghiền nát người chơi." },
+    { word = "Vampire", effect = "danger", info = "Một ma cà rồng xuất hiện từ quan tài." },
+    { word = "Monster", effect = "danger", info = "Một sinh vật lang thang nghe thấy tiếng động và tấn công." },
+    { word = "Dragon", effect = "danger", info = "Một con rồng bay lơ lửng phía trên trước khi phun lửa." },
+    -- Động vật
+    { word = "KingKong", effect = "danger", info = "Một con khỉ đột khổng lồ tìm kiếm người chơi để ném." },
+    { word = "Bees", effect = "danger", info = "Một đàn ong tấn công người chơi đi qua nó." },
+    { word = "Dinosaur", effect = "danger", info = "Một con T-Rex khổng lồ săn lùng người chơi trên mặt đất." },
+    { word = "Elephant", effect = "danger", info = "Phun nước xung quanh." },
+    { word = "Octopus", effect = "danger", info = "Một con bạch tuộc khổng lồ tóm lấy người chơi." },
+    { word = "Monkey", effect = "danger", info = "Những con khỉ ném vỏ chuối xung quanh." },
+    { word = "Crab", effect = "danger", info = "Tạo ra một nhóm cua." },
+    { word = "Spider", effect = "danger", info = "Tạo ra một con nhện khổng lồ và những con nhện nhỏ hơn." },
+    -- Thiên nhiên
+    { word = "Swamp", effect = "neutral", info = "Thêm những vũng nước đục làm chậm người chơi khi đi qua." },
+    { word = "Desert", effect = "neutral", info = "Biến đổi hòn đảo thành sa mạc." },
+    { word = "Mud", effect = "neutral", info = "Thêm những vũng bùn làm chậm di chuyển." },
+    -- Thời tiết
+    { word = "Rain", effect = "neutral", info = "Mưa liên tục làm bản đồ trơn trượt." },
+    { word = "Ice", effect = "neutral", info = "Làm cho bề mặt trơn trượt." },
+    { word = "Snow", effect = "danger", info = "Tạo ra một cơn bão tuyết; trú ẩn dưới mái nhà hoặc gần lửa." },
+    { word = "Night", effect = "neutral", info = "Biến đổi hòn đảo thành ban đêm." },
+    { word = "Day", effect = "neutral", info = "Mang mặt trời lên." },
+    { word = "Storm", effect = "danger", info = "Thêm mưa, gió giật, sấm và sét nguy hiểm." },
+    { word = "Fog", effect = "neutral", info = "Giảm tầm nhìn trên bản đồ." },
+    -- Thảm họa
+    { word = "Acid", effect = "danger", info = "Mưa axit độc hại rơi xuống đảo." },
+    { word = "supernova", effect = "danger", info = "Mặt trời phát nổ, tìm bóng râm." },
+    { word = "Flash Flood", effect = "danger", info = "Một dòng sông bùn di chuyển có thể cuốn trôi người chơi." },
+    { word = "Lava", effect = "danger", info = "Sàn nhà liên tục trở nên nóng chảy rồi nguội đi." },
+    { word = "Tornado", effect = "danger", info = "Một cơn lốc xoáy đi lang thang trên đảo săn lùng người chơi." },
+    { word = "BlackHole", effect = "danger", info = "Hút người chơi vào trong, đến được trung tâm là tử vong." },
+    { word = "Tsunami", effect = "danger", info = "Lũ lụt trên đảo, lên vùng đất cao để tránh mất máu." },
+    { word = "Flood", effect = "danger", info = "Phủ nước trên mặt đất và tạo ra nguy cơ chết đuối." },
+    { word = "Satellite", effect = "danger", info = "Một vệ tinh rơi xuống." },
+    { word = "Volcano", effect = "danger", info = "Phun đá dung nham." },
+    { word = "Nuke", effect = "danger", image = NUKE_IMAGE_ID, info = "Kích hoạt một ý tưởng thảm họa hạt nhân." },
+    { word = "Meteor", effect = "danger", info = "Một gợi ý tấn công để gây sát thương." },
+    -- Địa điểm
+    { word = "Hell", effect = "danger", info = "Mở ra những miệng núi lửa rực lửa khổng lồ." },
+    { word = "Heaven", effect = "help", info = "Cung cấp một cầu thang mây dẫn đến vầng hào quang." },
+    { word = "Maze", effect = "neutral", info = "Mọc lên một mê cung cây bụi." },
+    { word = "Farm", effect = "neutral", info = "Tạo ra một trang trại động vật." },
+    { word = "Space", effect = "neutral", info = "Di chuyển hòn đảo vào không gian với trọng lực thấp." },
+    { word = "Town", effect = "neutral", info = "Thêm các cửa hàng để cướp bóc và các tòa nhà." },
+    { word = "School", effect = "neutral", info = "Tạo ra một trường học chứa bàn ghế." },
+    { word = "Roblox HQ", effect = "neutral", info = "Thêm các tòa nhà Roblox HQ ban đầu." },
+    { word = "Pyramid", effect = "neutral", info = "Tạo ra một kim tự tháp có thể leo lên." },
+    { word = "Church", effect = "neutral", info = "Thêm một nhà thờ với các băng ghế." },
+    { word = "Safe House", effect = "help", info = "Cung cấp sự bảo vệ ngắn hạn khỏi nguy hiểm." },
+    { word = "Museum", effect = "neutral", info = "Tạo ra một bảo tàng chứa khủng long." },
+    -- Thực phẩm
+    { word = "Taco", effect = "help", info = "Triệu hồi Taco." },
+    { word = "Cheese", effect = "help", info = "Triệu hồi Cheese." },
+    { word = "Burger", effect = "help", info = "Triệu hồi Burger." },
+    -- Vật thể
+    { word = "Launchpad", effect = "neutral", info = "Thêm các bệ phóng đẩy người chơi lên không trung." },
+    { word = "Medkit", effect = "help", info = "Một chiếc máy bay thả một bộ dụng cụ y tế." },
+    { word = "Car", effect = "danger", info = "Cung cấp một chiếc xe có thể lái, gây sát thương." },
+    { word = "Lucky Block", effect = "neutral", info = "Tạo ra một khối may mắn có thể phá vỡ." },
+    { word = "Scarecrow", effect = "danger", info = "Thêm những người rơm canh gác người chơi." },
+    { word = "Lego", effect = "danger", info = "Rải các viên gạch đồ chơi gây đau." },
+    { word = "Helicopter", effect = "help", info = "Một chiếc trực thăng cứu hộ đón và chữa lành." },
+    { word = "Oil", effect = "neutral", info = "Thêm các vết dầu trơn trượt." },
+    { word = "Fireworks", effect = "neutral", info = "Bắn pháo hoa quanh bản đồ." },
+    { word = "Stairs", effect = "neutral", info = "Cung cấp cầu thang để leo lên." },
+    -- Meme & tổng hợp
+    { word = "Jesus", effect = "help", info = "Chữa lành tất cả mọi người, hồi sinh và tạo thức ăn." },
+    { word = "Superman", effect = "help", info = "Cho phép bạn bay và túm người chơi để ném." },
+    { word = "Hunger", effect = "danger", info = "Làm cho mọi người đói." },
+    { word = "67", effect = "neutral", info = "Tạo ra cậu bé 67." },
+    { word = "Hero", effect = "help", info = "Ban cho khả năng bay, đấm và hạ cánh." },
+    { word = "Dance", effect = "neutral", info = "Khiến những người chơi đứng yên nhảy múa." },
+    { word = "Mrbeast", effect = "danger", info = "Thử thách người chơi cuối cùng trong vòng tròn." },
+    { word = "Santa", effect = "help", info = "Ông già Noel bay quanh thả quà." },
+    { word = "Naruto", effect = "danger", info = "Tạo ra các bản sao bóng tối lao về phía người chơi." },
+    { word = "Kill", effect = "help", info = "Tặng cho người viết một con dao." },
+    { word = "Gojo", effect = "help", info = "Ban cho Infinity trong 30 giây." },
+    { word = "Luffy", effect = "help", info = "Ban cho cánh tay cao su để kéo bản thân." },
+    { word = "Love", effect = "help", info = "Tạo ra những trái tim chữa lành." },
+    { word = "Goku", effect = "help", info = "Biến đổi Saiyan và đòn tấn công tầm xa." },
+    { word = "Upside Down", effect = "neutral", info = "Lật ngược màn hình." },
+    { word = "Domain", effect = "danger", info = "Đòn tấn công khu vực chết người 15 giây." },
+    { word = "Spiderman", effect = "help", info = "Ban cho dây tơ nhện để di chuyển." },
+    { word = "Sleep", effect = "neutral", info = "Khiến người chơi ngủ gật khi họ ngừng di chuyển." },
+    { word = "Push", effect = "neutral", info = "Giải phóng một làn sóng xung kích đẩy mọi người." },
+    { word = "Fly", effect = "help", info = "Ban cho mọi người đôi cánh trong 20 giây." },
+    { word = "Fart", effect = "neutral", info = "Triệu hồi một đám mây phân khổng lồ." },
+    { word = "Pikachu", effect = "danger", info = "Thunderbolt tấn công người chơi đông đúc." },
+    { word = "Tung Tung Sahur", effect = "danger", info = "Kẻ truy đuổi săn lùng người chơi khắp bản đồ." },
+    { word = "Please", effect = "help", info = "Tặng tiền thông qua việc xin xỏ." },
+    { word = "Person", effect = "neutral", info = "Thêm một người liên tục nói tên." },
+    { word = "Gravity", effect = "neutral", info = "Tạo ra trọng lực thấp và những cú nhảy lớn." },
+    { word = "Falling Blocks", effect = "danger", info = "Thả những khối khổng lồ từ trên trời xuống." },
+    { word = "Sneeze", effect = "neutral", info = "Hắt hơi thổi bay người chơi." },
+    { word = "Tralalero", effect = "neutral", info = "Tăng tốc trên bản đồ trong suốt vòng đấu." },
+    { word = "Walk", effect = "neutral", info = "Hạn chế mọi người chỉ được đi bộ." },
+    { word = "Teleport", effect = "neutral", info = "Khiến mọi người bị giật cục trên bản đồ." },
+    { word = "Skibidi", effect = "danger", info = "Tạo ra những chiếc bồn cầu nhảy theo người chơi." },
+    { word = "Cry", effect = "neutral", info = "Khiến người chơi khóc ra những vũng nước." },
+    { word = "Troll", effect = "neutral", info = "Đảo ngược điều khiển của mọi người." },
+    { word = "Doge", effect = "danger", info = "Một chú chó con Doge khổng lồ đuổi theo người chơi." },
+    { word = "Aura", effect = "help", info = "Thêm +1000 Aura và hào quang." },
+    { word = "Moon", effect = "neutral", info = "Mặt trăng sẽ xuất hiện." },
 }
 
 local SelectedCommand = nil
-local SubmitLog = {}
+local currentFilter = "all"
+local currentSearch = ""
 
 local function submitWord(word)
     if not SubmitWord then return end
-    if not IsMyTurn then
-        table.insert(SubmitLog, { text = "Chưa đến lượt: " .. word, ok = false })
-        return
-    end
-    local ok = pcall(function() SubmitWord:FireServer(word) end)
-    table.insert(SubmitLog, { text = (ok and "Đã gửi: " or "Lỗi: ") .. word, ok = ok })
-    if #SubmitLog > 50 then table.remove(SubmitLog, 1) end
+    pcall(function() SubmitWord:FireServer(word) end)
 end
 
--- ============================================
--- TẠO GUI
--- ============================================
 local function createGUI()
     local old = CoreGui:FindFirstChild("SYI_Browser")
     if old then old:Destroy() end
@@ -71,9 +188,8 @@ local function createGUI()
     gui.IgnoreGuiInset = true
     gui.Parent = CoreGui
 
-    -- ===== FLOATING ICON (ẩn mặc định) =====
+    -- ===== FLOATING ICON =====
     local floatingIcon = Instance.new("TextButton")
-    floatingIcon.Name = "FloatingIcon"
     floatingIcon.Size = UDim2.new(0, 52, 0, 52)
     floatingIcon.Position = UDim2.new(0, 20, 0.5, -26)
     floatingIcon.BackgroundColor3 = Color3.fromRGB(120, 80, 220)
@@ -99,9 +215,8 @@ local function createGUI()
 
     -- ===== MAIN FRAME =====
     local main = Instance.new("Frame")
-    main.Name = "Main"
-    main.Size = UDim2.new(0, 620, 0, 420)
-    main.Position = UDim2.new(0.5, -310, 0.5, -210)
+    main.Size = UDim2.new(0, 620, 0, 460)
+    main.Position = UDim2.new(0.5, -310, 0.5, -230)
     main.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
     main.BorderSizePixel = 0
     main.Active = true
@@ -120,7 +235,6 @@ local function createGUI()
 
     -- ===== TITLE BAR =====
     local titleBar = Instance.new("Frame")
-    titleBar.Name = "TitleBar"
     titleBar.Size = UDim2.new(1, 0, 0, 42)
     titleBar.BackgroundColor3 = Color3.fromRGB(35, 28, 55)
     titleBar.BorderSizePixel = 0
@@ -148,9 +262,7 @@ local function createGUI()
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = titleBar
 
-    -- Status dot
     local statusDot = Instance.new("Frame")
-    statusDot.Name = "StatusDot"
     statusDot.Size = UDim2.new(0, 10, 0, 10)
     statusDot.Position = UDim2.new(1, -140, 0.5, -5)
     statusDot.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
@@ -162,7 +274,6 @@ local function createGUI()
     sdCorner.Parent = statusDot
 
     local statusText = Instance.new("TextLabel")
-    statusText.Name = "StatusText"
     statusText.Size = UDim2.new(0, 60, 1, 0)
     statusText.Position = UDim2.new(1, -126, 0, 0)
     statusText.BackgroundTransparency = 1
@@ -173,9 +284,7 @@ local function createGUI()
     statusText.TextXAlignment = Enum.TextXAlignment.Left
     statusText.Parent = titleBar
 
-    -- Nút MINIMIZE (dấu —)
     local minBtn = Instance.new("TextButton")
-    minBtn.Name = "MinimizeBtn"
     minBtn.Size = UDim2.new(0, 28, 0, 28)
     minBtn.Position = UDim2.new(1, -72, 0.5, -14)
     minBtn.BackgroundColor3 = Color3.fromRGB(80, 70, 120)
@@ -190,7 +299,6 @@ local function createGUI()
     mbCorner.CornerRadius = UDim.new(0, 6)
     mbCorner.Parent = minBtn
 
-    -- Nút CLOSE (×)
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 28, 0, 28)
     closeBtn.Position = UDim2.new(1, -36, 0.5, -14)
@@ -206,9 +314,8 @@ local function createGUI()
     cbCorner.CornerRadius = UDim.new(0, 6)
     cbCorner.Parent = closeBtn
 
-    -- ===== BODY 2 CỘT =====
+    -- ===== BODY =====
     local body = Instance.new("Frame")
-    body.Name = "Body"
     body.Size = UDim2.new(1, -16, 1, -58)
     body.Position = UDim2.new(0, 8, 0, 50)
     body.BackgroundTransparency = 1
@@ -246,10 +353,142 @@ local function createGUI()
     lhFix.BorderSizePixel = 0
     lhFix.Parent = leftHeader
 
+    -- 👇 THANH TÌM KIẾM VÀ DROPDOWN (GỘP CHUNG 1 HÀNG)
+    local searchBox = Instance.new("TextBox")
+    searchBox.Size = UDim2.new(1, -80, 0, 28)
+    searchBox.Position = UDim2.new(0, 8, 0, 32)
+    searchBox.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
+    searchBox.BorderSizePixel = 0
+    searchBox.Text = ""
+    searchBox.PlaceholderText = "🔍 Tìm kiếm..."
+    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 140)
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.TextSize = 13
+    searchBox.ClearTextOnFocus = false
+    searchBox.Parent = left
+
+    local sbCorner = Instance.new("UICorner")
+    sbCorner.CornerRadius = UDim.new(0, 6)
+    sbCorner.Parent = searchBox
+
+    -- Dropdown Menu (Đã Fix đè chữ)
+    local dropBtn = Instance.new("TextButton")
+    dropBtn.Size = UDim2.new(0, 60, 0, 28)
+    dropBtn.Position = UDim2.new(1, -68, 0, 32)
+    dropBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 58)
+    dropBtn.BorderSizePixel = 0
+    dropBtn.Text = "Tất cả ▼"
+    dropBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+    dropBtn.Font = Enum.Font.GothamBold
+    dropBtn.TextSize = 11
+    dropBtn.TextXAlignment = Enum.TextXAlignment.Center -- Căn giữa chữ
+    dropBtn.Parent = left
+
+    local dbCorner = Instance.new("UICorner")
+    dbCorner.CornerRadius = UDim.new(0, 6)
+    dbCorner.Parent = dropBtn
+
+    -- Chấm màu của Dropdown (Nằm bên trái, không đè chữ)
+    local dropDot = Instance.new("Frame")
+    dropDot.Size = UDim2.new(0, 6, 0, 6)
+    dropDot.Position = UDim2.new(0, 6, 0.5, -3)
+    dropDot.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+    dropDot.BorderSizePixel = 0
+    dropDot.Parent = dropBtn
+
+    local ddCorner = Instance.new("UICorner")
+    ddCorner.CornerRadius = UDim.new(1, 0)
+    ddCorner.Parent = dropDot
+
+    local dropdown = Instance.new("Frame")
+    dropdown.Size = UDim2.new(0, 60, 0, 110)
+    dropdown.Position = UDim2.new(1, -68, 0, 62)
+    dropdown.BackgroundColor3 = Color3.fromRGB(30, 30, 44)
+    dropdown.BorderSizePixel = 0
+    dropdown.Visible = false
+    dropdown.ZIndex = 10
+    dropdown.Parent = left
+
+    local dropCorner = Instance.new("UICorner")
+    dropCorner.CornerRadius = UDim.new(0, 6)
+    dropCorner.Parent = dropdown
+
+    local dropLayout = Instance.new("UIListLayout")
+    dropLayout.Padding = UDim.new(0, 2)
+    dropLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    dropLayout.Parent = dropdown
+
+    local dropPad = Instance.new("UIPadding")
+    dropPad.PaddingTop = UDim.new(0, 4)
+    dropPad.PaddingLeft = UDim.new(0, 4)
+    dropPad.PaddingRight = UDim.new(0, 4)
+    dropPad.Parent = dropdown
+
+    local filterOptions = {
+        { id = "all", text = "Tất cả", color = Color3.fromRGB(150, 150, 150) },
+        { id = "danger", text = "Danger", color = Color3.fromRGB(200, 60, 60) },
+        { id = "help", text = "Help", color = Color3.fromRGB(60, 180, 100) },
+        { id = "neutral", text = "Neutral", color = Color3.fromRGB(180, 160, 60) }
+    }
+
+    for _, opt in ipairs(filterOptions) do
+        local optBtn = Instance.new("TextButton")
+        optBtn.Size = UDim2.new(1, 0, 0, 22)
+        optBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 44)
+        optBtn.BorderSizePixel = 0
+        optBtn.Text = ""
+        optBtn.Parent = dropdown
+
+        local optCorner = Instance.new("UICorner")
+        optCorner.CornerRadius = UDim.new(0, 4)
+        optCorner.Parent = optBtn
+
+        -- Chấm tròn màu
+        local dot = Instance.new("Frame")
+        dot.Size = UDim2.new(0, 6, 0, 6)
+        dot.Position = UDim2.new(0, 6, 0.5, -3)
+        dot.BackgroundColor3 = opt.color
+        dot.BorderSizePixel = 0
+        dot.Parent = optBtn
+
+        local dCorner = Instance.new("UICorner")
+        dCorner.CornerRadius = UDim.new(1, 0)
+        dCorner.Parent = dot
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -16, 1, 0)
+        label.Position = UDim2.new(0, 16, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = opt.text
+        label.TextColor3 = Color3.fromRGB(200, 200, 220)
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 11
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = optBtn
+
+        optBtn.MouseButton1Click:Connect(function()
+            currentFilter = opt.id
+            dropBtn.Text = opt.text .. " ▼"
+            dropDot.BackgroundColor3 = opt.color
+            dropdown.Visible = false
+            if updateList then updateList() end
+        end)
+    end
+
+    dropBtn.MouseButton1Click:Connect(function()
+        dropdown.Visible = not dropdown.Visible
+    end)
+
+    -- Ẩn dropdown khi bấm ra ngoài (tùy chọn)
+    searchBox.Focused:Connect(function()
+        dropdown.Visible = false
+    end)
+
+    -- List
     local list = Instance.new("ScrollingFrame")
-    list.Name = "List"
-    list.Size = UDim2.new(1, -8, 1, -90)
-    list.Position = UDim2.new(0, 4, 0, 32)
+    list.Size = UDim2.new(1, -8, 1, -125)
+    list.Position = UDim2.new(0, 4, 0, 68)
     list.BackgroundTransparency = 1
     list.BorderSizePixel = 0
     list.ScrollBarThickness = 5
@@ -308,10 +547,6 @@ local function createGUI()
     sendBtn.TextSize = 13
     sendBtn.Parent = inputArea
 
-    local sbCorner = Instance.new("UICorner")
-    sbCorner.CornerRadius = UDim.new(0, 4)
-    sbCorner.Parent = sendBtn
-
     -- ----- CỘT PHẢI -----
     local right = Instance.new("Frame")
     right.Size = UDim2.new(0.58, -4, 1, 0)
@@ -346,8 +581,7 @@ local function createGUI()
     rhFix.Parent = rightHeader
 
     local imageFrame = Instance.new("Frame")
-    imageFrame.Name = "ImageFrame"
-    imageFrame.Size = UDim2.new(1, -16, 0, 120)
+    imageFrame.Size = UDim2.new(1, -16, 0, 170)
     imageFrame.Position = UDim2.new(0, 8, 0, 36)
     imageFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
     imageFrame.BorderSizePixel = 0
@@ -357,6 +591,15 @@ local function createGUI()
     local ifCorner = Instance.new("UICorner")
     ifCorner.CornerRadius = UDim.new(0, 6)
     ifCorner.Parent = imageFrame
+
+    local commandImage = Instance.new("ImageLabel")
+    commandImage.Size = UDim2.new(1, 0, 1, 0)
+    commandImage.Position = UDim2.new(0.5, 0, 0.5, 0)
+    commandImage.AnchorPoint = Vector2.new(0.5, 0.5)
+    commandImage.BackgroundTransparency = 1
+    commandImage.Image = ""
+    commandImage.ScaleType = Enum.ScaleType.Crop
+    commandImage.Parent = imageFrame
 
     local imagePlaceholder = Instance.new("TextLabel")
     imagePlaceholder.Size = UDim2.new(1, 0, 1, 0)
@@ -369,7 +612,7 @@ local function createGUI()
 
     local wordTitle = Instance.new("TextLabel")
     wordTitle.Size = UDim2.new(1, -16, 0, 32)
-    wordTitle.Position = UDim2.new(0, 8, 0, 162)
+    wordTitle.Position = UDim2.new(0, 8, 0, 212)
     wordTitle.BackgroundTransparency = 1
     wordTitle.Text = "Chọn một lệnh"
     wordTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -380,7 +623,7 @@ local function createGUI()
 
     local effectBadge = Instance.new("TextLabel")
     effectBadge.Size = UDim2.new(0, 80, 0, 22)
-    effectBadge.Position = UDim2.new(0, 8, 0, 196)
+    effectBadge.Position = UDim2.new(0, 8, 0, 246)
     effectBadge.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
     effectBadge.BorderSizePixel = 0
     effectBadge.Text = "-"
@@ -393,9 +636,10 @@ local function createGUI()
     ebCorner.CornerRadius = UDim.new(0, 4)
     ebCorner.Parent = effectBadge
 
+    -- 👇 FIX TRIỆT ĐỂ LỖI XUỐNG DÒNG (Dùng AutomaticSize)
     local descScroll = Instance.new("ScrollingFrame")
-    descScroll.Size = UDim2.new(1, -16, 0, 100)
-    descScroll.Position = UDim2.new(0, 8, 0, 226)
+    descScroll.Size = UDim2.new(1, -16, 0, 80)
+    descScroll.Position = UDim2.new(0, 8, 0, 276)
     descScroll.BackgroundColor3 = Color3.fromRGB(18, 18, 26)
     descScroll.BorderSizePixel = 0
     descScroll.ScrollBarThickness = 5
@@ -408,34 +652,51 @@ local function createGUI()
     dsCorner.Parent = descScroll
 
     local descLabel = Instance.new("TextLabel")
-    descLabel.Size = UDim2.new(1, -12, 0, 0)
+    descLabel.Size = UDim2.new(1, 0, 0, 0) -- Kích thước X giãn 100%, Y = 0 (để AutoSize lo)
     descLabel.Position = UDim2.new(0, 6, 0, 6)
     descLabel.BackgroundTransparency = 1
     descLabel.Text = "Thông tin chi tiết của lệnh sẽ hiển thị ở đây khi bạn chọn một lệnh bên trái."
     descLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
     descLabel.Font = Enum.Font.Gotham
     descLabel.TextSize = 13
-    descLabel.TextWrapped = true
+    descLabel.TextWrapped = true -- Xuống dòng
+    descLabel.TextTruncate = Enum.TextTruncate.None
     descLabel.TextXAlignment = Enum.TextXAlignment.Left
     descLabel.TextYAlignment = Enum.TextYAlignment.Top
+    descLabel.AutomaticSize = Enum.AutomaticSize.Y -- Tự động giãn chiều cao theo chữ
     descLabel.Parent = descScroll
 
     local submitSelectedBtn = Instance.new("TextButton")
-    submitSelectedBtn.Size = UDim2.new(1, -16, 0, 40)
-    submitSelectedBtn.Position = UDim2.new(0, 8, 1, -48)
+    submitSelectedBtn.Size = UDim2.new(0.5, -12, 0, 40)
+    submitSelectedBtn.Position = UDim2.new(0.5, 4, 1, -48)
     submitSelectedBtn.BackgroundColor3 = Color3.fromRGB(100, 70, 200)
     submitSelectedBtn.BorderSizePixel = 0
     submitSelectedBtn.Text = "GỬI LỆNH NÀY"
     submitSelectedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     submitSelectedBtn.Font = Enum.Font.GothamBold
-    submitSelectedBtn.TextSize = 14
+    submitSelectedBtn.TextSize = 13
     submitSelectedBtn.Parent = right
 
     local ssCorner = Instance.new("UICorner")
     ssCorner.CornerRadius = UDim.new(0, 8)
     ssCorner.Parent = submitSelectedBtn
 
-    -- ===== TẠO BUTTON LIST =====
+    local autoBtn = Instance.new("TextButton")
+    autoBtn.Size = UDim2.new(0.5, -12, 0, 40)
+    autoBtn.Position = UDim2.new(0, 8, 1, -48)
+    autoBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+    autoBtn.BorderSizePixel = 0
+    autoBtn.Text = "BẬT AUTO"
+    autoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    autoBtn.Font = Enum.Font.GothamBold
+    autoBtn.TextSize = 13
+    autoBtn.Parent = right
+
+    local abCorner = Instance.new("UICorner")
+    abCorner.CornerRadius = UDim.new(0, 8)
+    abCorner.Parent = autoBtn
+
+    -- ===== LOGIC LỌC VÀ TÌM KIẾM =====
     local buttons = {}
     for i, cmd in ipairs(CommandData) do
         local btn = Instance.new("TextButton")
@@ -448,6 +709,7 @@ local function createGUI()
         btn.TextSize = 13
         btn.TextXAlignment = Enum.TextXAlignment.Left
         btn.LayoutOrder = i
+        btn.Visible = true
         btn.Parent = list
 
         local bCorner = Instance.new("UICorner")
@@ -473,15 +735,54 @@ local function createGUI()
             elseif cmd.effect == "neutral" then color = Color3.fromRGB(180, 160, 60) end
             effectBadge.BackgroundColor3 = color
             descLabel.Text = cmd.info
+
+            if cmd.image and cmd.image ~= "" and cmd.image ~= "rbxassetid://0" then
+                commandImage.Image = cmd.image
+                commandImage.Visible = true
+                imagePlaceholder.Visible = false
+            else
+                commandImage.Image = ""
+                commandImage.Visible = false
+                imagePlaceholder.Visible = true
+            end
+
+            -- Cập nhật CanvasSize cho ScrollingFrame dựa trên AutoSize của Label
             task.defer(function()
                 descScroll.CanvasSize = UDim2.new(0, 0, 0, descLabel.TextBounds.Y + 12)
             end)
         end)
     end
 
-    task.defer(function()
-        list.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 8)
+    -- Hàm cập nhật danh sách
+    function updateList()
+        local searchLower = currentSearch:lower()
+        local visibleCount = 0
+        
+        for _, cmd in ipairs(CommandData) do
+            local btn = buttons[cmd.word]
+            local matchSearch = (searchLower == "") or (cmd.word:lower():find(searchLower, 1, true) ~= nil)
+            local matchFilter = (currentFilter == "all") or (cmd.effect == currentFilter)
+            
+            if matchSearch and matchFilter then
+                btn.Visible = true
+                visibleCount = visibleCount + 1
+                btn.LayoutOrder = visibleCount
+            else
+                btn.Visible = false
+            end
+        end
+        
+        task.defer(function()
+            list.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 8)
+        end)
+    end
+
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        currentSearch = searchBox.Text
+        updateList()
     end)
+
+    updateList()
 
     -- ===== MINIMIZE / RESTORE =====
     local isMinimized = false
@@ -490,35 +791,28 @@ local function createGUI()
     local function minimizeMenu()
         if isMinimized then return end
         isMinimized = true
-
-        -- Lưu vị trí hiện tại của floating icon để không bị nhảy
-        -- Thu nhỏ main về tâm
-        local shrinkTween = TweenService:Create(main, minimizeTweenInfo, {
+        dropdown.Visible = false
+        TweenService:Create(main, minimizeTweenInfo, {
             Size = UDim2.new(0, 0, 0, 0),
             Position = UDim2.new(0.5, 0, 0.5, 0),
             BackgroundTransparency = 1,
-        })
-        shrinkTween:Play()
-
-        -- Ẩn stroke
+        }):Play()
         TweenService:Create(mainStroke, minimizeTweenInfo, { Transparency = 1 }):Play()
 
-        -- Hiện floating icon (fade in + scale)
         floatingIcon.Visible = true
         floatingIcon.Size = UDim2.new(0, 0, 0, 0)
         TweenService:Create(floatingIcon, minimizeTweenInfo, {
             Size = UDim2.new(0, 52, 0, 52),
         }):Play()
 
-        shrinkTween.Completed:Connect(function()
-            main.Visible = false
+        task.delay(0.25, function()
+            if isMinimized then main.Visible = false end
         end)
     end
 
     local function restoreMenu()
         if not isMinimized then return end
         isMinimized = false
-
         main.Visible = true
         main.BackgroundTransparency = 0
         main.Size = UDim2.new(0, 0, 0, 0)
@@ -526,11 +820,10 @@ local function createGUI()
         mainStroke.Transparency = 0.2
 
         TweenService:Create(main, minimizeTweenInfo, {
-            Size = UDim2.new(0, 620, 0, 420),
-            Position = UDim2.new(0.5, -310, 0.5, -210),
+            Size = UDim2.new(0, 620, 0, 460),
+            Position = UDim2.new(0.5, -310, 0.5, -230),
         }):Play()
 
-        -- Ẩn floating icon
         local tween = TweenService:Create(floatingIcon, minimizeTweenInfo, {
             Size = UDim2.new(0, 0, 0, 0),
         })
@@ -543,10 +836,7 @@ local function createGUI()
 
     minBtn.MouseButton1Click:Connect(minimizeMenu)
     floatingIcon.MouseButton1Click:Connect(restoreMenu)
-
-    closeBtn.MouseButton1Click:Connect(function()
-        gui:Destroy()
-    end)
+    closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
     -- ===== EVENTS =====
     local function sendCustom()
@@ -565,6 +855,23 @@ local function createGUI()
         if SelectedCommand then submitWord(SelectedCommand.word) end
     end)
 
+    autoBtn.MouseButton1Click:Connect(function()
+        if not SelectedCommand then return end
+        
+        AutoEnabled = not AutoEnabled
+        if AutoEnabled then
+            AutoWord = SelectedCommand.word
+            autoBtn.Text = "TẮT AUTO"
+            autoBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+            print("[AUTO] Đã bật tự động gửi: " .. AutoWord)
+        else
+            AutoWord = nil
+            autoBtn.Text = "BẬT AUTO"
+            autoBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+            print("[AUTO] Đã tắt")
+        end
+    end)
+
     -- ===== STATUS LOOP =====
     task.spawn(function()
         while gui.Parent do
@@ -580,8 +887,6 @@ local function createGUI()
             task.wait(0.4)
         end
     end)
-
-    print("[UI] GUI load xong. Nút '—' để ẩn, icon 'SYI' để mở lại.")
 end
 
 createGUI()
