@@ -716,14 +716,17 @@ local MySaveManager = Library.SaveManager
 
 local MOON_PLACE_ID = 82878101790702
 local SEA2_PLACE_ID = 132854526011923
+local RAID_TOP_PLACE_ID = 78848478384148
 local IS_MOON_MAP = (game.PlaceId == MOON_PLACE_ID)
 local IS_SEA2_MAP = (game.PlaceId == SEA2_PLACE_ID)
+local IS_RAID_TOP_MAP = (game.PlaceId == RAID_TOP_PLACE_ID)
 
-print("[Map] " .. (IS_MOON_MAP and "🌙 Moon" or IS_SEA2_MAP and "🌊 Sea 2" or "🌊 Sea 1") .. " detected")
+print("[Map] " .. (IS_MOON_MAP and "🌙 Moon" or IS_SEA2_MAP and "🌊 Sea 2"
+    or IS_RAID_TOP_MAP and "🐉 Raid T.O.P" or "🌊 Sea 1") .. " detected")
 
 local Window = Library:CreateWindow({
-    Title = "MarvenRiz Hub" .. (IS_MOON_MAP and " (Moon)" or ""),
-    Subtitle = IS_MOON_MAP and "Auto Raid Moon Only" or "Sea 1 — Rock Fruit",
+    Title = "MarvenRiz Hub" .. (IS_MOON_MAP and " (Moon)" or IS_RAID_TOP_MAP and " (Raid T.O.P)" or ""),
+    Subtitle = IS_MOON_MAP and "Auto Raid Moon Only" or IS_RAID_TOP_MAP and "Raid T.O.P Only" or "Sea 1 — Rock Fruit",
     Size = UDim2.fromOffset(500, 370),
     AccentColor = Color3.fromRGB(50, 150, 255),
     SideBarWidth = 120,
@@ -733,7 +736,7 @@ local Window = Library:CreateWindow({
     SphereImage = "rbxassetid://73243738744141",
     SphereIconSize = 38,
     Map = "RockFruit",
-    LoadingImage = (not IS_MOON_MAP) and "rbxassetid://89825534401862" or nil,
+    LoadingImage = (not IS_MOON_MAP and not IS_RAID_TOP_MAP) and "rbxassetid://89825534401862" or nil,
     BackgroundImage = "rbxassetid://104569104995749"
 })
 
@@ -1442,295 +1445,7 @@ if IS_MOON_MAP then
     end
 end
 
-if not IS_MOON_MAP and not IS_SEA2_MAP then
-    _G.LastSkillTime = 0
-    _G.LastSkillKey = ""
-    _G.DASH_SKILLS = {x = true}
-    _G.DASH_NEGATE_TIME = 0.35
 
-    local function AutoSkill()
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if not hrp then return end
-
-            local Skills = {}
-            if _G.AutoSkillZ then table.insert(Skills, "z") end
-            if _G.AutoSkillX then table.insert(Skills, "x") end
-            if _G.AutoSkillC then table.insert(Skills, "c") end
-            if _G.AutoSkillV then table.insert(Skills, "v") end
-            if _G.AutoSkillF then table.insert(Skills, "f") end
-            if #Skills == 0 then return end
-
-            local Skill = Skills[math.random(#Skills)]
-            _G.LastSkillTime = tick()
-            _G.LastSkillKey = Skill
-
-            local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-            local action = remotes and remotes:FindFirstChild("Action")
-            if not action then return end
-
-            for _, Tool in ipairs(char:GetChildren()) do
-                if Tool:IsA("Tool") then
-                    action:FireServer(Tool.Name, Skill)
-                end
-            end
-
-            if _G.ClearDashBodyMovers and hrp then
-                _G.ClearDashBodyMovers(hrp, 0.8)
-            end
-        end)
-    end
-
-    function _G.ClearDashBodyMovers(hrp, duration)
-        if not hrp or not hrp.Parent then return end
-        duration = duration or 0.8
-        task.spawn(function()
-            local startTime = tick()
-            while tick() - startTime < duration do
-                task.wait(0.03)
-                if not hrp or not hrp.Parent then break end
-                for _, child in ipairs(hrp:GetChildren()) do
-                    if child:IsA("BodyVelocity") then
-                        if child.Name == "Fly" or child.Name == "BodyVelocity"
-                            or child.Name == "DashVelocity" or child.Name == "AntiDashBV" then
-                            pcall(function() child:Destroy() end)
-                        end
-                    elseif child:IsA("BodyGyro") then
-                        if child.Name == "BodyGyro" or child.Name == "DashGyro" then
-                            pcall(function() child:Destroy() end)
-                        end
-                    elseif child:IsA("AlignPosition") then
-                        if child.Name == "AlignPosition" or child.Name == "DashAlign" then
-                            pcall(function() child:Destroy() end)
-                        end
-                    end
-                end
-                hrp.AssemblyLinearVelocity = Vector3.zero
-                hrp.AssemblyAngularVelocity = Vector3.zero
-            end
-        end)
-    end
-
-    local function EquipWeapon()
-        if _G.RaidBuffSpamActive or _G.DragonBuffSpamActive or _G.LavaBuffSpamActive then return end
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            for _, v in ipairs(char:GetChildren()) do
-                if v:IsA("Tool") and v:GetAttribute("Type") ~= _G.MainWeapon then
-                    v.Parent = LocalPlayer.Backpack
-                end
-            end
-            for _, v in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                if v:IsA("Tool") and v:GetAttribute("Type") == _G.MainWeapon then
-                    char.Humanoid:EquipTool(v)
-                    break
-                end
-            end
-            for _, v in ipairs(char:GetChildren()) do
-                if v:IsA("Tool") and v:GetAttribute("Type") ~= _G.MainWeapon
-                    and not table.find(_G.Select_EquipWeapon or {}, v:GetAttribute("Type")) then
-                    v.Parent = LocalPlayer.Backpack
-                end
-            end
-            for _, v in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                if v:IsA("Tool") and v:GetAttribute("Type") ~= _G.MainWeapon
-                    and table.find(_G.Select_EquipWeapon or {}, v:GetAttribute("Type")) then
-                    v.Parent = char
-                end
-            end
-        end)
-    end
-
-    local function Attack()
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-            local action = remotes and remotes:FindFirstChild("Action")
-            if not action then return end
-            for _, v in ipairs(char:GetChildren()) do
-                if v:IsA("Tool") then action:FireServer(v.Name, "hit") end
-            end
-        end)
-    end
-
-    local VFX_CONNECTIONS = {}
-    local VFX_KILL_CLASSES = {
-        ["ParticleEmitter"] = true, ["Beam"] = true, ["Trail"] = true,
-        ["Sparkles"] = true, ["Fire"] = true, ["Smoke"] = true,
-        ["Highlight"] = true, ["PointLight"] = true,
-        ["SpotLight"] = true, ["SurfaceLight"] = true,
-    }
-
-    local function TryKillVFX(obj)
-        if not obj or not obj.Parent then return end
-        local cls = obj.ClassName
-        if not VFX_KILL_CLASSES[cls] then return end
-        pcall(function()
-            if cls == "ParticleEmitter" or cls == "Beam" or cls == "Trail"
-                or cls == "Sparkles" or cls == "Fire" or cls == "Smoke" then
-                if obj.Enabled then obj.Enabled = false end
-            elseif cls == "Highlight" then
-                if obj.Enabled then obj.Enabled = false end
-            elseif cls == "PointLight" or cls == "SpotLight" or cls == "SurfaceLight" then
-                if obj.Enabled then obj.Enabled = false end
-            end
-        end)
-    end
-
-    local function KillVFXIn(container)
-        if not container then return end
-        pcall(function()
-            for _, v in ipairs(container:GetDescendants()) do TryKillVFX(v) end
-        end)
-    end
-
-    local function HookContainer(container)
-        if not container then return end
-        local conn = container.DescendantAdded:Connect(function(obj)
-            if _G.VFXDisabled then TryKillVFX(obj) end
-        end)
-        table.insert(VFX_CONNECTIONS, conn)
-    end
-
-    local function NoVFX(State)
-        _G.VFXDisabled = State
-        for _, conn in ipairs(VFX_CONNECTIONS) do
-            pcall(function() conn:Disconnect() end)
-        end
-        VFX_CONNECTIONS = {}
-        if not State then return end
-        KillVFXIn(workspace)
-        local cam = workspace.CurrentCamera
-        if cam then KillVFXIn(cam) end
-        local char = LocalPlayer.Character
-        if char then KillVFXIn(char) end
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        if pg then KillVFXIn(pg) end
-        if char then
-            local hum = char:FindFirstChild("Humanoid")
-            if hum then
-                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-                if hum.JumpPower < 50 then hum.JumpPower = 50 end
-            end
-            for _, folderName in ipairs({"Stun", "StunS"}) do
-                local folder = char:FindFirstChild(folderName)
-                if folder and #folder:GetChildren() > 0 then
-                    pcall(function() folder:ClearAllChildren() end)
-                end
-            end
-        end
-        HookContainer(workspace)
-        if cam then HookContainer(cam) end
-        if char then HookContainer(char) end
-        if pg then HookContainer(pg) end
-        local respawnConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
-            if not _G.VFXDisabled then return end
-            task.wait(0.5)
-            KillVFXIn(newChar)
-            HookContainer(newChar)
-        end)
-        table.insert(VFX_CONNECTIONS, respawnConn)
-    end
-
-    LocalPlayer.Idled:Connect(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end)
-
-    local Tab1 = Window:CreateTab("Settings", true, false)
-    local Tab_Page1 = Tab1:CreatePage("Main Settings")
-    local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon", "Left")
-    local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills", "Left")
-    local Method = Tab_Page1:CreateSection("🎯 Select Method Farm", "Right")
-    local Haki = Tab_Page1:CreateSection("👁️ Haki", "Right")
-    local VFX = Tab_Page1:CreateSection("✨ VFX", "Right")
-
-    local Tab_Page2 = Tab1:CreatePage("Other Settings")
-    local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth", "Right")
-    local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion", "Left")
-
-    Weapon:Dropdown({
-        Title = "Main Weapon (Attack)",
-        Options = TypeTool, Multi = false, Value = "Melee",
-        Callback = function(Value) _G.MainWeapon = Value end
-    })
-    Weapon:Dropdown({
-        Title = "Select Support Weapon",
-        Options = TypeTool, Multi = true,
-        Callback = function(Value) _G.Select_EquipWeapon = Value end
-    })
-
-    AutoSkills:Toggle({Title = "Auto Skill Z", Id = "SKILLZ", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
-    AutoSkills:Toggle({Title = "Auto Skill X", Id = "SKILLX", Value = false, Callback = function(v) _G.AutoSkillX = v end})
-    AutoSkills:Toggle({Title = "Auto Skill C", Id = "SKILLC", Value = false, Callback = function(v) _G.AutoSkillC = v end})
-    AutoSkills:Toggle({Title = "Auto Skill V", Id = "SKILLV", Value = false, Callback = function(v) _G.AutoSkillV = v end})
-    AutoSkills:Toggle({Title = "Auto Skill F", Id = "SKILLF", Value = false, Callback = function(v) _G.AutoSkillF = v end})
-
-    Haki:Toggle({Title = "Auto Enable Haki", Id = "AENHAKI", Value = false, Callback = function(v) _G.Auto_Haki = v end})
-
-    Method:Dropdown({
-        Title = "Select Farm Method",
-        Options = {"Behind", "Below", "Upper", "Front"},
-        Id = "SELEMETHODFARM", Multi = false, Value = "Upper",
-        Callback = function(v) _G.Select_Method = v end
-    })
-    Method:Slider({
-        Title = "Farm Distance", Min = 0, Max = 30, Value = 5,
-        Callback = function(v) _G.Distance_Farm = v end
-    })
-
-    VFX:Toggle({Title = "Disable VFX", Value = false, Callback = function(v) NoVFX(v) end})
-
-    Accessory:Toggle({
-        Title = "Auto Equip Best Accessory", Value = false,
-        Callback = function(v) _G.Auto_Equip_Accessory = v end
-    })
-    Accessory:Toggle({
-        Title = "Auto Rebirth (Max Level)", Value = false,
-        Callback = function(v) _G.Auto_Rebirth = v end
-    })
-
-    Potion:Dropdown({
-        Title = "🧪 Select X2 Potion",
-        Options = X2List, Multi = true,
-        Callback = function(v)
-            local list = {}
-            local seen = {}
-            local function addItem(item)
-                if type(item) == "string" and item ~= "" and not seen[item] then
-                    seen[item] = true
-                    table.insert(list, item)
-                end
-            end
-            if type(v) == "table" then
-                for _, item in ipairs(v) do addItem(item) end
-                for key, val in pairs(v) do if val == true then addItem(key) end end
-            elseif type(v) == "string" and v ~= "" then
-                addItem(v)
-            end
-            _G.Select_Potion = list
-            print("[Potion] Đã chọn " .. #list .. " potion:")
-            for _, p in ipairs(list) do print(" - " .. p) end
-        end
-    })
-    Potion:Toggle({
-        Title = "🤖 Auto Use Potion", Value = false,
-        Callback = function(v)
-            _G.Auto_Use_Potion = v
-            print("[Potion] Auto:", v and "ON" or "OFF")
-        end
-    })
-
-    local PotionInfoPara = Potion:Paragraph({ Title = "🍦 X2 Potions: ---", Content = "Select Potion to view" })
-	
--- ══════════════════════════════════════════════════════════
--- RAID T.O.P v5 — tích hợp vào MarvenRiz Hub
--- UI dùng chung Library của script chính; không tạo ScreenGui riêng.
--- ══════════════════════════════════════════════════════════
 do
 -- ══════════════════════════════════════════════════════════
 -- RaidTOP.lua — WHIS RAID T.O.P (FULL) — v5 LIVE BOSS HEIGHT
@@ -2649,10 +2364,357 @@ end
 
 end -- isolated RaidTOP module
 
+-- ══════════════════════════════════════════════════════════
+-- RAID T.O.P PAGE BUILDER — dùng chung cho Main Page và Raid map
+-- ══════════════════════════════════════════════════════════
+local function BuildRaidTOPPage(MainTab)
+    local RaidTOPPage = MainTab:CreatePage("Raid T.O.P")
+    local RaidTOPCard = RaidTOPPage:CreateSection("🐉 Raid T.O.P v5", "Left")
+    local RaidTOPSettings = RaidTOPPage:CreateSection("⚙️ Raid Settings", "Right")
+    local RaidTOPStatus = RaidTOPPage:CreateSection("📊 Status", "Right")
+
+    RaidTOPCard:Toggle({
+        Title = "🤖 Auto Raid T.O.P",
+        Id = "RAIDTOP_AUTO",
+        Value = false,
+        Callback = function(v)
+            if v then
+                _G.RaidTOP_StartAuto()
+            else
+                _G.RaidTOP_StopAuto()
+            end
+        end
+    })
+
+    RaidTOPSettings:Slider({
+        Title = "Emergency HP Threshold (%)",
+        Min = 5, Max = 95, Value = 30,
+        Callback = function(v) _G.RaidTOP_SetLowHealthPercent(v) end
+    })
+    RaidTOPSettings:Slider({
+        Title = "Boss Follow Height (studs)",
+        Min = 5, Max = 500, Value = 25,
+        Callback = function(v) _G.RaidTOP_SetAimHeight(v) end
+    })
+
+    local RaidTOPStatusPara = RaidTOPStatus:Paragraph({
+        Title = "Status: IDLE",
+        Content = "Raid T.O.P ready. Dragon Ball information is shown here."
+    })
+    task.spawn(function()
+        while task.wait(1) do
+            pcall(function()
+                local phase, running, autoRunning, bossCount, hasBalls, ballMessage = _G.RaidTOP_GetStatus()
+                local placeLine = game.PlaceId == 119091355492870 and "Map: Sea 1 / Source"
+                    or game.PlaceId == 78848478384148 and "Map: Raid T.O.P"
+                    or ("Map PlaceId: " .. tostring(game.PlaceId))
+                local detail = placeLine .. "\nRaid: " .. (running and "Running" or "Stopped")
+                    .. " | Auto: " .. (autoRunning and "ON" or "OFF")
+                if game.PlaceId == 78848478384148 then
+                    detail = detail .. "\nBosses alive: " .. tostring(bossCount)
+                else
+                    detail = detail .. "\nDragon Balls: " .. (hasBalls and "7/7 ✅" or tostring(ballMessage))
+                end
+                RaidTOPStatusPara:SetTitle("Status: " .. tostring(phase))
+                RaidTOPStatusPara:SetContent(detail)
+            end)
+        end
+    end)
+    return RaidTOPPage
+end
+
+if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
+    _G.LastSkillTime = 0
+    _G.LastSkillKey = ""
+    _G.DASH_SKILLS = {x = true}
+    _G.DASH_NEGATE_TIME = 0.35
+
+    local function AutoSkill()
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+
+            local Skills = {}
+            if _G.AutoSkillZ then table.insert(Skills, "z") end
+            if _G.AutoSkillX then table.insert(Skills, "x") end
+            if _G.AutoSkillC then table.insert(Skills, "c") end
+            if _G.AutoSkillV then table.insert(Skills, "v") end
+            if _G.AutoSkillF then table.insert(Skills, "f") end
+            if #Skills == 0 then return end
+
+            local Skill = Skills[math.random(#Skills)]
+            _G.LastSkillTime = tick()
+            _G.LastSkillKey = Skill
+
+            local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+            local action = remotes and remotes:FindFirstChild("Action")
+            if not action then return end
+
+            for _, Tool in ipairs(char:GetChildren()) do
+                if Tool:IsA("Tool") then
+                    action:FireServer(Tool.Name, Skill)
+                end
+            end
+
+            if _G.ClearDashBodyMovers and hrp then
+                _G.ClearDashBodyMovers(hrp, 0.8)
+            end
+        end)
+    end
+
+    function _G.ClearDashBodyMovers(hrp, duration)
+        if not hrp or not hrp.Parent then return end
+        duration = duration or 0.8
+        task.spawn(function()
+            local startTime = tick()
+            while tick() - startTime < duration do
+                task.wait(0.03)
+                if not hrp or not hrp.Parent then break end
+                for _, child in ipairs(hrp:GetChildren()) do
+                    if child:IsA("BodyVelocity") then
+                        if child.Name == "Fly" or child.Name == "BodyVelocity"
+                            or child.Name == "DashVelocity" or child.Name == "AntiDashBV" then
+                            pcall(function() child:Destroy() end)
+                        end
+                    elseif child:IsA("BodyGyro") then
+                        if child.Name == "BodyGyro" or child.Name == "DashGyro" then
+                            pcall(function() child:Destroy() end)
+                        end
+                    elseif child:IsA("AlignPosition") then
+                        if child.Name == "AlignPosition" or child.Name == "DashAlign" then
+                            pcall(function() child:Destroy() end)
+                        end
+                    end
+                end
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end
+        end)
+    end
+
+    local function EquipWeapon()
+        if _G.RaidBuffSpamActive or _G.DragonBuffSpamActive or _G.LavaBuffSpamActive then return end
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            for _, v in ipairs(char:GetChildren()) do
+                if v:IsA("Tool") and v:GetAttribute("Type") ~= _G.MainWeapon then
+                    v.Parent = LocalPlayer.Backpack
+                end
+            end
+            for _, v in ipairs(LocalPlayer.Backpack:GetChildren()) do
+                if v:IsA("Tool") and v:GetAttribute("Type") == _G.MainWeapon then
+                    char.Humanoid:EquipTool(v)
+                    break
+                end
+            end
+            for _, v in ipairs(char:GetChildren()) do
+                if v:IsA("Tool") and v:GetAttribute("Type") ~= _G.MainWeapon
+                    and not table.find(_G.Select_EquipWeapon or {}, v:GetAttribute("Type")) then
+                    v.Parent = LocalPlayer.Backpack
+                end
+            end
+            for _, v in ipairs(LocalPlayer.Backpack:GetChildren()) do
+                if v:IsA("Tool") and v:GetAttribute("Type") ~= _G.MainWeapon
+                    and table.find(_G.Select_EquipWeapon or {}, v:GetAttribute("Type")) then
+                    v.Parent = char
+                end
+            end
+        end)
+    end
+
+    local function Attack()
+        pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+            local action = remotes and remotes:FindFirstChild("Action")
+            if not action then return end
+            for _, v in ipairs(char:GetChildren()) do
+                if v:IsA("Tool") then action:FireServer(v.Name, "hit") end
+            end
+        end)
+    end
+
+    local VFX_CONNECTIONS = {}
+    local VFX_KILL_CLASSES = {
+        ["ParticleEmitter"] = true, ["Beam"] = true, ["Trail"] = true,
+        ["Sparkles"] = true, ["Fire"] = true, ["Smoke"] = true,
+        ["Highlight"] = true, ["PointLight"] = true,
+        ["SpotLight"] = true, ["SurfaceLight"] = true,
+    }
+
+    local function TryKillVFX(obj)
+        if not obj or not obj.Parent then return end
+        local cls = obj.ClassName
+        if not VFX_KILL_CLASSES[cls] then return end
+        pcall(function()
+            if cls == "ParticleEmitter" or cls == "Beam" or cls == "Trail"
+                or cls == "Sparkles" or cls == "Fire" or cls == "Smoke" then
+                if obj.Enabled then obj.Enabled = false end
+            elseif cls == "Highlight" then
+                if obj.Enabled then obj.Enabled = false end
+            elseif cls == "PointLight" or cls == "SpotLight" or cls == "SurfaceLight" then
+                if obj.Enabled then obj.Enabled = false end
+            end
+        end)
+    end
+
+    local function KillVFXIn(container)
+        if not container then return end
+        pcall(function()
+            for _, v in ipairs(container:GetDescendants()) do TryKillVFX(v) end
+        end)
+    end
+
+    local function HookContainer(container)
+        if not container then return end
+        local conn = container.DescendantAdded:Connect(function(obj)
+            if _G.VFXDisabled then TryKillVFX(obj) end
+        end)
+        table.insert(VFX_CONNECTIONS, conn)
+    end
+
+    local function NoVFX(State)
+        _G.VFXDisabled = State
+        for _, conn in ipairs(VFX_CONNECTIONS) do
+            pcall(function() conn:Disconnect() end)
+        end
+        VFX_CONNECTIONS = {}
+        if not State then return end
+        KillVFXIn(workspace)
+        local cam = workspace.CurrentCamera
+        if cam then KillVFXIn(cam) end
+        local char = LocalPlayer.Character
+        if char then KillVFXIn(char) end
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then KillVFXIn(pg) end
+        if char then
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+                if hum.JumpPower < 50 then hum.JumpPower = 50 end
+            end
+            for _, folderName in ipairs({"Stun", "StunS"}) do
+                local folder = char:FindFirstChild(folderName)
+                if folder and #folder:GetChildren() > 0 then
+                    pcall(function() folder:ClearAllChildren() end)
+                end
+            end
+        end
+        HookContainer(workspace)
+        if cam then HookContainer(cam) end
+        if char then HookContainer(char) end
+        if pg then HookContainer(pg) end
+        local respawnConn = LocalPlayer.CharacterAdded:Connect(function(newChar)
+            if not _G.VFXDisabled then return end
+            task.wait(0.5)
+            KillVFXIn(newChar)
+            HookContainer(newChar)
+        end)
+        table.insert(VFX_CONNECTIONS, respawnConn)
+    end
+
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+
+    local Tab1 = Window:CreateTab("Settings", true, false)
+    local Tab_Page1 = Tab1:CreatePage("Main Settings")
+    local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon", "Left")
+    local AutoSkills = Tab_Page1:CreateSection("⚔️ Auto Skills", "Left")
+    local Method = Tab_Page1:CreateSection("🎯 Select Method Farm", "Right")
+    local Haki = Tab_Page1:CreateSection("👁️ Haki", "Right")
+    local VFX = Tab_Page1:CreateSection("✨ VFX", "Right")
+
+    local Tab_Page2 = Tab1:CreatePage("Other Settings")
+    local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth", "Right")
+    local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion", "Left")
+
+    Weapon:Dropdown({
+        Title = "Main Weapon (Attack)",
+        Options = TypeTool, Multi = false, Value = "Melee",
+        Callback = function(Value) _G.MainWeapon = Value end
+    })
+    Weapon:Dropdown({
+        Title = "Select Support Weapon",
+        Options = TypeTool, Multi = true,
+        Callback = function(Value) _G.Select_EquipWeapon = Value end
+    })
+
+    AutoSkills:Toggle({Title = "Auto Skill Z", Id = "SKILLZ", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
+    AutoSkills:Toggle({Title = "Auto Skill X", Id = "SKILLX", Value = false, Callback = function(v) _G.AutoSkillX = v end})
+    AutoSkills:Toggle({Title = "Auto Skill C", Id = "SKILLC", Value = false, Callback = function(v) _G.AutoSkillC = v end})
+    AutoSkills:Toggle({Title = "Auto Skill V", Id = "SKILLV", Value = false, Callback = function(v) _G.AutoSkillV = v end})
+    AutoSkills:Toggle({Title = "Auto Skill F", Id = "SKILLF", Value = false, Callback = function(v) _G.AutoSkillF = v end})
+
+    Haki:Toggle({Title = "Auto Enable Haki", Id = "AENHAKI", Value = false, Callback = function(v) _G.Auto_Haki = v end})
+
+    Method:Dropdown({
+        Title = "Select Farm Method",
+        Options = {"Behind", "Below", "Upper", "Front"},
+        Id = "SELEMETHODFARM", Multi = false, Value = "Upper",
+        Callback = function(v) _G.Select_Method = v end
+    })
+    Method:Slider({
+        Title = "Farm Distance", Min = 0, Max = 30, Value = 5,
+        Callback = function(v) _G.Distance_Farm = v end
+    })
+
+    VFX:Toggle({Title = "Disable VFX", Value = false, Callback = function(v) NoVFX(v) end})
+
+    Accessory:Toggle({
+        Title = "Auto Equip Best Accessory", Value = false,
+        Callback = function(v) _G.Auto_Equip_Accessory = v end
+    })
+    Accessory:Toggle({
+        Title = "Auto Rebirth (Max Level)", Value = false,
+        Callback = function(v) _G.Auto_Rebirth = v end
+    })
+
+    Potion:Dropdown({
+        Title = "🧪 Select X2 Potion",
+        Options = X2List, Multi = true,
+        Callback = function(v)
+            local list = {}
+            local seen = {}
+            local function addItem(item)
+                if type(item) == "string" and item ~= "" and not seen[item] then
+                    seen[item] = true
+                    table.insert(list, item)
+                end
+            end
+            if type(v) == "table" then
+                for _, item in ipairs(v) do addItem(item) end
+                for key, val in pairs(v) do if val == true then addItem(key) end end
+            elseif type(v) == "string" and v ~= "" then
+                addItem(v)
+            end
+            _G.Select_Potion = list
+            print("[Potion] Đã chọn " .. #list .. " potion:")
+            for _, p in ipairs(list) do print(" - " .. p) end
+        end
+    })
+    Potion:Toggle({
+        Title = "🤖 Auto Use Potion", Value = false,
+        Callback = function(v)
+            _G.Auto_Use_Potion = v
+            print("[Potion] Auto:", v and "ON" or "OFF")
+        end
+    })
+
+    local PotionInfoPara = Potion:Paragraph({ Title = "🍦 X2 Potions: ---", Content = "Select Potion to view" })
+	
+
+
     local Tab2 = Window:CreateTab("Main", false, false)
     local Farm = Tab2:CreatePage("Farm")
     local AllBoss = Tab2:CreatePage("Boss")
     local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop")
+    local RaidTOPPage = BuildRaidTOPPage(Tab2)
     local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
 
     local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm", "Left")
@@ -2679,70 +2741,6 @@ end -- isolated RaidTOP module
     local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings", "Right")
     local TimeMysteryCard = RaidBossPage:CreateSection("🎁 Mystery Box", "Left")
 
-    local RaidTOPTab = Window:CreateTab("🐉 Raid T.O.P", false, false)
-    local RaidTOPPage = RaidTOPTab:CreatePage("Whis Raid T.O.P")
-    local RaidTOPCard = RaidTOPPage:CreateSection("🐉 Raid T.O.P v5", "Left")
-    local RaidTOPSettings = RaidTOPPage:CreateSection("⚙️ Raid Settings", "Right")
-    local RaidTOPStatus = RaidTOPPage:CreateSection("📊 Status", "Right")
-
-    RaidTOPCard:Button({
-        Title = "🔍 Check 7 Dragon Balls",
-        Callback = function()
-            local ok, msg = _G.RaidTOP_CheckDragonBalls()
-            _G.SeaNotify(ok and "✅ Dragon Balls" or "❌ Dragon Balls", msg, 4)
-        end
-    })
-    RaidTOPCard:Button({
-        Title = "🐉 RAID ONCE",
-        Callback = function() _G.RaidTOP_Once() end
-    })
-    RaidTOPCard:Toggle({
-        Title = "🤖 Auto Raid T.O.P",
-        Value = false,
-        Callback = function(v)
-            if v then _G.RaidTOP_StartAuto() else _G.RaidTOP_StopAuto() end
-        end
-    })
-    RaidTOPCard:Button({
-        Title = "⏹️ Stop Raid T.O.P",
-        Callback = function() _G.RaidTOP_Stop() end
-    })
-    RaidTOPSettings:Slider({
-        Title = "Emergency HP Threshold (%)",
-        Min = 5, Max = 95, Value = 30,
-        Callback = function(v) _G.RaidTOP_SetLowHealthPercent(v) end
-    })
-    RaidTOPSettings:Slider({
-        Title = "Boss Follow Height (studs)",
-        Min = 5, Max = 500, Value = 25,
-        Callback = function(v) _G.RaidTOP_SetAimHeight(v) end
-    })
-    local RaidTOPStatusPara = RaidTOPStatus:Paragraph({
-        Title = "Status: IDLE",
-        Content = "Raid T.O.P ready. Existing Main Settings control weapon, skills and Haki."
-    })
-    task.spawn(function()
-        while task.wait(1) do
-            pcall(function()
-                if not RaidTOPStatusPara then return end
-                local phase, running, autoRunning, bossCount, hasBalls, ballMessage = _G.RaidTOP_GetStatus()
-                local placeLine = game.PlaceId == 119091355492870 and "Map: Sea 1 / Source"
-                    or game.PlaceId == 78848478384148 and "Map: Raid T.O.P"
-                    or ("Map PlaceId: " .. tostring(game.PlaceId))
-                local runLine = running and "Running" or "Stopped"
-                local autoLine = autoRunning and "ON" or "OFF"
-                local detail = placeLine .. "\nPhase: " .. tostring(phase)
-                    .. "\nRaid: " .. runLine .. " | Auto: " .. autoLine
-                if game.PlaceId == 78848478384148 then
-                    detail = detail .. "\nBosses alive: " .. tostring(bossCount)
-                else
-                    detail = detail .. "\nDragon Balls: " .. (hasBalls and "7/7" or tostring(ballMessage))
-                end
-                RaidTOPStatusPara:SetTitle("Status: " .. tostring(phase))
-                RaidTOPStatusPara:SetContent(detail)
-            end)
-        end
-    end)
 
 
     AutoFarmCard:Toggle({
@@ -9497,6 +9495,52 @@ end)
             end)
         end)
     end)
+end
+
+
+-- ══════════════════════════════════════════════════════════
+-- RAID T.O.P MAP: chỉ dựng các mục được yêu cầu
+-- Main > Raid T.O.P | Settings > Chọn vũ khí + Auto Skills | Config
+-- ══════════════════════════════════════════════════════════
+if IS_RAID_TOP_MAP then
+    local MainTab = Window:CreateTab("Main", true, false)
+    BuildRaidTOPPage(MainTab)
+
+    local SettingsTab = Window:CreateTab("Settings", false, false)
+    local SettingsPage = SettingsTab:CreatePage("Main Settings")
+    local WeaponSection = SettingsPage:CreateSection("🗡️ Chọn vũ khí", "Left")
+    local AutoSkillsSection = SettingsPage:CreateSection("⚔️ Auto Skills", "Right")
+
+    WeaponSection:Dropdown({
+        Title = "Main Weapon (Attack)",
+        Options = TypeTool, Multi = false, Value = "Melee",
+        Callback = function(value) _G.MainWeapon = value end
+    })
+    WeaponSection:Dropdown({
+        Title = "Select Support Weapon",
+        Options = TypeTool, Multi = true,
+        Callback = function(value) _G.Select_EquipWeapon = value end
+    })
+
+    AutoSkillsSection:Toggle({Title = "Auto Skill Z", Id = "SKILLZ", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
+    AutoSkillsSection:Toggle({Title = "Auto Skill X", Id = "SKILLX", Value = false, Callback = function(v) _G.AutoSkillX = v end})
+    AutoSkillsSection:Toggle({Title = "Auto Skill C", Id = "SKILLC", Value = false, Callback = function(v) _G.AutoSkillC = v end})
+    AutoSkillsSection:Toggle({Title = "Auto Skill V", Id = "SKILLV", Value = false, Callback = function(v) _G.AutoSkillV = v end})
+    AutoSkillsSection:Toggle({Title = "Auto Skill F", Id = "SKILLF", Value = false, Callback = function(v) _G.AutoSkillF = v end})
+
+    local ConfigTab = Window:CreateTab("Config", false, false)
+    if MySaveManager then
+        pcall(function()
+            MySaveManager:SetFolder("MarvenRiz_RaidTOP")
+            MySaveManager:BuildConfigTab(ConfigTab)
+        end)
+        task.spawn(function()
+            task.wait(1)
+            pcall(function() MySaveManager:LoadAutoloadConfig() end)
+        end)
+    else
+        warn("[Raid T.O.P] SaveManager unavailable; Config tab is empty")
+    end
 end
 
 print("[Sea 1] ✅ Load successful!")
