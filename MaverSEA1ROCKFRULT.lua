@@ -1495,6 +1495,8 @@ local RUNTIME = {
 	LowHealthMode = false,
     EmergencyHold = nil,
     EmergencyPosition = nil,
+    LastChickenV = 0,
+    LastChickenEquip = 0,
 }
 
 _G.MainWeapon = _G.MainWeapon or "Melee"
@@ -1594,6 +1596,90 @@ local function stopEmergencyFly()
     end
 
     log("✅ HP hồi phục — trở lại chiến đấu")
+end
+
+-- Super Chicken: tự trang bị trước, xác nhận đã nằm trong Character,
+-- sau đó mới kiểm tra HUD và dùng V khi chiêu sẵn sàng.
+local function isSuperChickenTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local normalizedName = string.lower((tool.Name or ""):gsub("[%s%p_]+", ""))
+    return normalizedName == "superchicken"
+end
+
+local function findSuperChicken(char)
+    char = char or LP.Character
+    if char then
+        for _, item in ipairs(char:GetChildren()) do
+            if isSuperChickenTool(item) then
+                return item, true
+            end
+        end
+    end
+
+    local backpack = LP:FindFirstChildOfClass("Backpack") or LP:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if isSuperChickenTool(item) then
+                return item, false
+            end
+        end
+    end
+    return nil, false
+end
+
+local function trySuperChickenV(char)
+    char = char or LP.Character
+    if not char then return false end
+
+    local chickenTool, equipped = findSuperChicken(char)
+    if not chickenTool then return false end
+
+    -- Chưa trang bị: yêu cầu Humanoid equip và đợi vòng lặp kế tiếp xác nhận.
+    if not equipped or chickenTool.Parent ~= char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return false end
+        if tick() - RUNTIME.LastChickenEquip < 0.8 then return false end
+        RUNTIME.LastChickenEquip = tick()
+        local ok, err = pcall(function()
+            hum:EquipTool(chickenTool)
+        end)
+        if not ok then
+            log("⚠️ Super Chicken equip thất bại: " .. tostring(err))
+        end
+        return false
+    end
+
+    -- Chỉ kiểm tra HUD sau khi đã xác nhận Tool ở trong Character.
+    local playerGui = LP:FindFirstChildOfClass("PlayerGui") or LP:FindFirstChild("PlayerGui")
+    local hud = playerGui and playerGui:FindFirstChild("HUD")
+    local main = hud and hud:FindFirstChild("Main")
+    local skillList = main and main:FindFirstChild("Frame_SkillList_" .. chickenTool.Name)
+    local border = skillList and skillList:FindFirstChild("Border")
+    local mainFrame = border and border:FindFirstChild("Main")
+    local keyFrame = mainFrame and mainFrame:FindFirstChild("V")
+    if not keyFrame then return false end
+
+    local readyLabel = keyFrame:FindFirstChild("Ready")
+    local cooldownFrame = keyFrame:FindFirstChild("CooldownFrame")
+    if not readyLabel or readyLabel.Text == "UnReady" then return false end
+    if cooldownFrame and cooldownFrame.Visible then return false end
+    if tick() - RUNTIME.LastChickenV < 1.0 then return false end
+
+    -- Dùng đúng Remote và cách gọi đã xác nhận hoạt động trong test độc lập.
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local action = remotes and remotes:FindFirstChild("Action")
+    if not action then return false end
+
+    local ok, err = pcall(function()
+        action:FireServer(chickenTool.Name, "v")
+    end)
+    if ok then
+        RUNTIME.LastChickenV = tick()
+        log("🐔 Super Chicken V — đã gửi lệnh khi đang né boss")
+        return true
+    end
+    log("⚠️ Gửi Super Chicken V thất bại: " .. tostring(err))
+    return false
 end
 
 local function startEmergencyFly(hrp)
@@ -2060,22 +2146,26 @@ local function fightBoss()
     return false
 end
 
--- Kiểm tra phần trăm HP
+-- Kiểm tra HP theo cơ chế hysteresis: ngưỡng cài đặt để bắt đầu né,
+-- nhưng phải hồi trên 80% mới được phép quay lại đánh boss.
 local hpPercent = (hum.Health / hum.MaxHealth) * 100
 
-if hpPercent <= CONFIG.LowHealthPercent then
-    startEmergencyFly(hrp)
-    return true
-end
-
--- HP đã hồi phục
 if RUNTIME.LowHealthMode then
-    stopEmergencyFly()
+    -- Vẫn đang ở chế độ né: giữ vị trí cao và chờ HP > 80%.
+    if hpPercent <= 80 then
+        trySuperChickenV(char)
+        return true
+    end
 
+    -- Chỉ thoát chế độ né khi HP thực sự vượt 80%.
+    stopEmergencyFly()
     RUNTIME.CurrentTarget = nil
     RUNTIME.LookLocked = false
-
     task.wait(0.2)
+elseif hpPercent <= CONFIG.LowHealthPercent then
+    startEmergencyFly(hrp)
+    trySuperChickenV(char)
+    return true
 end
 
 if not boss.Hrp or not boss.Humanoid then
