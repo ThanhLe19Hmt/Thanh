@@ -709,7 +709,7 @@ local function Teleport(Pos)
 end
 
 local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/UI_Test.lua"
+    "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MarvenRizLib.lua.txt"
 ))()
 
 local MySaveManager = Library.SaveManager
@@ -725,19 +725,17 @@ print("[Map] " .. (IS_MOON_MAP and "🌙 Moon" or IS_SEA2_MAP and "🌊 Sea 2"
     or IS_RAID_TOP_MAP and "🐉 Raid T.O.P" or "🌊 Sea 1") .. " detected")
 
 local Window = Library:CreateWindow({
-    Title = "MarvenRiz Hub" .. (IS_MOON_MAP and " (Moon)" or IS_RAID_TOP_MAP and " (Raid T.O.P)" or ""),
-    Subtitle = IS_MOON_MAP and "Auto Raid Moon Only" or IS_RAID_TOP_MAP and "Raid T.O.P Only" or "Sea 1 — Rock Fruit",
+    Title = "MarvenRiz Hub",
+    Subtitle = "Map : Rock Fruit",
     Size = UDim2.fromOffset(500, 370),
     AccentColor = Color3.fromRGB(50, 150, 255),
     SideBarWidth = 120,
-    Logo = "rbxassetid://73243738744141",
+    Logo = "rbxassetid://87526284179554",
     LogoSize = 32,
     SphereText = false,
-    SphereImage = "rbxassetid://73243738744141",
+    SphereImage = "rbxassetid://87526284179554",
     SphereIconSize = 38,
-    Map = "RockFruit",
-    LoadingImage = (not IS_MOON_MAP and not IS_RAID_TOP_MAP) and "rbxassetid://89825534401862" or nil,
-    BackgroundImage = "rbxassetid://104569104995749"
+    Map = "RockFruit"
 })
 
 function _G.SeaNotify(title, desc, duration)
