@@ -1,9 +1,3 @@
-print("[Sea 1] ▶️ Loading...")
-
--- ══════════════════════════════════════════════════════════
--- [SH-A] SERVER HOP — CONFIG + UTIL
--- ══════════════════════════════════════════════════════════
-
 _G.SH_Config = _G.SH_Config or {
     PriorityMobs    = {"Bacon Thief"},
     TargetCount     = 1,
@@ -16,7 +10,6 @@ _G.SH_Config = _G.SH_Config or {
     EmptyChecks     = 3,
     NotifyEnabled   = true,
 }
-
 _G.SH_Runtime = _G.SH_Runtime or {
     Running      = false,
     AutoRunning  = false,
@@ -26,8 +19,6 @@ _G.SH_Runtime = _G.SH_Runtime or {
     AttemptCount = 0,
     EmptyCount   = 0,
 }
-
--- KHÔI PHỤC STATE từ queue_on_teleport (nếu có)
 do
     local saved = (getgenv and getgenv().SH_SAVED_STATE) or _G.SH_SAVED_STATE
     if saved and type(saved) == "string" and saved ~= "" then
@@ -47,40 +38,31 @@ do
                     end
                 end
             end
-            -- Bật lại Auto nếu trước đó đang bật
             if _G.SH_Config.AutoMode == true then
-                print(string.format("[SH] ♻️ Khôi phục: đã thử %d server | Kỷ lục: %d mob",
-                    _G.SH_Runtime.AttemptCount, _G.SH_Runtime.BestCount))
             end
         end
-        -- Xóa state sau khi khôi phục để tránh dùng lại
         if getgenv then getgenv().SH_SAVED_STATE = nil end
         _G.SH_SAVED_STATE = nil
     end
 end
-
 _G.SH_RecentlyDead = _G.SH_RecentlyDead or {}
 _G.SH_AUTOLOAD_URL = _G.SH_AUTOLOAD_URL or "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Script/MAINMENUBLACKHOLE.lua"
-
 local SH_Teleport = game:GetService("TeleportService")
 local SH_Http     = game:GetService("HttpService")
 local SH_Players  = game:GetService("Players")
 local SH_PlaceId  = game.PlaceId
 local SH_JobId    = game.JobId
-
 local function SH_Notify(title, desc, dur)
     if not _G.SH_Config.NotifyEnabled then return end
     pcall(function()
         if _G.SeaNotify then _G.SeaNotify(title, desc, dur)
-        else print(string.format("[SH] %s — %s", title or "", desc or "")) end
+        else  end
     end)
 end
-
 local function SH_HttpGet(url)
     local ok, res = pcall(function() return game:HttpGet(url, true) end)
     return ok and res or nil
 end
-
 function _G.SH_CountMobs(mobList)
     mobList = mobList or _G.SH_Config.PriorityMobs
     local folder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
@@ -112,7 +94,6 @@ function _G.SH_CountMobs(mobList)
     end
     return count, found
 end
-
 function _G.SH_TrackDeadMobs(mobList)
     mobList = mobList or _G.SH_Config.PriorityMobs
     local folder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
@@ -126,7 +107,6 @@ function _G.SH_TrackDeadMobs(mobList)
                         or hum:GetState() == Enum.HumanoidStateType.Dead
                     if dead and not _G.SH_RecentlyDead[v] then
                         _G.SH_RecentlyDead[v] = tick()
-                        print("[SH] 💀 " .. name .. " đã chết — đánh dấu")
                     end
                     break
                 end
@@ -137,7 +117,6 @@ function _G.SH_TrackDeadMobs(mobList)
         if not mob.Parent then _G.SH_RecentlyDead[mob] = nil end
     end
 end
-
 local function SH_GetServers()
     local cursor, all = "", {}
     while #all < _G.SH_Config.ScanLimit do
@@ -160,10 +139,8 @@ local function SH_GetServers()
     end
     return all
 end
-
 local function SH_QueueRejoin()
     if _G.SH_Config.AutoMode ~= true then
-        print("[SH] ⏸️ AutoMode TẮT — không queue rejoin")
         return false
     end
     local url = _G.SH_AUTOLOAD_URL
@@ -171,7 +148,6 @@ local function SH_QueueRejoin()
         warn("[SH] ⚠️ _G.SH_AUTOLOAD_URL rỗng — script sẽ KHÔNG tự chạy lại sau teleport")
         return false
     end
-    -- LƯU Attempted + BestCount + BestJob + AttemptCount qua teleport
     local R = _G.SH_Runtime
     local saveData = {
         Attempted    = {},
@@ -179,19 +155,14 @@ local function SH_QueueRejoin()
         BestCount    = R.BestCount or 0,
         AttemptCount = R.AttemptCount or 0,
     }
-    -- Chỉ lưu danh sách job id (string) — không lưu table phức tạp
     local ids = {}
     for id, _ in pairs(R.Attempted or {}) do
         if type(id) == "string" then table.insert(ids, id) end
     end
     saveData.Attempted = ids
-
-    -- Encode JSON AN TOÀN (chỉ string + number)
     local okEnc, json = pcall(function() return SH_Http:JSONEncode(saveData) end)
     if not okEnc then json = "{}" end
-    -- Escape chuỗi JSON để nhúng vào Lua string
     local safeJson = json:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "")
-
     local safeUrl = url:gsub("\\", "\\\\"):gsub('"', '\\"')
     local payload = string.format([[
 task.wait(2)
@@ -205,7 +176,6 @@ pcall(function()
     if src then loadstring(src)() end
 end)
 ]], safeJson, safeJson, safeUrl)
-
     local ok = pcall(function()
         if queue_on_teleport then queue_on_teleport(payload)
         elseif syn and syn.queue_on_teleport then syn.queue_on_teleport(payload)
@@ -214,7 +184,6 @@ end)
     end)
     return ok
 end
-
 local function SH_PickNextServer(state)
     local servers = SH_GetServers()
     if #servers == 0 then return nil end
@@ -225,32 +194,19 @@ local function SH_PickNextServer(state)
         end
     end
     if #candidates == 0 then
-        print("[SH] 🔄 Đã thử hết server trong list — reset & thử lại")
         state.Attempted = {}
         for _, s in ipairs(servers) do table.insert(candidates, s) end
     end
-    -- ƯU TIÊN server ĐÔNG NGƯỜI (dễ có boss/nhiều mob)
-    -- Không ưu tiên server vắng (thường là server chết, không có boss)
     table.sort(candidates, function(a, b)
         local pa = a.playing or 0
         local pb = b.playing or 0
-        -- Server >= 3 người được ưu tiên
         if pa >= 3 and pb < 3 then return true end
         if pb >= 3 and pa < 3 then return false end
-        -- Cùng nhóm → chọn đông hơn
         return pa > pb
     end)
-    -- Log server sắp chọn
     local pick = candidates[1]
-    print(string.format("[SH] 🎯 Chọn server tiếp: playing=%d/%d (đã thử %d)",
-        pick.playing or 0, pick.maxPlayers or 0, state.AttemptCount or 0))
     return pick
 end
-
--- ══════════════════════════════════════════════════════════
--- [SH-B] SERVER HOP — HÀM CHÍNH
--- ══════════════════════════════════════════════════════════
-
 function _G.SH_HopOnce()
     if _G.SH_Runtime.Running then
         SH_Notify("⚠️ Đang chạy", "Đang hop rồi", 2)
@@ -258,7 +214,6 @@ function _G.SH_HopOnce()
     end
     if getgenv and getgenv().SH_MANUAL_STOP == true
         and _G.SH_Config.AutoMode ~= true then
-        print("[SH] 🛑 Bị chặn — MANUAL_STOP đang bật")
         return
     end
     _G.SH_RecentlyDead = {}
@@ -266,35 +221,25 @@ function _G.SH_HopOnce()
     task.spawn(function()
         local R = _G.SH_Runtime
         local C = _G.SH_Config
-
         local mobListStr = table.concat(C.PriorityMobs, ", ")
-        print(string.format("[SH] 🎯 Đang tìm: %s | Cần đạt: %d", mobListStr, C.TargetCount))
         SH_Notify("🎯 Đang tìm", mobListStr, 3)
-
         SH_Notify("🔎 Đang đếm mob", "Chờ " .. C.JoinWaitTime .. "s...", 2)
         task.wait(C.JoinWaitTime)
-
         local count, found = _G.SH_CountMobs()
         local list = {}
         for n, c in pairs(found) do table.insert(list, n .. " x" .. c) end
-
-        print(string.format("[SH] 📊 Server hiện tại: %d/%d mob cần | Có: %s",
-            count, C.TargetCount, (#list > 0) and table.concat(list, ", ") or "KHÔNG"))
-
         if count > R.BestCount then
             R.BestCount = count
             R.BestJob = SH_JobId
             SH_Notify("🏆 Kỷ lục mới", string.format("%d mob — %s",
                 count, table.concat(list, ", ")), 3)
         end
-
         if count >= C.TargetCount then
             SH_Notify("✅ Đã đủ mob", string.format("%d/%d — giữ server",
                 count, C.TargetCount), 5)
             R.Running = false
             return
         end
-
         if R.AttemptCount >= C.MaxAttempts then
             if R.BestJob and R.BestJob ~= SH_JobId and R.BestCount > count then
                 SH_Notify("↩️ Về server tốt nhất",
@@ -310,31 +255,23 @@ function _G.SH_HopOnce()
             R.Running = false
             return
         end
-
-        -- Đánh dấu server HIỆN TẠI là đã thử (tránh quay lại nó)
         if SH_JobId and SH_JobId ~= "" then
             R.Attempted[SH_JobId] = true
         end
-
         local nextSrv = SH_PickNextServer(R)
         if not nextSrv then
             SH_Notify("❌ Không có server", "List rỗng", 3)
             R.Running = false
             return
         end
-
         R.Attempted[nextSrv.id] = true
         R.AttemptCount = R.AttemptCount + 1
-        print(string.format("[SH] 📝 Đã đánh dấu server hiện tại (%s) + server mới (%s)",
-            SH_JobId, nextSrv.id))
-
         SH_Notify(
             string.format("🌀 Join server #%d", R.AttemptCount),
             string.format("Players: %d/%d | Tìm: %s | Kỷ lục: %d",
                 nextSrv.playing, nextSrv.maxPlayers, mobListStr, R.BestCount),
             3
         )
-
         SH_QueueRejoin()
         task.wait(1)
         pcall(function()
@@ -343,7 +280,6 @@ function _G.SH_HopOnce()
         R.Running = false
     end)
 end
-
 function _G.SH_StartAuto()
     if _G.SH_Runtime.AutoRunning then return end
     if getgenv then getgenv().SH_MANUAL_STOP = false end
@@ -352,7 +288,6 @@ function _G.SH_StartAuto()
     _G.SH_Runtime.AutoRunning = true
     _G.SH_Runtime.EmptyCount = 0
     SH_Notify("🤖 Auto Join BẬT", "Theo dõi mob mỗi " .. _G.SH_Config.CheckInterval .. "s", 3)
-
     task.spawn(function()
         while _G.SH_Runtime.AutoRunning do
             task.wait(_G.SH_Config.CheckInterval)
@@ -363,18 +298,12 @@ function _G.SH_StartAuto()
                 _G.SH_TrackDeadMobs()
                 local count = select(1, _G.SH_CountMobs())
                 local mobStr = table.concat(_G.SH_Config.PriorityMobs, ", ")
-
                 if count > 0 then
                     if _G.SH_Runtime.EmptyCount > 0 then
-                        print(string.format("[SH] ✅ Có mob lại (%d) — hủy đếm", count))
                     end
                     _G.SH_Runtime.EmptyCount = 0
-                    print(string.format("[SH] 📊 %s còn sống: %d — không hop", mobStr, count))
                 else
                     _G.SH_Runtime.EmptyCount = (_G.SH_Runtime.EmptyCount or 0) + 1
-                    print(string.format("[SH] ⏳ Không có %s sống (%d/%d) — chờ...",
-                        mobStr, _G.SH_Runtime.EmptyCount, _G.SH_Config.EmptyChecks))
-
                     if _G.SH_Runtime.EmptyCount >= _G.SH_Config.EmptyChecks then
                         SH_Notify("🚨 " .. mobStr .. " đã hết",
                             "Chuyển server khác...", 4)
@@ -387,7 +316,6 @@ function _G.SH_StartAuto()
         end
     end)
 end
-
 function _G.SH_StopAuto()
     _G.SH_Runtime.AutoRunning = false
     _G.SH_Runtime.EmptyCount = 0
@@ -399,7 +327,6 @@ function _G.SH_StopAuto()
     end)
     SH_Notify("⏹️ Auto Join TẮT", "Đã dừng + hủy queue", 2)
 end
-
 function _G.SH_ResetRuntime()
     _G.SH_Runtime.Attempted = {}
     _G.SH_Runtime.BestJob = nil
@@ -411,19 +338,14 @@ function _G.SH_ResetRuntime()
     _G.SH_SAVED_STATE = nil
     SH_Notify("🔄 Reset", "Đã xóa lịch sử + tracking", 2)
 end
-
--- Khởi động Auto (nếu AutoMode = true trong config)
 task.spawn(function()
     task.wait(8)
     pcall(function() _G.SH_TrackDeadMobs() end)
     if _G.SH_Config.AutoMode == true and not _G.SH_Runtime.AutoRunning then
         _G.SH_StartAuto()
     else
-        print("[SH] ⏸️ Auto Join TẮT — không tự bật")
     end
 end)
-
--- Vòng lặp tracking mob chết (mỗi 1s)
 task.spawn(function()
     while task.wait(1) do
         pcall(function()
@@ -433,7 +355,6 @@ task.spawn(function()
         end)
     end
 end)
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
@@ -442,7 +363,6 @@ local VirtualUser = game:GetService("VirtualUser")
 local GuiService = game:GetService("GuiService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
-
 local function FormatNumber(n)
     n = tonumber(n) or 0
     if n < 0 then return tostring(n) end
@@ -461,24 +381,20 @@ local function FormatNumber(n)
     if b == math.floor(b) then return tostring(math.floor(b)) .. "B" end
     return string.format("%.1fB", b)
 end
-
 local function SafeWait(parent, name, timeout)
     local ok, result = pcall(function() return parent:WaitForChild(name, timeout or 3) end)
     if ok and result then return result end
     return parent:FindFirstChild(name)
 end
-
 local function SafeRequire(module)
     if not module then return nil end
     local ok, result = pcall(function() return require(module) end)
     if ok and result then return result end
     return nil
 end
-
 local Npc_Quest = SafeWait(workspace, "NpcQuest", 3)
 local Itemdrops = SafeWait(workspace, "Itemdrops", 3)
 local ModulesFolder = SafeWait(ReplicatedStorage, "Modules", 3)
-
 local UseItems = SafeRequire(ModulesFolder and ModulesFolder:FindFirstChild("UseItems"))
 local CraftingTable = SafeRequire(ModulesFolder and ModulesFolder:FindFirstChild("CraftingTable"))
 local Quest_Module = SafeRequire(ModulesFolder and ModulesFolder:FindFirstChild("QuestModule"))
@@ -489,9 +405,7 @@ local AccessoryModule = SafeRequire(ModulesFolder and ModulesFolder:FindFirstChi
 local PointItemM = SafeRequire(ModulesFolder and ModulesFolder:FindFirstChild("GaranteeRandomItem"))
 local PointItemMoon = SafeRequire(ModulesFolder and ModulesFolder:FindFirstChild("GaranteeEventMoon"))
 local Economy = SafeRequire(ModulesFolder and ModulesFolder:FindFirstChild("Economy"))
-
 local Action = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Action")
-
 local missingModules = {}
 for name, mod in pairs({
     UseItems = UseItems,
@@ -510,20 +424,15 @@ end
 if #missingModules > 0 then
     warn("[Sea 1] ⚠️ Missing modules: " .. table.concat(missingModules, ", "))
 end
-
 local TypeTool = {"Melee", "Sword", "Special", "DevilFruit"}
 local RandomChestValue = {"x5", "x10", "x15"}
-
 local Quest_List, WeaponAll, MonsterDrop = {}, {}, {}
 local ItemDrop, ItemToMob, ItemAll = {}, {}, {}
 local X2List, Poitem, PoiteMoon, SellItems, Bosses = {}, {}, {}, {}, {}
-
 local CachedInventory = {}
 local LastCraft, CraftDelay, LastInventory = 0, 1, 0
 local NotifyCraft = false
-
 local MethodFarm = CFrame.new(0, 5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-
 local SpawnList = {
     ["Thief"] = "Bacon Thief",
     ["Piccolo"] = "Piccolo",
@@ -531,7 +440,6 @@ local SpawnList = {
     ["Devil Boat"] = "Devil Boat",
     ["Kraken"] = "Kraken"
 }
-
 _G.SmoothUpperBelow = true
 _G.AutoCombat = false
 _G.CanAutoSkill = false
@@ -591,7 +499,6 @@ _G.AutoBossAll = false
 _G.LAVA_UNDER_LAVA_Y = -100
 _G.LAVA_AIM_HEIGHT = 25
 _G.LAVA_SURFACE_DELAY = 1.5
-
 if PointItemM then
     for Item, Price in pairs(PointItemM) do
         table.insert(Poitem, {Name = Item, Price = Price})
@@ -601,7 +508,6 @@ if PointItemM then
         Poitem[i] = Data.Name .. " / " .. Data.Price .. " Point"
     end
 end
-
 if PointItemMoon then
     for Item, Price in pairs(PointItemMoon) do
         table.insert(PoiteMoon, {Name = Item, Price = Price})
@@ -611,7 +517,6 @@ if PointItemMoon then
         PoiteMoon[i] = Data.Name .. " / " .. Data.Price .. " Point"
     end
 end
-
 if Quest_Module and Npc_Quest then
     pcall(function()
         table.sort(Quest_Module, function(a, b) return a.Level < b.Level end)
@@ -623,18 +528,15 @@ if Quest_Module and Npc_Quest then
         end
     end)
 end
-
 if UseItems then
     for Weapon in pairs(UseItems) do table.insert(WeaponAll, Weapon) end
     table.sort(WeaponAll)
 end
-
 if Blacklist then
     for ItemName in pairs(Blacklist) do
         if ItemName:find("X2") then table.insert(X2List, ItemName) end
     end
 end
-
 if Itemdrops then
     pcall(function()
         for _, Mob in ipairs(Itemdrops:GetChildren()) do
@@ -655,7 +557,6 @@ if Itemdrops then
         end
     end)
 end
-
 if ItemList then
     for ItemName in pairs(ItemToMob) do
         local Data = ItemList[ItemName]
@@ -663,14 +564,12 @@ if ItemList then
     end
     table.sort(ItemAll)
 end
-
 if SpawnBossList then
     for BossName in pairs(SpawnBossList) do table.insert(Bosses, BossName) end
     table.sort(Bosses)
 end
 if #Bosses == 0 then Bosses = {"Bacon Thief", "Piccolo", "Duck Monster", "Devil Boat"} end
 if #WeaponAll == 0 then WeaponAll = {"Melee", "Sword", "Special", "DevilFruit"} end
-
 local function GetQuest_Level(My_level)
     local Quest
     for _, v in ipairs(Quest_List) do
@@ -678,11 +577,9 @@ local function GetQuest_Level(My_level)
     end
     return Quest
 end
-
 local function GetQuestFrame()
     return LocalPlayer.PlayerGui.HUD.Main.Frame_Quest
 end
-
 local function GetInventory()
     if tick() - LastInventory < 0.2 then return CachedInventory end
     LastInventory = tick()
@@ -692,12 +589,10 @@ local function GetInventory()
     CachedInventory = Success and Inv or {}
     return CachedInventory
 end
-
 local function GetItemAmount(ItemName)
     local Inv = GetInventory()
     return (Inv[ItemName] and Inv[ItemName].amount) or 0
 end
-
 local function Teleport(Pos)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -707,23 +602,16 @@ local function Teleport(Pos)
         hrp.AssemblyAngularVelocity = Vector3.zero
     end
 end
-
 local Library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MarvenRizLib.lua.txt"
+    "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MarvenRizLib.lua"
 ))()
-
 local MySaveManager = Library.SaveManager
-
 local MOON_PLACE_ID = 82878101790702
 local SEA2_PLACE_ID = 132854526011923
 local RAID_TOP_PLACE_ID = 78848478384148
 local IS_MOON_MAP = (game.PlaceId == MOON_PLACE_ID)
 local IS_SEA2_MAP = (game.PlaceId == SEA2_PLACE_ID)
 local IS_RAID_TOP_MAP = (game.PlaceId == RAID_TOP_PLACE_ID)
-
-print("[Map] " .. (IS_MOON_MAP and "🌙 Moon" or IS_SEA2_MAP and "🌊 Sea 2"
-    or IS_RAID_TOP_MAP and "🐉 Raid T.O.P" or "🌊 Sea 1") .. " detected")
-
 local Window = Library:CreateWindow({
     Title = "MarvenRiz Hub",
     Subtitle = "Map : Rock Fruit",
@@ -737,7 +625,6 @@ local Window = Library:CreateWindow({
     SphereIconSize = 38,
     Map = "RockFruit"
 })
-
 function _G.SeaNotify(title, desc, duration)
     pcall(function()
         if Library and Library.Notify then
@@ -745,23 +632,17 @@ function _G.SeaNotify(title, desc, duration)
         end
     end)
 end
-
 if IS_MOON_MAP then
     _G.MoonRunning = false
     _G.MoonHitPosition = "Upper"
     _G.MoonHitDistance = 12
-
     local MoonLastRunning = false
     local MoonCurrentTarget = nil
     local MoonAtCave = false
     local MoonLastEquip = 0
-
     local CAVE_POS = Vector3.new(-195, 14, 412)
-
     local function IsMoonRunning() return _G.MoonRunning == true end
-
     local function SetMoonRunning(v) _G.MoonRunning = v and true or false end
-
     local function AsString(v)
         if type(v) == "string" then return v end
         if type(v) == "table" then
@@ -771,7 +652,6 @@ if IS_MOON_MAP then
         end
         return nil
     end
-
     local function AsStringList(v)
         local list = {}
         if type(v) == "string" then
@@ -783,11 +663,9 @@ if IS_MOON_MAP then
         end
         return list
     end
-
     local function GetMobFolder()
         return workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
     end
-
     local function IsMobValid(mob)
         if not mob or not mob.Parent then return false end
         if not mob:IsA("Model") then return false end
@@ -797,7 +675,6 @@ if IS_MOON_MAP then
         if hum.Health <= 0 or hum.MaxHealth <= 0 then return false end
         return true
     end
-
     local MOB_SPEED_THRESHOLD = 30
     local MOB_PRIORITY_NAMES = {
         ["Sonic"] = true, ["Sonic.exe"] = true, ["Flash"] = true, ["Sanic"] = true,
@@ -807,7 +684,6 @@ if IS_MOON_MAP then
         ["Bacon Bicycle"] = true, ["BaconBicycle"] = true,
         ["bacon bicycle"] = true, ["baconbicycle"] = true,
     }
-
     local function IsPriorityMob(mob)
         if not mob then return false end
         if MOB_PRIORITY_NAMES[mob.Name] then return true end
@@ -815,14 +691,12 @@ if IS_MOON_MAP then
         if hum and hum.WalkSpeed >= MOB_SPEED_THRESHOLD then return true end
         return false
     end
-
     local function GetMoonTarget()
         local char = LocalPlayer.Character
         local myHrp = char and char:FindFirstChild("HumanoidRootPart")
         if not myHrp then return nil end
         local mobFolder = GetMobFolder()
         if not mobFolder then return nil end
-
         if MoonCurrentTarget and MoonCurrentTarget.Parent then
             local h = MoonCurrentTarget:FindFirstChild("Humanoid")
             if h and h.Health > 0 and h.MaxHealth > 0 then
@@ -833,12 +707,10 @@ if IS_MOON_MAP then
                 MoonCurrentTarget = nil
             end
         end
-
         local priorityTarget = nil
         local priorityDist = math.huge
         local normalTarget = nil
         local normalDist = math.huge
-
         for _, mob in ipairs(mobFolder:GetChildren()) do
             if IsMobValid(mob) then
                 local d = (myHrp.Position - mob.HumanoidRootPart.Position).Magnitude
@@ -849,7 +721,6 @@ if IS_MOON_MAP then
                 end
             end
         end
-
         if priorityTarget then
             if MoonCurrentTarget and MoonCurrentTarget ~= priorityTarget then
                 local h = MoonCurrentTarget:FindFirstChild("Humanoid")
@@ -857,17 +728,14 @@ if IS_MOON_MAP then
             end
             return priorityTarget, "🔥 PRIORITY"
         end
-
         if MoonCurrentTarget and MoonCurrentTarget.Parent then
             local h = MoonCurrentTarget:FindFirstChild("Humanoid")
             if h and h.Health > 0 and h.MaxHealth > 0 then
                 return MoonCurrentTarget, "🎯 ATTACKING"
             end
         end
-
         return normalTarget, normalTarget and "🎯 ATTACKING" or nil
     end
-
     local function Moon_GetMethodFarm(height)
         height = height or (_G.MoonHitDistance or 12)
         local mode = _G.MoonHitPosition or "Upper"
@@ -881,14 +749,12 @@ if IS_MOON_MAP then
             return CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
         end
     end
-
     local function Moon_TeleportToMob(hrp, tHrp)
         if not hrp or not hrp.Parent or not tHrp or not tHrp.Parent then return end
         hrp.CFrame = tHrp.CFrame * Moon_GetMethodFarm()
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
     end
-
     local function MoonEquipWeapon()
         pcall(function()
             local char = LocalPlayer.Character
@@ -917,12 +783,10 @@ if IS_MOON_MAP then
             end
         end)
     end
-
     local function Moon_GetAction()
         local remotes = ReplicatedStorage:FindFirstChild("Remotes")
         return remotes and remotes:FindFirstChild("Action")
     end
-
     local function IsSkillOnCooldown(toolName, skillKey)
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
         local main = hud and hud:FindFirstChild("Main")
@@ -940,7 +804,6 @@ if IS_MOON_MAP then
         local isCooldownShow = cooldownFrame and cooldownFrame.Visible
         return isUnready or isCooldownShow
     end
-
     local function GetReadySkills(toolName)
         local ready = {}
         if _G.AutoSkillZ and not IsSkillOnCooldown(toolName, "z") then table.insert(ready, "z") end
@@ -950,7 +813,6 @@ if IS_MOON_MAP then
         if _G.AutoSkillF and not IsSkillOnCooldown(toolName, "f") then table.insert(ready, "f") end
         return ready
     end
-
     local function Moon_AutoSkill()
         local char = LocalPlayer.Character
         if not char then return false end
@@ -973,7 +835,6 @@ if IS_MOON_MAP then
         end
         return fired
     end
-
     local function Moon_Attack()
         local char = LocalPlayer.Character
         if not char then return end
@@ -985,9 +846,7 @@ if IS_MOON_MAP then
             end
         end
     end
-	
 	local BUFF_LIST = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
-
     local function FindBuffTool()
         local char = LocalPlayer.Character
         if not char then return nil, nil, nil end
@@ -1010,7 +869,6 @@ if IS_MOON_MAP then
         end
         return nil, nil, nil
     end
-
     local function EnsureBuffEquipped()
         local char = LocalPlayer.Character
         if not char then return nil, nil end
@@ -1028,7 +886,6 @@ if IS_MOON_MAP then
         end
         return nil, nil
     end
-
     local function IsFBuffOnCooldown(buffName)
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
         local main = hud and hud:FindFirstChild("Main")
@@ -1044,7 +901,6 @@ if IS_MOON_MAP then
         local isCooldownVisible = cooldownFrame and cooldownFrame.Visible
         return isUnready or isCooldownVisible
     end
-
     local function Moon_AutoBuffOnStart()
         task.spawn(function()
             local action = Moon_GetAction()
@@ -1086,7 +942,6 @@ if IS_MOON_MAP then
             end
         end)
     end
-
     local VFX_CONNECTIONS = {}
     local VFX_KILL_CLASSES = {
         ["ParticleEmitter"] = true, ["Beam"] = true, ["Trail"] = true,
@@ -1094,7 +949,6 @@ if IS_MOON_MAP then
         ["Highlight"] = true, ["PointLight"] = true,
         ["SpotLight"] = true, ["SurfaceLight"] = true,
     }
-
     local function TryKillVFX(obj)
         if not obj or not obj.Parent then return end
         local cls = obj.ClassName
@@ -1108,14 +962,12 @@ if IS_MOON_MAP then
             end
         end)
     end
-
     local function KillVFXIn(container)
         if not container then return end
         pcall(function()
             for _, v in ipairs(container:GetDescendants()) do TryKillVFX(v) end
         end)
     end
-
     local function HookContainer(container)
         if not container then return end
         local conn = container.DescendantAdded:Connect(function(obj)
@@ -1123,7 +975,6 @@ if IS_MOON_MAP then
         end)
         table.insert(VFX_CONNECTIONS, conn)
     end
-
     function Moon_NoVFX(state)
         _G.VFXDisabled = state
         for _, conn in ipairs(VFX_CONNECTIONS) do
@@ -1163,7 +1014,6 @@ if IS_MOON_MAP then
         end)
         table.insert(VFX_CONNECTIONS, respawnConn)
     end
-
     local MoonTab = Window:CreateTab("Auto Raid Moon", true, false)
     local MoonPage = MoonTab:CreatePage("Moon Raid")
     local MoonFarm = MoonPage:CreateSection("🌙 Auto Farm Moon", "Left")
@@ -1172,9 +1022,7 @@ if IS_MOON_MAP then
     local MoonInfo = MoonPage:CreateSection("📊 Status", "Right")
     local MoonTravel = MoonPage:CreateSection("🌍 Travel", "Left")
     local MoonFX = MoonPage:CreateSection("✨ VFX", "Right")
-
     local MoonStatusPara = MoonInfo:Paragraph({ Title = "Status: Waiting", Content = "Enable left toggle to farm Moon" })
-
     MoonFarm:Toggle({
         Title = "🌙 Auto Farm Moon Mob",
         Id = "MOON_AUTO_FARM",
@@ -1185,7 +1033,6 @@ if IS_MOON_MAP then
             MoonStatusPara:SetContent(v and "Searching mob..." or "Re-enable to continue")
         end
     })
-
     MoonFarm:Dropdown({
         Title = "🎯 Hit Position",
         Options = {"Upper", "Below", "Behind", "Front"},
@@ -1196,7 +1043,6 @@ if IS_MOON_MAP then
             if val then _G.MoonHitPosition = val end
         end
     })
-
     MoonFarm:Slider({
         Title = "📏 Hit Distance",
         Min = 5, Max = 40, Value = 12,
@@ -1204,7 +1050,6 @@ if IS_MOON_MAP then
             if type(v) == "number" then _G.MoonHitDistance = v end
         end
     })
-
     MoonWeapon:Dropdown({
         Title = "🗡️ Main Weapon",
         Options = {"Melee", "Sword", "Special", "DevilFruit"},
@@ -1215,20 +1060,17 @@ if IS_MOON_MAP then
             if val then _G.MainWeapon = val end
         end
     })
-
     MoonWeapon:Dropdown({
         Title = "🗡️ Support Weapons",
         Options = {"Melee", "Sword", "Special", "DevilFruit"},
         Multi = true,
         Callback = function(v) _G.Select_EquipWeapon = AsStringList(v) end
     })
-
     MoonSkills:Toggle({Title = "Auto Skill Z", Id = "MOON_SKILL_Z", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
     MoonSkills:Toggle({Title = "Auto Skill X", Id = "MOON_SKILL_X", Value = false, Callback = function(v) _G.AutoSkillX = v end})
     MoonSkills:Toggle({Title = "Auto Skill C", Id = "MOON_SKILL_C", Value = false, Callback = function(v) _G.AutoSkillC = v end})
     MoonSkills:Toggle({Title = "Auto Skill V", Id = "MOON_SKILL_V", Value = false, Callback = function(v) _G.AutoSkillV = v end})
     MoonSkills:Toggle({Title = "Auto Skill F", Id = "MOON_SKILL_F", Value = false, Callback = function(v) _G.AutoSkillF = v end})
-
     MoonFX:Toggle({
         Title = "🚫 Disable VFX",
         Id = "MOON_NO_VFX",
@@ -1237,7 +1079,6 @@ if IS_MOON_MAP then
             if Moon_NoVFX then Moon_NoVFX(v) end
         end
     })
-
     MoonTravel:Button({
         Title = "🌍 Back To Earth",
         Callback = function()
@@ -1266,7 +1107,6 @@ if IS_MOON_MAP then
             _G.SeaNotify("✅ Activated", "Waiting for map change...", 5)
         end
     })
-
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -1288,18 +1128,15 @@ if IS_MOON_MAP then
                     end
                     return
                 end
-
                 if not MoonLastRunning then
                     MoonLastRunning = true
                     MoonCurrentTarget = nil
                     MoonAtCave = false
                 end
-
                 local char = LocalPlayer.Character
                 local hum = char and char:FindFirstChild("Humanoid")
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hum or not hrp or hum.Health <= 0 then return end
-
                 local target, priorityText = GetMoonTarget()
                 if not target then
                     _G.CanAutoSkill = false
@@ -1314,10 +1151,8 @@ if IS_MOON_MAP then
                     end
                     return
                 end
-
                 _G.CanAutoSkill = true
                 MoonAtCave = false
-
                 local shouldSwitch = false
                 if target ~= MoonCurrentTarget then
                     local oldDead = true
@@ -1332,28 +1167,22 @@ if IS_MOON_MAP then
                     end
                 end
                 if shouldSwitch then MoonCurrentTarget = target end
-
                 MoonStatusPara:SetTitle(priorityText .. ": " .. target.Name)
-
                 local tHrp = target:FindFirstChild("HumanoidRootPart")
                 local tHum = target:FindFirstChild("Humanoid")
                 if not tHrp or not tHum then return end
                 tHum.WalkSpeed = 0
                 tHum.JumpPower = 0
-
                 Moon_TeleportToMob(hrp, tHrp)
-
                 local now = tick()
                 if now - MoonLastEquip >= 0.5 then
                     MoonLastEquip = now
                     MoonEquipWeapon()
                 end
-
                 local hasSkillEnabled = _G.AutoSkillZ or _G.AutoSkillX or _G.AutoSkillC or _G.AutoSkillV or _G.AutoSkillF
                 local skillFired = false
                 if hasSkillEnabled then skillFired = Moon_AutoSkill() end
                 if not skillFired then Moon_Attack() end
-
                 MoonStatusPara:SetContent(string.format(
                     "HP: %d / %d | Dist: %d | %s",
                     math.floor(tHum.Health),
@@ -1364,7 +1193,6 @@ if IS_MOON_MAP then
             end)
         end
     end)
-
     task.spawn(function()
         while task.wait(1) do
             pcall(function()
@@ -1380,7 +1208,6 @@ if IS_MOON_MAP then
             end)
         end
     end)
-
     task.spawn(function()
         task.wait(2)
         pcall(function()
@@ -1393,7 +1220,6 @@ if IS_MOON_MAP then
             end
         end)
     end)
-
     task.spawn(function()
         task.wait(3)
         local waited = 0
@@ -1408,7 +1234,6 @@ if IS_MOON_MAP then
         MoonLastRunning = true
         Moon_AutoBuffOnStart()
     end)
-
     if MySaveManager then
         pcall(function() MySaveManager:SetFolder("MarvenRiz_Moon") end)
         local okBuild, errBuild = pcall(function()
@@ -1442,23 +1267,14 @@ if IS_MOON_MAP then
         pcall(function() Window:CreateTab("⚙️ Setting", false, false) end)
     end
 end
-
-
 do
--- ══════════════════════════════════════════════════════════
--- RaidTOP.lua — WHIS RAID T.O.P (FULL) — v5 LIVE BOSS HEIGHT
--- Fix: AimHeight 25, không rơi/tp lặp khi vào cổng
--- ══════════════════════════════════════════════════════════
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
-
 local SOURCE_PLACE = 119091355492870
 local RAID_PLACE   = 78848478384148
-
 local CONFIG = {
     DragonBalls = {
         "Dragon Ball 1", "Dragon Ball 2", "Dragon Ball 3",
@@ -1466,14 +1282,13 @@ local CONFIG = {
         "Dragon Ball 7",
     },
     PortalTimeout   = 45,
-    AimHeight       = 25,    -- 🔑 trả về độ cao cũ
+    AimHeight       = 25,
     SnapDistance    = 20,
     AutoRaid        = false,
-    LowHealthPercent = 30, -- Ngưỡng HP để dịch chuyển khẩn cấp; chỉnh bằng thanh trượt
+    LowHealthPercent = 30,
     EmergencyFlyHeight = 5000,
     SkillInterval = 0.07,
 }
-
 local RUNTIME = {
     Running         = false,
     AutoRunning     = false,
@@ -1496,7 +1311,6 @@ local RUNTIME = {
     LastChickenV = 0,
     LastChickenEquip = 0,
 }
-
 _G.MainWeapon = _G.MainWeapon or "Melee"
 _G.AutoSkillZ = _G.AutoSkillZ or false
 _G.AutoSkillX = _G.AutoSkillX or false
@@ -1504,21 +1318,14 @@ _G.AutoSkillC = _G.AutoSkillC or false
 _G.AutoSkillV = _G.AutoSkillV or false
 _G.AutoSkillF = _G.AutoSkillF or false
 _G.Auto_Haki = _G.Auto_Haki or false
-
 local LOOK_DOWN_CF = CFrame.Angles(math.rad(-90), 0, 0)
-
-local function log(s) print("[TOP] " .. s) end
+local function log(s)  end
 local function notify(title, desc, dur)
     pcall(function()
         if _G.SeaNotify then _G.SeaNotify(title, desc, dur)
         else log(title .. " — " .. (desc or "")) end
     end)
 end
-
--- ══════════════════════════════════════════════════════════
--- ALIGN SETUP
--- ══════════════════════════════════════════════════════════
-
 local function setupAlign(hrp)
     if RUNTIME.Align and RUNTIME.Align.Parent then return end
     local hum = hrp.Parent and hrp.Parent:FindFirstChildOfClass("Humanoid")
@@ -1531,7 +1338,6 @@ local function setupAlign(hrp)
     attach.Name = "BossFollowAttach"
     attach.Parent = hrp
     RUNTIME.AlignAttach = attach
-
     local align = Instance.new("AlignPosition")
     align.Name = "BossFollowAlign"
     align.Attachment0 = attach
@@ -1543,7 +1349,6 @@ local function setupAlign(hrp)
     align.RigidityEnabled = true
     align.Parent = hrp
     RUNTIME.Align = align
-
     local orient = Instance.new("AlignOrientation")
     orient.Name = "BossFollowOrient"
     orient.Attachment0 = attach
@@ -1555,7 +1360,6 @@ local function setupAlign(hrp)
     orient.Parent = hrp
     RUNTIME.Orient = orient
 end
-
 local function teardownAlign(hrp)
     if RUNTIME.Align then RUNTIME.Align:Destroy(); RUNTIME.Align = nil end
     if RUNTIME.Orient then RUNTIME.Orient:Destroy(); RUNTIME.Orient = nil end
@@ -1569,41 +1373,27 @@ local function teardownAlign(hrp)
         end
     end
 end
-
-
--- ══════════════════════════════════════════════════════════
--- LOW HP ESCAPE — INSTANT SUPER HIGH TELEPORT
--- ══════════════════════════════════════════════════════════
-
 local function stopEmergencyFly()
     if RUNTIME.EmergencyHold then
         RUNTIME.EmergencyHold:Destroy()
         RUNTIME.EmergencyHold = nil
     end
-
     RUNTIME.EmergencyPosition = nil
     RUNTIME.LowHealthMode = false
-
     local char = LP.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-
     if hum then
         hum.PlatformStand = false
         hum.AutoRotate = true
         hum:ChangeState(Enum.HumanoidStateType.Running)
     end
-
     log("✅ HP hồi phục — trở lại chiến đấu")
 end
-
--- Super Chicken: tự trang bị trước, xác nhận đã nằm trong Character,
--- sau đó mới kiểm tra HUD và dùng V khi chiêu sẵn sàng.
 local function isSuperChickenTool(tool)
     if not tool or not tool:IsA("Tool") then return false end
     local normalizedName = string.lower((tool.Name or ""):gsub("[%s%p_]+", ""))
     return normalizedName == "superchicken"
 end
-
 local function findSuperChicken(char)
     char = char or LP.Character
     if char then
@@ -1613,7 +1403,6 @@ local function findSuperChicken(char)
             end
         end
     end
-
     local backpack = LP:FindFirstChildOfClass("Backpack") or LP:FindFirstChild("Backpack")
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
@@ -1624,15 +1413,11 @@ local function findSuperChicken(char)
     end
     return nil, false
 end
-
 local function trySuperChickenV(char)
     char = char or LP.Character
     if not char then return false end
-
     local chickenTool, equipped = findSuperChicken(char)
     if not chickenTool then return false end
-
-    -- Chưa trang bị: yêu cầu Humanoid equip và đợi vòng lặp kế tiếp xác nhận.
     if not equipped or chickenTool.Parent ~= char then
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum then return false end
@@ -1646,8 +1431,6 @@ local function trySuperChickenV(char)
         end
         return false
     end
-
-    -- Chỉ kiểm tra HUD sau khi đã xác nhận Tool ở trong Character.
     local playerGui = LP:FindFirstChildOfClass("PlayerGui") or LP:FindFirstChild("PlayerGui")
     local hud = playerGui and playerGui:FindFirstChild("HUD")
     local main = hud and hud:FindFirstChild("Main")
@@ -1656,18 +1439,14 @@ local function trySuperChickenV(char)
     local mainFrame = border and border:FindFirstChild("Main")
     local keyFrame = mainFrame and mainFrame:FindFirstChild("V")
     if not keyFrame then return false end
-
     local readyLabel = keyFrame:FindFirstChild("Ready")
     local cooldownFrame = keyFrame:FindFirstChild("CooldownFrame")
     if not readyLabel or readyLabel.Text == "UnReady" then return false end
     if cooldownFrame and cooldownFrame.Visible then return false end
     if tick() - RUNTIME.LastChickenV < 1.0 then return false end
-
-    -- Dùng đúng Remote và cách gọi đã xác nhận hoạt động trong test độc lập.
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
     local action = remotes and remotes:FindFirstChild("Action")
     if not action then return false end
-
     local ok, err = pcall(function()
         action:FireServer(chickenTool.Name, "v")
     end)
@@ -1679,41 +1458,27 @@ local function trySuperChickenV(char)
     log("⚠️ Gửi Super Chicken V thất bại: " .. tostring(err))
     return false
 end
-
 local function startEmergencyFly(hrp)
     if RUNTIME.LowHealthMode then return end
-
     RUNTIME.LowHealthMode = true
-
-    -- Ngắt toàn bộ hệ thống bám boss
     teardownAlign(hrp)
-
     _G.CanAutoSkill = false
     _G.CurrentFarmTarget = nil
-
     RUNTIME.CurrentTarget = nil
     RUNTIME.LookLocked = false
-
-    -- Dịch chuyển tức thời cả nhân vật lên cao trong MỘT lần, không tween/lerp.
     local char = LP.Character
     local targetPosition =
         hrp.Position + Vector3.new(0, CONFIG.EmergencyFlyHeight, 0)
     local targetCFrame = CFrame.new(targetPosition) *
         (hrp.CFrame - hrp.CFrame.Position)
-
     RUNTIME.EmergencyPosition = targetPosition
-
     if char then
         char:PivotTo(targetCFrame)
     else
         hrp.CFrame = targetCFrame
     end
-
-    -- Xóa vận tốc ngay sau khi dịch chuyển để tránh quán tính kéo nhân vật xuống.
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
-
-    -- Giữ nhân vật cố định ở độ cao mới
     local hold = Instance.new("BodyPosition")
     hold.Name = "RaidTOP_EmergencyHold"
     hold.Position = targetPosition
@@ -1721,26 +1486,16 @@ local function startEmergencyFly(hrp)
     hold.P = 100000
     hold.D = 10000
     hold.Parent = hrp
-
     RUNTIME.EmergencyHold = hold
-
     log("🚨 LOW HP — TELEPORT LÊN CAO " ..
         CONFIG.EmergencyFlyHeight .. " STUDS!")
-
     notify("🚨 HP THẤP!", "Đã dịch chuyển lên vị trí né boss!", 5)
 end
-
-
--- ══════════════════════════════════════════════════════════
--- TELEPORT / SNAP
--- ══════════════════════════════════════════════════════════
-
 local function Teleport(pos)
     local char = LP.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if hrp then hrp.CFrame = pos end
 end
-
 local function snapToBoss(hrp, bossHrp)
     local targetPos = bossHrp.Position + Vector3.new(0, CONFIG.AimHeight, 0)
     hrp.CFrame = CFrame.new(targetPos) * LOOK_DOWN_CF
@@ -1749,7 +1504,6 @@ local function snapToBoss(hrp, bossHrp)
     if RUNTIME.Align then RUNTIME.Align.Position = targetPos end
     log("⚡ SNAP tới boss")
 end
-
 local function standOnGround(hrp)
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -1763,11 +1517,6 @@ local function standOnGround(hrp)
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 end
-
--- ══════════════════════════════════════════════════════════
--- DRAGON BALL CHECK
--- ══════════════════════════════════════════════════════════
-
 local function checkDragonBalls()
     local invStr = LP:GetAttribute("Inventory")
     if not invStr then return false, "No inventory" end
@@ -1782,11 +1531,6 @@ local function checkDragonBalls()
     if #missing > 0 then return false, "Thiếu: " .. table.concat(missing, ", ") end
     return true, "Đủ 7 loại"
 end
-
--- ══════════════════════════════════════════════════════════
--- FIND OBJECTS
--- ══════════════════════════════════════════════════════════
-
 local function findWhis()
     local npcPrompt = workspace:FindFirstChild("NpcPrompt")
     if not npcPrompt then return nil, nil end
@@ -1800,7 +1544,6 @@ local function findWhis()
     end
     return hrp, prompt
 end
-
 local function findTopZone()
     local zone = workspace:FindFirstChild("TeleportTOPZone")
     if not zone then return nil, nil end
@@ -1808,13 +1551,11 @@ local function findTopZone()
     local ring = zone:FindFirstChild("Ring")
     return hitbox, ring
 end
-
 local function isPortalActive()
     local hitbox = findTopZone()
     if not hitbox then return false end
     return hitbox.Parent and hitbox:IsDescendantOf(workspace)
 end
-
 local function getAllBosses()
     local bossFolder = workspace:FindFirstChild("Boss")
     if not bossFolder then return {} end
@@ -1835,11 +1576,6 @@ local function getAllBosses()
     table.sort(list, function(a, b) return a.Wave < b.Wave end)
     return list
 end
-
--- ══════════════════════════════════════════════════════════
--- EQUIP / ATTACK / SKILL
--- ══════════════════════════════════════════════════════════
-
 local function equipWeapon()
     pcall(function()
         local char = LP.Character
@@ -1861,7 +1597,6 @@ local function equipWeapon()
         end
     end)
 end
-
 local function attack()
     pcall(function()
         local char = LP.Character
@@ -1874,7 +1609,6 @@ local function attack()
         end
     end)
 end
-
 local function autoSkill()
     pcall(function()
         local char = LP.Character
@@ -1897,13 +1631,7 @@ local function autoSkill()
         end
     end)
 end
-
--- ══════════════════════════════════════════════════════════
--- BUFF SSJ F
--- ══════════════════════════════════════════════════════════
-
 local BUFF_LIST = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
-
 local function findBuffTool()
     local char = LP.Character
     if not char then return nil, nil end
@@ -1926,7 +1654,6 @@ local function findBuffTool()
     end
     return nil, nil
 end
-
 local function isFBuffOnCooldown(buffName)
     local hud = LP.PlayerGui:FindFirstChild("HUD")
     local main = hud and hud:FindFirstChild("Main")
@@ -1942,7 +1669,82 @@ local function isFBuffOnCooldown(buffName)
     local isCooldownVisible = cooldownFrame and cooldownFrame.Visible
     return isUnready or isCooldownVisible
 end
-
+if _G.RaidTOP_AutoNoVFX == nil then _G.RaidTOP_AutoNoVFX = true end
+local NOVFX_CONNS = {}
+local NOVFX_CLASSES = {
+    ["ParticleEmitter"] = true, ["Beam"] = true, ["Trail"] = true,
+    ["Sparkles"] = true, ["Fire"] = true, ["Smoke"] = true,
+    ["Highlight"] = true, ["PointLight"] = true,
+    ["SpotLight"] = true, ["SurfaceLight"] = true,
+}
+local function novfxKill(obj)
+    if not obj or not obj.Parent then return end
+    if not NOVFX_CLASSES[obj.ClassName] then return end
+    pcall(function()
+        if obj.Enabled then obj.Enabled = false end
+    end)
+end
+local function novfxKillIn(container)
+    if not container then return end
+    pcall(function()
+        for _, v in ipairs(container:GetDescendants()) do novfxKill(v) end
+    end)
+end
+local function novfxHook(container)
+    if not container then return end
+    local conn = container.DescendantAdded:Connect(function(obj)
+        if _G.VFXDisabled then novfxKill(obj) end
+    end)
+    table.insert(NOVFX_CONNS, conn)
+end
+local function enableNoVFX()
+    if _G.RaidTOP_AutoNoVFX == false then return end
+    if _G.VFXDisabled then return end
+    if type(_G.MarvenNoVFX) == "function" then
+        local ok = pcall(_G.MarvenNoVFX, true)
+        if ok then
+            log("✨ Auto Disable VFX (script gốc)")
+            return
+        end
+    end
+    _G.VFXDisabled = true
+    for _, conn in ipairs(NOVFX_CONNS) do
+        pcall(function() conn:Disconnect() end)
+    end
+    NOVFX_CONNS = {}
+    novfxKillIn(workspace)
+    local cam = workspace.CurrentCamera
+    if cam then novfxKillIn(cam) end
+    local char = LP.Character
+    if char then novfxKillIn(char) end
+    local pg = LP:FindFirstChild("PlayerGui")
+    if pg then novfxKillIn(pg) end
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then
+            if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+            if hum.JumpPower < 50 then hum.JumpPower = 50 end
+        end
+        for _, folderName in ipairs({ "Stun", "StunS" }) do
+            local folder = char:FindFirstChild(folderName)
+            if folder and #folder:GetChildren() > 0 then
+                pcall(function() folder:ClearAllChildren() end)
+            end
+        end
+    end
+    novfxHook(workspace)
+    if cam then novfxHook(cam) end
+    if char then novfxHook(char) end
+    if pg then novfxHook(pg) end
+    local respawnConn = LP.CharacterAdded:Connect(function(newChar)
+        if not _G.VFXDisabled then return end
+        task.wait(0.5)
+        novfxKillIn(newChar)
+        novfxHook(newChar)
+    end)
+    table.insert(NOVFX_CONNS, respawnConn)
+    log("✨ Auto Disable VFX")
+end
 local function autoBuffLoop()
     task.spawn(function()
         local char = LP.Character
@@ -1950,18 +1752,16 @@ local function autoBuffLoop()
         local remotes = ReplicatedStorage:FindFirstChild("Remotes")
         local action = remotes and remotes:FindFirstChild("Action")
         if not action then return end
-
         if not char:FindFirstChild("HakiFolder") then
             pcall(function() action:FireServer("Misc", "buso") end)
             log("✅ Đã bật Haki")
         end
-
         local tool, buffName = findBuffTool()
         if not tool then
             log("⚠️ Không có SSJ tool — chỉ bật Haki")
+            enableNoVFX()
             return
         end
-
         local hum = char:FindFirstChild("Humanoid")
         local isEquipped = false
         for _, t in ipairs(char:GetChildren()) do
@@ -1974,7 +1774,6 @@ local function autoBuffLoop()
             pcall(function() hum:EquipTool(tool) end)
             task.wait(0.3)
         end
-
         local startTime = tick()
         local fireCount = 0
         while tick() - startTime < 20 do
@@ -1994,47 +1793,35 @@ local function autoBuffLoop()
             log("⚡ SSJ F #" .. fireCount .. " — " .. buffName)
             task.wait(0.35)
         end
-
         task.wait(0.3)
         local c2 = LP.Character
         if c2 and not c2:FindFirstChild("HakiFolder") then
             pcall(function() action:FireServer("Misc", "buso") end)
             log("✅ Đã bật Haki (lần 2)")
         end
+        enableNoVFX()
     end)
 end
-
--- ══════════════════════════════════════════════════════════
--- ENTER RAID — FIX: chỉ set CFrame 1 lần, không kéo lại
--- ══════════════════════════════════════════════════════════
-
 local function enterRaid()
     log("════════ ENTER RAID ════════")
-
     if game.PlaceId == RAID_PLACE then
         log("✅ Đã ở map raid")
         return true
     end
-
     if game.PlaceId ~= SOURCE_PLACE then
         log("❌ Không phải map gốc Sea 1")
         return false
     end
-
     local char = LP.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-
-    -- 🔑 BƯỚC 1: Cổng đã mở → TP vào LUÔN, KHÔNG kéo CFrame lặp
     local hitbox = findTopZone()
     if hitbox then
         log("🚪 Cổng đã mở — TP vào 1 lần rồi đứng chờ")
         RUNTIME.EnteredViaZone = true
-        -- Set CFrame ĐÚNG 1 LẦN
         hrp.CFrame = CFrame.new(hitbox.Position)
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
-
         local startWait = tick()
         while tick() - startWait < CONFIG.PortalTimeout do
             task.wait(0.3)
@@ -2043,7 +1830,6 @@ local function enterRaid()
                 notify("✅ Vào raid", "Từ cổng có sẵn", 3)
                 return true
             end
-            -- 🔑 KHÔNG set CFrame lại — chỉ zero velocity để không trôi
             local c = LP.Character
             local h = c and c:FindFirstChild("HumanoidRootPart")
             if h then
@@ -2053,13 +1839,10 @@ local function enterRaid()
         end
         log("⚠️ Cổng có sẵn nhưng chưa vào — thử summon")
     end
-
-    -- 🔑 BƯỚC 2: Không có cổng → summon Whis (1 lần)
     if RUNTIME.SummonAttempted then
         log("⚠️ Đã summon rồi — bỏ qua")
         return false
     end
-
     local hasBalls, msg = checkDragonBalls()
     if not hasBalls then
         notify("❌ Thiếu Dragon Ball", msg, 5)
@@ -2067,27 +1850,20 @@ local function enterRaid()
         return false
     end
     log("✅ Đủ 7 Dragon Ball")
-
     RUNTIME.SummonAttempted = true
-
     local whisperHrp, prompt = findWhis()
     if not whisperHrp or not prompt then
         notify("❌ Không tìm Whis", "", 4)
         return false
     end
-
     log("🚀 TP Whis")
     hrp.CFrame = CFrame.new(whisperHrp.Position + Vector3.new(0, 2, 0), whisperHrp.Position)
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
     task.wait(0.5)
-
     log("🖱️ Bấm Whis prompt (1 lần duy nhất)")
     pcall(function() fireproximityprompt(prompt, prompt.HoldDuration + 0.1) end)
-
     task.wait(1.5)
-
-    -- Chờ cổng mở — KHÔNG kéo CFrame lặp
     local portalWait = tick()
     local portalTpDone = false
     while tick() - portalWait < CONFIG.PortalTimeout do
@@ -2097,7 +1873,6 @@ local function enterRaid()
             notify("✅ Vào raid", "Sau summon", 3)
             return true
         end
-        -- Nếu cổng mới xuất hiện → TP vào đúng 1 lần
         if not portalTpDone then
             local newHitbox = findTopZone()
             if newHitbox then
@@ -2108,7 +1883,6 @@ local function enterRaid()
                 portalTpDone = true
             end
         else
-            -- Đã TP rồi → chỉ zero velocity, KHÔNG set CFrame lại
             local h = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
             if h then
                 h.AssemblyLinearVelocity = Vector3.zero
@@ -2116,46 +1890,30 @@ local function enterRaid()
             end
         end
     end
-
     notify("⏹️ Timeout", "Không teleport được", 5)
     log("❌ Timeout — vẫn ở map gốc")
     return false
 end
-
--- ══════════════════════════════════════════════════════════
--- FIGHT BOSS — bám độ cao 25
--- ══════════════════════════════════════════════════════════
-
 local function fightBoss()
     if game.PlaceId ~= RAID_PLACE then return false end
-
     local bosses = getAllBosses()
     if #bosses == 0 then
         RUNTIME.Phase = "DONE"
         return false
     end
-
     local boss = bosses[1]
-
     local char = LP.Character
     local hum = char and char:FindFirstChild("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	if not hum or not hrp or hum.Health <= 0 then
     return false
 end
-
--- Kiểm tra HP theo cơ chế hysteresis: ngưỡng cài đặt để bắt đầu né,
--- nhưng phải hồi trên 80% mới được phép quay lại đánh boss.
 local hpPercent = (hum.Health / hum.MaxHealth) * 100
-
 if RUNTIME.LowHealthMode then
-    -- Vẫn đang ở chế độ né: giữ vị trí cao và chờ HP > 80%.
     if hpPercent <= 80 then
         trySuperChickenV(char)
         return true
     end
-
-    -- Chỉ thoát chế độ né khi HP thực sự vượt 80%.
     stopEmergencyFly()
     RUNTIME.CurrentTarget = nil
     RUNTIME.LookLocked = false
@@ -2165,29 +1923,21 @@ elseif hpPercent <= CONFIG.LowHealthPercent then
     trySuperChickenV(char)
     return true
 end
-
 if not boss.Hrp or not boss.Humanoid then
     return false
 end
-
     boss.Humanoid.WalkSpeed = 0
     boss.Humanoid.JumpPower = 0
-
     _G.CurrentFarmTarget = nil
     _G.CanAutoSkill = false
-
     if not RUNTIME.Align or not RUNTIME.Align.Parent then
         setupAlign(hrp)
     end
-
     local now = tick()
-
-    -- Snap lần đầu bám boss mới
     if RUNTIME.CurrentTarget ~= boss or not RUNTIME.LookLocked then
         RUNTIME.CurrentTarget = boss
         RUNTIME.LookLocked = false
         if RUNTIME.Orient then RUNTIME.Orient.Enabled = false end
-        -- 🔑 Bám độ cao 25 (AimHeight)
         local targetPos = boss.Hrp.Position + Vector3.new(0, CONFIG.AimHeight, 0)
         hrp.CFrame = CFrame.new(targetPos) * LOOK_DOWN_CF
         hrp.AssemblyLinearVelocity = Vector3.zero
@@ -2201,8 +1951,6 @@ end
         RUNTIME.LookSetCount = RUNTIME.LookSetCount + 1
         log("👁️ Lock look DOWN lần #" .. RUNTIME.LookSetCount)
     end
-
-    -- Track boss pos: nếu xa > SnapDistance → snap lại (giữ độ cao 25)
     if now - RUNTIME.LastTrack >= 0.03 then
         RUNTIME.LastTrack = now
         local targetPos = boss.Hrp.Position + Vector3.new(0, CONFIG.AimHeight, 0)
@@ -2214,33 +1962,24 @@ end
             if RUNTIME.Align then RUNTIME.Align.Position = targetPos end
         end
     end
-
     if hum.PlatformStand then hum.PlatformStand = false end
     local state = hum:GetState()
     if state ~= Enum.HumanoidStateType.Running
        and state ~= Enum.HumanoidStateType.Freefall then
         hum:ChangeState(Enum.HumanoidStateType.Running)
     end
-
     if now - RUNTIME.LastEquip >= 0.5 then
         RUNTIME.LastEquip = now
         equipWeapon()
     end
-
     if now - RUNTIME.LastAttack >= CONFIG.SkillInterval then
         RUNTIME.LastAttack = now
         local hasSkill = _G.AutoSkillZ or _G.AutoSkillX or _G.AutoSkillC
             or _G.AutoSkillV or _G.AutoSkillF
         if hasSkill then autoSkill() else attack() end
     end
-
     return true
 end
-
--- ══════════════════════════════════════════════════════════
--- RAID ONCE
--- ══════════════════════════════════════════════════════════
-
 function _G.RaidTOP_Once()
     if RUNTIME.Running then
         notify("⚠️ Đang chạy", "", 2)
@@ -2253,7 +1992,6 @@ function _G.RaidTOP_Once()
     RUNTIME.LookLocked = false
     RUNTIME.LookSetCount = 0
     RUNTIME.CurrentTarget = nil
-
     task.spawn(function()
         local ok = enterRaid()
         if not ok then
@@ -2261,10 +1999,7 @@ function _G.RaidTOP_Once()
             RUNTIME.Phase = "IDLE"
             return
         end
-
         RUNTIME.Phase = "IN_RAID"
-
-        -- Vào raid xong: teardown Align cũ, đứng đất
         local char = LP.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -2273,9 +2008,7 @@ function _G.RaidTOP_Once()
             standOnGround(hrp)
             log("🌍 Đã đứng xuống đất trong raid")
         end
-
         autoBuffLoop()
-
         log("⏳ Đợi boss spawn đủ...")
         notify("⏳ Đợi boss", "Đang chờ 10 boss spawn", 3)
         local spawnWait = tick()
@@ -2297,17 +2030,13 @@ function _G.RaidTOP_Once()
                 break
             end
         end
-
         task.wait(2)
-
         log("⚔️ Bắt đầu đánh boss...")
         local lastBossList = 0
         local lastBossCount = 0
         local noBossTime = 0
-
         while RUNTIME.Running do
             task.wait(0.1)
-
             if game.PlaceId ~= RAID_PLACE then
                 log("✅ Đã về map gốc — hoàn thành raid")
                 notify("🏆 Hoàn thành", "Đã về map gốc", 5)
@@ -2318,7 +2047,6 @@ function _G.RaidTOP_Once()
                 teardownAlign(h)
                 return
             end
-
             local ok2 = fightBoss()
             if not ok2 then
                 noBossTime = noBossTime + 0.1
@@ -2330,7 +2058,6 @@ function _G.RaidTOP_Once()
             else
                 noBossTime = 0
             end
-
             local now = tick()
             if now - lastBossList > 3 then
                 lastBossList = now
@@ -2348,17 +2075,11 @@ function _G.RaidTOP_Once()
         end
     end)
 end
-
--- ══════════════════════════════════════════════════════════
--- AUTO RAID
--- ══════════════════════════════════════════════════════════
-
 function _G.RaidTOP_StartAuto()
     if RUNTIME.AutoRunning then return end
     RUNTIME.AutoRunning = true
     CONFIG.AutoRaid = true
     notify("🤖 Auto RAID BẬT", "Lặp lại đến khi hết DB", 3)
-
     task.spawn(function()
         while RUNTIME.AutoRunning do
             if game.PlaceId == RAID_PLACE then
@@ -2378,13 +2099,11 @@ function _G.RaidTOP_StartAuto()
         end
     end)
 end
-
 function _G.RaidTOP_StopAuto()
     RUNTIME.AutoRunning = false
     CONFIG.AutoRaid = false
     notify("⏹️ Auto TẮT", "", 2)
 end
-
 function _G.RaidTOP_Stop()
     RUNTIME.Running = false
     RUNTIME.AutoRunning = false
@@ -2400,11 +2119,6 @@ function _G.RaidTOP_Stop()
     teardownAlign(hrp)
     notify("⏹️ Dừng", "", 2)
 end
-
--- ══════════════════════════════════════════════════════════
--- ANTI-FLING
--- ══════════════════════════════════════════════════════════
-
 RunService.Stepped:Connect(function()
     pcall(function()
         if not RUNTIME.Running then return end
@@ -2416,9 +2130,6 @@ RunService.Stepped:Connect(function()
         end
     end)
 end)
-
-
--- API bridge for the main MarvenRiz UI (keeps RaidTOP internals local).
 local function applyRaidTOPAimHeight()
     if not RUNTIME.Running or game.PlaceId ~= RAID_PLACE then return end
     local char = LP.Character
@@ -2432,7 +2143,6 @@ local function applyRaidTOPAimHeight()
     hrp.AssemblyLinearVelocity = Vector3.zero
     hrp.AssemblyAngularVelocity = Vector3.zero
 end
-
 _G.RaidTOP_SetAimHeight = function(value)
     CONFIG.AimHeight = math.clamp(math.floor((tonumber(value) or 25) + 0.5), 5, 500)
     applyRaidTOPAimHeight()
@@ -2448,19 +2158,381 @@ _G.RaidTOP_GetStatus = function()
     local hasBalls, ballMessage = checkDragonBalls()
     return RUNTIME.Phase, RUNTIME.Running, RUNTIME.AutoRunning, bossCount, hasBalls, ballMessage
 end
-
-
-end -- isolated RaidTOP module
-
--- ══════════════════════════════════════════════════════════
--- RAID T.O.P PAGE BUILDER — dùng chung cho Main Page và Raid map
--- ══════════════════════════════════════════════════════════
-local function BuildRaidTOPPage(MainTab)
-    local RaidTOPPage = MainTab:CreatePage("Raid T.O.P")
+end
+local function BuildShopTOPSection(Page)
+    local LP = game:GetService("Players").LocalPlayer
+    local RS = game:GetService("ReplicatedStorage")
+    local BUY_KEY = "buy_topshop"
+    local BUY_DELAY = 0.5
+    local function notify(t, m, d)
+        pcall(function()
+            if _G.SeaNotify then _G.SeaNotify(t, m, d or 3) end
+        end)
+    end
+    local function norm(s)
+        return (tostring(s):lower():gsub("[^%w]", ""))
+    end
+    local function cleanText(s)
+        return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+    end
+    local ST = {
+        Items = {},
+        ItemSet = {},
+        Extras = {},
+        Wanted = {},
+        Sig = "",
+        LastSec = nil,
+        Frame = nil,
+        LastDeepScan = 0,
+    }
+    _G.ShopTopAutoBuy = false
+    _G.ShopTopBuyAll = false
+    local STCard = Page:CreateSection("🏪 Shop T.O.P (Beerus)", "Left")
+    local STInfoCard = Page:CreateSection("📊 Shop T.O.P Info", "Right")
+    local STInfoPara = STInfoCard:Paragraph({
+        Title = "🏪 Shop T.O.P: ( loading... )",
+        Content = "Đang tìm GUI Shop T.O.P..."
+    })
+    local STItemsPara = STInfoCard:Paragraph({
+        Title = "📦 Items: 0",
+        Content = "Chưa có dữ liệu"
+    })
+    local STSelPara = STInfoCard:Paragraph({
+        Title = "🎯 Auto Buy: OFF",
+        Content = "Chưa chọn item"
+    })
+    local function isTopShopName(n)
+        n = norm(n)
+        if n == "" then return false end
+        if n:find("raid", 1, true) or n:find("dungeon", 1, true) then return false end
+        return n:find("shoptop", 1, true) ~= nil
+            or n:find("topshop", 1, true) ~= nil
+            or n:find("beerus", 1, true) ~= nil
+    end
+    local function findShopFrame()
+        if ST.Frame and ST.Frame.Parent then return ST.Frame end
+        ST.Frame = nil
+        local pg = LP:FindFirstChildOfClass("PlayerGui")
+        if not pg then return nil end
+        local hud = pg:FindFirstChild("HUD")
+        local mainF = hud and hud:FindFirstChild("Main")
+        if mainF then
+            for _, c in ipairs(mainF:GetChildren()) do
+                if c:IsA("GuiObject") and isTopShopName(c.Name) then
+                    ST.Frame = c
+                    return c
+                end
+            end
+        end
+        if os.clock() - ST.LastDeepScan < 5 then return nil end
+        ST.LastDeepScan = os.clock()
+        for _, d in ipairs(pg:GetDescendants()) do
+            if d:IsA("GuiObject") and isTopShopName(d.Name)
+                and d:FindFirstChildWhichIsA("ScrollingFrame", true) then
+                ST.Frame = d
+                return d
+            end
+        end
+        return nil
+    end
+    local NAME_KEYS = { "Label", "TitleLabel", "ItemName", "NameLabel", "Title" }
+    local function isBadName(t)
+        if t == "" or t == "Item" or t == "Buy" or t == "Purchase" or t == "Sold Out" then return true end
+        if not t:find("%a") then return true end
+        if t:match("^[xX]%d+$") then return true end
+        return false
+    end
+    local function pickName(item)
+        for _, k in ipairs(NAME_KEYS) do
+            local l = item:FindFirstChild(k, true)
+            if l and (l:IsA("TextLabel") or l:IsA("TextButton")) then
+                local t = cleanText(l.Text)
+                if not isBadName(t) then return t end
+            end
+        end
+        for _, d in ipairs(item:GetDescendants()) do
+            if d:IsA("TextLabel") then
+                local t = cleanText(d.Text)
+                if not isBadName(t) and #t <= 40 then return t end
+            end
+        end
+        return nil
+    end
+    local function itemExtra(item, name)
+        local parts = {}
+        for _, d in ipairs(item:GetDescendants()) do
+            if d:IsA("TextLabel") or d:IsA("TextButton") then
+                local t = cleanText(d.Text)
+                if t ~= "" and t ~= name and t ~= "Item" then
+                    parts[#parts + 1] = t
+                end
+            end
+        end
+        return table.concat(parts, " | ")
+    end
+    local function readShop()
+        local frame = findShopFrame()
+        if not frame then return nil end
+        local names, extras, seen = {}, {}, {}
+        for _, d in ipairs(frame:GetDescendants()) do
+            if d:IsA("ScrollingFrame") then
+                for _, item in ipairs(d:GetChildren()) do
+                    if item:IsA("GuiObject") then
+                        local nm = pickName(item)
+                        if nm and not seen[nm] then
+                            seen[nm] = true
+                            names[#names + 1] = nm
+                            extras[nm] = itemExtra(item, nm)
+                        end
+                    end
+                end
+            end
+        end
+        local head, resetText, timeCandidate = {}, nil, nil
+        for _, d in ipairs(frame:GetDescendants()) do
+            if (d:IsA("TextLabel") or d:IsA("TextButton")) and not d:FindFirstAncestorWhichIsA("ScrollingFrame") then
+                local t = cleanText(d.Text)
+                if t ~= "" then
+                    local nn = norm(d.Name)
+                    if nn:find("reset", 1, true) or nn:find("restock", 1, true)
+                        or nn:find("timer", 1, true) or nn:find("refresh", 1, true) then
+                        resetText = resetText or t
+                    elseif t:find("%d+:%d+") then
+                        timeCandidate = timeCandidate or t
+                    end
+                    if #head < 6 then head[#head + 1] = t end
+                end
+            end
+        end
+        return {
+            frame = frame,
+            names = names,
+            extras = extras,
+            head = head,
+            resetText = resetText or timeCandidate,
+        }
+    end
+    local function parseSeconds(t)
+        if not t then return nil end
+        local h, m, s = t:match("(%d+):(%d+):(%d+)")
+        if h then return tonumber(h) * 3600 + tonumber(m) * 60 + tonumber(s) end
+        m, s = t:match("(%d+):(%d+)")
+        if m then return tonumber(m) * 60 + tonumber(s) end
+        local total, found = 0, false
+        for num, unit in t:gmatch("(%d+)%s*([hmsHMS])") do
+            found = true
+            num = tonumber(num)
+            unit = unit:lower()
+            if unit == "h" then total = total + num * 3600
+            elseif unit == "m" then total = total + num * 60
+            else total = total + num end
+        end
+        if found then return total end
+        return nil
+    end
+    local function getNetEvent()
+        local m = RS:FindFirstChild("Modules")
+        local nf = m and m:FindFirstChild("NetworkFramework")
+        return nf and nf:FindFirstChild("NetworkEvent")
+    end
+    local function buyItem(item)
+        local ev = getNetEvent()
+        if not ev then return false end
+        local key = (_G.ShopTopBuyKey and tostring(_G.ShopTopBuyKey) ~= "") and tostring(_G.ShopTopBuyKey) or BUY_KEY
+        ev:FireServer("fire", nil, key, item)
+        return true
+    end
+    local function effectiveList()
+        local out = {}
+        for _, n in ipairs(ST.Items) do
+            if _G.ShopTopBuyAll or ST.Wanted[n] then out[#out + 1] = n end
+        end
+        return out
+    end
+    local lastSelText = ""
+    local function refreshSelInfo()
+        local list = effectiveList()
+        local title = _G.ShopTopAutoBuy and "🎯 Auto Buy: ON" or "🎯 Auto Buy: OFF"
+        local body
+        if _G.ShopTopBuyAll then
+            body = "Mua TẤT CẢ (" .. #ST.Items .. " item)"
+        elseif #list == 0 then
+            body = "Chưa chọn item nào (hoặc item đã chọn không còn trong shop)"
+        else
+            body = "Mua: " .. table.concat(list, ", ")
+        end
+        local key = title .. "\1" .. body
+        if key == lastSelText then return end
+        lastSelText = key
+        STSelPara:SetTitle(title)
+        STSelPara:SetContent(body)
+    end
+    local STDropdown = nil
+    local refreshing = false
+    local function onSelect(v)
+        if refreshing then return end
+        local sel = {}
+        if type(v) == "table" then
+            for k, val in pairs(v) do
+                if type(val) == "string" then
+                    sel[val] = true
+                elseif val == true and type(k) == "string" then
+                    sel[k] = true
+                end
+            end
+        elseif type(v) == "string" and v ~= "" then
+            sel[v] = true
+        end
+        ST.Wanted = sel
+        refreshSelInfo()
+    end
+    local function makeDropdown(items)
+        STDropdown = STCard:Dropdown({
+            Title = "Select Items to Auto Buy",
+            Options = items,
+            Multi = true,
+            Callback = onSelect,
+        })
+    end
+    local function updateDropdown(items)
+        if not STDropdown then
+            makeDropdown(items)
+            return
+        end
+        refreshing = true
+        local updated = false
+        for _, m in ipairs({ "UpdateOptions", "Refresh", "SetOptions", "SetValues", "Set" }) do
+            local okIdx, fn = pcall(function() return STDropdown[m] end)
+            if okIdx and type(fn) == "function" then
+                local ok = pcall(fn, STDropdown, items)
+                if ok then updated = true break end
+            end
+        end
+        if not updated then
+            pcall(function() STDropdown:Destroy() end)
+            STDropdown = nil
+            makeDropdown(items)
+        end
+        task.delay(0.6, function() refreshing = false end)
+    end
+    makeDropdown({ "(Đang tải danh sách Shop T.O.P...)" })
+    STCard:Toggle({
+        Title = "Auto Buy (selected items)",
+        Value = false,
+        Callback = function(Value)
+            if Value and not _G.ShopTopBuyAll and next(ST.Wanted) == nil then
+                notify("❌ No item selected", "Chọn item hoặc bật 'Buy ALL' trước!", 3)
+                _G.ShopTopAutoBuy = false
+                return
+            end
+            _G.ShopTopAutoBuy = Value
+            notify(Value and "▶️ Enable Auto Buy T.O.P" or "⏹️ Disable Auto Buy T.O.P", "Shop T.O.P", 3)
+            refreshSelInfo()
+        end
+    })
+    STCard:Toggle({
+        Title = "Buy ALL items in shop",
+        Value = false,
+        Callback = function(Value)
+            _G.ShopTopBuyAll = Value
+            refreshSelInfo()
+        end
+    })
+    local lastItemsText, lastHeadTitle, lastHeadBody = "", "", ""
+    task.spawn(function()
+        while task.wait(0.5) do
+            pcall(function()
+                local data = readShop()
+                if not data then
+                    local t = "🏪 Shop T.O.P: chưa thấy GUI"
+                    local b = "Hãy mở Shop T.O.P (Beerus) 1 lần để script đọc danh sách."
+                    if t ~= lastHeadTitle or b ~= lastHeadBody then
+                        lastHeadTitle, lastHeadBody = t, b
+                        STInfoPara:SetTitle(t)
+                        STInfoPara:SetContent(b)
+                    end
+                    refreshSelInfo()
+                    return
+                end
+                local t = "🏪 " .. (data.resetText or "Shop T.O.P")
+                local b = (#data.head > 0) and table.concat(data.head, "\n") or "(không có text)"
+                if t ~= lastHeadTitle or b ~= lastHeadBody then
+                    lastHeadTitle, lastHeadBody = t, b
+                    STInfoPara:SetTitle(t)
+                    STInfoPara:SetContent(b)
+                end
+                local names = data.names
+                if #names == 0 then
+                    local msg = "Đã thấy GUI: " .. data.frame:GetFullName()
+                        .. "\nnhưng chưa đọc được item (có thể shop đang làm mới)."
+                    if msg ~= lastItemsText then
+                        lastItemsText = msg
+                        STItemsPara:SetTitle("📦 Items: 0")
+                        STItemsPara:SetContent(msg)
+                    end
+                    refreshSelInfo()
+                    return
+                end
+                table.sort(names)
+                local sig = table.concat(names, "\1")
+                local sec = parseSeconds(data.resetText)
+                local restocked = false
+                if sec and ST.LastSec and sec > ST.LastSec + 2 then restocked = true end
+                ST.LastSec = sec
+                if sig ~= ST.Sig then
+                    local oldSet = ST.ItemSet
+                    local firstLoad = (ST.Sig == "")
+                    local newAppeared = false
+                    for _, n in ipairs(names) do
+                        if not oldSet[n] then newAppeared = true break end
+                    end
+                    ST.Sig = sig
+                    ST.Items = names
+                    ST.ItemSet = {}
+                    for _, n in ipairs(names) do ST.ItemSet[n] = true end
+                    ST.Extras = data.extras
+                    updateDropdown(names)
+                    if firstLoad then
+                        notify("🏪 Shop T.O.P", "Đã tải " .. #names .. " item", 3)
+                    elseif newAppeared or restocked then
+                        notify("🔄 Beerus đã Restock", "Danh sách mới: " .. #names .. " item", 4)
+                    end
+                end
+                local lines = {}
+                for i, n in ipairs(ST.Items) do
+                    if i > 20 then lines[#lines + 1] = "..." break end
+                    local ex = ST.Extras[n]
+                    lines[#lines + 1] = "• " .. n .. ((ex and ex ~= "") and ("  —  " .. ex) or "")
+                end
+                local itemsText = table.concat(lines, "\n")
+                if itemsText ~= lastItemsText then
+                    lastItemsText = itemsText
+                    STItemsPara:SetTitle("📦 Items: " .. #ST.Items)
+                    STItemsPara:SetContent(itemsText)
+                end
+                refreshSelInfo()
+            end)
+        end
+    end)
+    task.spawn(function()
+        while task.wait(0.2) do
+            if _G.ShopTopAutoBuy then
+                pcall(function()
+                    for _, it in ipairs(effectiveList()) do
+                        if not _G.ShopTopAutoBuy then break end
+                        buyItem(it)
+                        task.wait(BUY_DELAY)
+                    end
+                end)
+            end
+        end
+    end)
+end
+local function BuildRaidTOPPage(MainTab, withShop)
+    local RaidTOPPage = MainTab:CreatePage(withShop and "Raid & Shop T.O.P" or "Raid T.O.P")
     local RaidTOPCard = RaidTOPPage:CreateSection("🐉 Raid T.O.P v5", "Left")
     local RaidTOPSettings = RaidTOPPage:CreateSection("⚙️ Raid Settings", "Right")
     local RaidTOPStatus = RaidTOPPage:CreateSection("📊 Status", "Right")
-
     RaidTOPCard:Toggle({
         Title = "🤖 Auto Raid T.O.P",
         Id = "RAIDTOP_AUTO",
@@ -2473,7 +2545,12 @@ local function BuildRaidTOPPage(MainTab)
             end
         end
     })
-
+    RaidTOPSettings:Toggle({
+        Title = "✨ Auto Disable VFX (sau Haki + SSJ)",
+        Id = "RAIDTOP_AUTO_NOVFX",
+        Value = true,
+        Callback = function(v) _G.RaidTOP_AutoNoVFX = v end
+    })
     RaidTOPSettings:Slider({
         Title = "Emergency HP Threshold (%)",
         Min = 5, Max = 95, Value = 30,
@@ -2484,7 +2561,6 @@ local function BuildRaidTOPPage(MainTab)
         Min = 5, Max = 500, Value = 25,
         Callback = function(v) _G.RaidTOP_SetAimHeight(v) end
     })
-
     local RaidTOPStatusPara = RaidTOPStatus:Paragraph({
         Title = "Status: IDLE",
         Content = "Raid T.O.P ready. Dragon Ball information is shown here."
@@ -2508,22 +2584,22 @@ local function BuildRaidTOPPage(MainTab)
             end)
         end
     end)
+    if withShop then
+        BuildShopTOPSection(RaidTOPPage)
+    end
     return RaidTOPPage
 end
-
 if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
     _G.LastSkillTime = 0
     _G.LastSkillKey = ""
     _G.DASH_SKILLS = {x = true}
     _G.DASH_NEGATE_TIME = 0.35
-
     local function AutoSkill()
         pcall(function()
             local char = LocalPlayer.Character
             if not char then return end
             local hrp = char:FindFirstChild("HumanoidRootPart")
             if not hrp then return end
-
             local Skills = {}
             if _G.AutoSkillZ then table.insert(Skills, "z") end
             if _G.AutoSkillX then table.insert(Skills, "x") end
@@ -2531,27 +2607,22 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             if _G.AutoSkillV then table.insert(Skills, "v") end
             if _G.AutoSkillF then table.insert(Skills, "f") end
             if #Skills == 0 then return end
-
             local Skill = Skills[math.random(#Skills)]
             _G.LastSkillTime = tick()
             _G.LastSkillKey = Skill
-
             local remotes = ReplicatedStorage:FindFirstChild("Remotes")
             local action = remotes and remotes:FindFirstChild("Action")
             if not action then return end
-
             for _, Tool in ipairs(char:GetChildren()) do
                 if Tool:IsA("Tool") then
                     action:FireServer(Tool.Name, Skill)
                 end
             end
-
             if _G.ClearDashBodyMovers and hrp then
                 _G.ClearDashBodyMovers(hrp, 0.8)
             end
         end)
     end
-
     function _G.ClearDashBodyMovers(hrp, duration)
         if not hrp or not hrp.Parent then return end
         duration = duration or 0.8
@@ -2581,7 +2652,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end)
     end
-
     local function EquipWeapon()
         if _G.RaidBuffSpamActive or _G.DragonBuffSpamActive or _G.LavaBuffSpamActive then return end
         pcall(function()
@@ -2612,7 +2682,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end)
     end
-
     local function Attack()
         pcall(function()
             local char = LocalPlayer.Character
@@ -2625,7 +2694,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end)
     end
-
     local VFX_CONNECTIONS = {}
     local VFX_KILL_CLASSES = {
         ["ParticleEmitter"] = true, ["Beam"] = true, ["Trail"] = true,
@@ -2633,7 +2701,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         ["Highlight"] = true, ["PointLight"] = true,
         ["SpotLight"] = true, ["SurfaceLight"] = true,
     }
-
     local function TryKillVFX(obj)
         if not obj or not obj.Parent then return end
         local cls = obj.ClassName
@@ -2649,14 +2716,12 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end)
     end
-
     local function KillVFXIn(container)
         if not container then return end
         pcall(function()
             for _, v in ipairs(container:GetDescendants()) do TryKillVFX(v) end
         end)
     end
-
     local function HookContainer(container)
         if not container then return end
         local conn = container.DescendantAdded:Connect(function(obj)
@@ -2664,7 +2729,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         end)
         table.insert(VFX_CONNECTIONS, conn)
     end
-
     local function NoVFX(State)
         _G.VFXDisabled = State
         for _, conn in ipairs(VFX_CONNECTIONS) do
@@ -2704,12 +2768,11 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         end)
         table.insert(VFX_CONNECTIONS, respawnConn)
     end
-
+    _G.MarvenNoVFX = NoVFX
     LocalPlayer.Idled:Connect(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
     end)
-
     local Tab1 = Window:CreateTab("Settings", true, false)
     local Tab_Page1 = Tab1:CreatePage("Main Settings")
     local Weapon = Tab_Page1:CreateSection("🗡️ Select Weapon", "Left")
@@ -2717,11 +2780,9 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
     local Method = Tab_Page1:CreateSection("🎯 Select Method Farm", "Right")
     local Haki = Tab_Page1:CreateSection("👁️ Haki", "Right")
     local VFX = Tab_Page1:CreateSection("✨ VFX", "Right")
-
     local Tab_Page2 = Tab1:CreatePage("Other Settings")
     local Accessory = Tab_Page2:CreateSection("🎒 Accessory & Rebirth", "Right")
     local Potion = Tab_Page2:CreateSection("🧪 Auto Use X2 Potion", "Left")
-
     Weapon:Dropdown({
         Title = "Main Weapon (Attack)",
         Options = TypeTool, Multi = false, Value = "Melee",
@@ -2732,15 +2793,12 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Options = TypeTool, Multi = true,
         Callback = function(Value) _G.Select_EquipWeapon = Value end
     })
-
     AutoSkills:Toggle({Title = "Auto Skill Z", Id = "SKILLZ", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
     AutoSkills:Toggle({Title = "Auto Skill X", Id = "SKILLX", Value = false, Callback = function(v) _G.AutoSkillX = v end})
     AutoSkills:Toggle({Title = "Auto Skill C", Id = "SKILLC", Value = false, Callback = function(v) _G.AutoSkillC = v end})
     AutoSkills:Toggle({Title = "Auto Skill V", Id = "SKILLV", Value = false, Callback = function(v) _G.AutoSkillV = v end})
     AutoSkills:Toggle({Title = "Auto Skill F", Id = "SKILLF", Value = false, Callback = function(v) _G.AutoSkillF = v end})
-
     Haki:Toggle({Title = "Auto Enable Haki", Id = "AENHAKI", Value = false, Callback = function(v) _G.Auto_Haki = v end})
-
     Method:Dropdown({
         Title = "Select Farm Method",
         Options = {"Behind", "Below", "Upper", "Front"},
@@ -2751,9 +2809,7 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Title = "Farm Distance", Min = 0, Max = 30, Value = 5,
         Callback = function(v) _G.Distance_Farm = v end
     })
-
     VFX:Toggle({Title = "Disable VFX", Value = false, Callback = function(v) NoVFX(v) end})
-
     Accessory:Toggle({
         Title = "Auto Equip Best Accessory", Value = false,
         Callback = function(v) _G.Auto_Equip_Accessory = v end
@@ -2762,7 +2818,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Title = "Auto Rebirth (Max Level)", Value = false,
         Callback = function(v) _G.Auto_Rebirth = v end
     })
-
     Potion:Dropdown({
         Title = "🧪 Select X2 Potion",
         Options = X2List, Multi = true,
@@ -2782,29 +2837,22 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 addItem(v)
             end
             _G.Select_Potion = list
-            print("[Potion] Đã chọn " .. #list .. " potion:")
-            for _, p in ipairs(list) do print(" - " .. p) end
+            for _, p in ipairs(list) do  end
         end
     })
     Potion:Toggle({
         Title = "🤖 Auto Use Potion", Value = false,
         Callback = function(v)
             _G.Auto_Use_Potion = v
-            print("[Potion] Auto:", v and "ON" or "OFF")
         end
     })
-
     local PotionInfoPara = Potion:Paragraph({ Title = "🍦 X2 Potions: ---", Content = "Select Potion to view" })
-	
-
-
     local Tab2 = Window:CreateTab("Main", false, false)
     local Farm = Tab2:CreatePage("Farm")
     local AllBoss = Tab2:CreatePage("Boss")
     local RaidBossPage = Tab2:CreatePage("Raid Boss & Shop")
-    local RaidTOPPage = BuildRaidTOPPage(Tab2)
+    local RaidTOPPage = BuildRaidTOPPage(Tab2, true)
     local RaidDun = Tab2:CreatePage("Dungeon, Shop / Weapon")
-
     local AutoFarmCard = Farm:CreateSection("🌾 Auto Farm", "Left")
     local MaterialCard = Farm:CreateSection("⛏️ Auto Farm Material", "Right")
     local Boss = AllBoss:CreateSection("👹 Boss", "Left")
@@ -2821,16 +2869,12 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
     local DungeonSettingsCard = RaidDun:CreateSection("⚙️ Dungeon Settings", "Right")
     local ShopDunInfoCard = RaidDun:CreateSection("📊 Shop Dungeon Info", "Right")
     local RaidCard = RaidDun:CreateSection("🌋 Auto Raid Moon", "Right")
-
     local RaidBossCard = RaidBossPage:CreateSection("⚔️ Auto Raid Boss", "Left")
     local RaidBossInfoCard = RaidBossPage:CreateSection("📋 Raid Info", "Right")
     local ShopRaidCard = RaidBossPage:CreateSection("🏪 Shop Raid", "Left")
     local ShopRaidInfoCard = RaidBossPage:CreateSection("📊 Shop Info", "Right")
     local RaidSettingsCard = RaidBossPage:CreateSection("⚙️ Raid Settings", "Right")
     local TimeMysteryCard = RaidBossPage:CreateSection("🎁 Mystery Box", "Left")
-
-
-
     AutoFarmCard:Toggle({
         Title = "Auto Level Farm",
         Value = false,
@@ -2841,7 +2885,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     MaterialCard:Dropdown({
         Title = "Select Farm Material",
         Options = ItemAll, Multi = true,
@@ -2862,7 +2905,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = false,
         Callback = function(v) _G.Auto_Farm_Material = v end
     })
-
     Boss:Dropdown({
         Title = "Select Boss",
         Options = Bosses, Multi = false,
@@ -2873,19 +2915,16 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = false,
         Callback = function(v) _G.Auto_FarmBoss = v end
     })
-
     Thief:Toggle({
         Title = "Auto Farm Thief Chest",
         Value = false,
         Callback = function(v) _G.Auto_BaconThief = v end
     })
-
     Piccolo:Toggle({
         Title = "Auto Farm Piccolo",
         Value = false,
         Callback = function(v) _G.Auto_Piccolo = v end
     })
-
     Duck:Toggle({
         Title = "Auto Farm Duck (Full)",
         Value = false,
@@ -2896,19 +2935,16 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     DevilBoat:Toggle({
         Title = "Auto Farm Devil Boat",
         Value = false,
         Callback = function(v) _G.Auto_DevilBoat = v end
     })
-
     Kraken:Toggle({
         Title = "Auto Farm Kraken",
         Value = false,
         Callback = function(v) _G.Auto_Kraken = v end
     })
-
     ALLBOSS:Toggle({
         Title = "👹 Auto Boss All",
         Desc = "Auto: Piccolo, Devil Boat, Thief, Kraken",
@@ -2920,11 +2956,8 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     local Spawn_Status = SpawnedT:Paragraph({Title = "Spawn Status", Content = "N/A"})
-
     local Item_Auto = WeaponCraft:Paragraph({Title = "Item Requirements ( None )", Content = "N/A"})
-
     WeaponCraft:Dropdown({
         Title = "Select Weapon Craft",
         Options = WeaponAll, Multi = false,
@@ -2941,7 +2974,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     local NotifyClass = false
     WeaponCraft:Toggle({
         Title = "Auto Craft Weapon (Full)",
@@ -2956,7 +2988,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = false,
         Callback = function(v) _G.Auto_Farm_Set = v end
     })
-
     RaidCard:Toggle({
         Title = "Auto Raid Moon (Full)",
         Value = false,
@@ -2967,7 +2998,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     DungeonCard:Textbox({
         Title = "Dungeon Orb to Use",
         Id = "DUNOTOUSE",
@@ -2996,7 +3026,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     local RaidBossData = {
         ["Bacon of Grudge"] = {
             Name = "Bacon of Grudge",
@@ -3014,19 +3043,16 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             PortalCost = 1, Valid = true, OffsetY = 25,
         },
     }
-
     local RaidBossInfoPara = RaidBossInfoCard:Paragraph({
         Title = "Name: ( not selected )",
         Content = "Please choose a Boss Raid!!",
         TitleSize = 18, ContentSize = 16, TextSize = 16,
     })
-	
 	local PortalGunPara = RaidBossInfoCard:Paragraph({
     Title = "🔫 Portal Gun: ---",
     Content = "Loading...",
     TitleSize = 18, ContentSize = 16, TextSize = 16,
     })
-
     RaidBossCard:Dropdown({
     Title = "Choose a boss to raid",
     Options = {"Bacon of Grudge", "Dragon", "Lava Titan"},
@@ -3037,7 +3063,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         if Data then
             RaidBossInfoPara:SetTitle("Name: " .. Data.Name)
             RaidBossInfoPara:SetContent("Reward: " .. Data.Reward .. "\n- " .. Data.PortalCost .. " Portal Gun")
-
             local Inv = GetInventory()
             local portalGun = (Inv["Portal Gun"] and Inv["Portal Gun"].amount) or 0
             local cost = Data.PortalCost or 1
@@ -3050,7 +3075,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         end
     end
 })
-
     RaidBossCard:Button({
         Title = "Start Raid Now!!",
         Callback = function()
@@ -3063,7 +3087,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 _G.SeaNotify("❌ Invalid Raid", "NO RAID!!!", 3)
                 return
             end
-
             if _G.AutoRaidWho == "Dragon" then
                 if _G.AutoRaidRunning then _G.AutoRaidRunning = false end
                 if _G.AutoRaidLava then _G.AutoRaidLava = false end
@@ -3074,7 +3097,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 )
                 return
             end
-
             if _G.AutoRaidWho == "Lava Titan" then
                 if _G.AutoRaidRunning then _G.AutoRaidRunning = false end
                 if _G.AutoRaidDragon then _G.AutoRaidDragon = false end
@@ -3085,14 +3107,12 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 )
                 return
             end
-
             if _G.AutoRaidDragon then _G.AutoRaidDragon = false end
             if _G.AutoRaidLava then _G.AutoRaidLava = false end
             _G.AutoRaidRunning = not _G.AutoRaidRunning
             _G.SeaNotify(_G.AutoRaidRunning and "▶️ Start Raid" or "⏹️ Stop Raid", Data.Name, 3)
         end
     })
-
     RaidSettingsCard:Slider({
     Title = "Bacon Boss Height",
     Min = 0, Max = 150, Value = 55,
@@ -3101,13 +3121,11 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         _G.BACON_BOSS_HEIGHT = v
     end
     })
-	
     RaidSettingsCard:Slider({
         Title = "Golden Ball Height",
         Min = 0, Max = 150, Value = 25,
         Callback = function(v) _G.RaidBallOffsetY = v end
     })
-	
 	RaidSettingsCard:Slider({
     Title = "Dragon Height",
     Min = 0, Max = 100, Value = 25,
@@ -3116,7 +3134,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         _G.DRAGON_AIM_HEIGHT = v
     end
     })
-	
 	RaidSettingsCard:Slider({
     Title = "Lava Height",
     Min = 0, Max = 100, Value = 25,
@@ -3125,7 +3142,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         _G.LAVA_AIM_HEIGHT = v
     end
     })
-	
     RaidSettingsCard:Toggle({
     Title = "I Am Thanos",
     Desc = "When \"I Am Thanos\" is enabled, it will Auto-use the F skill of the Thanos equipment when fighting any Raid Boss below 50% HP.",
@@ -3134,7 +3150,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         _G.UseThanosF = v
     end
     })
-
     local ShopInfoPara = ShopRaidInfoCard:Paragraph({
         Title = "RaidPoint: ( loading... )",
         Content = "Restock In: ( loading... )"
@@ -3143,18 +3158,15 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Title = "Item: ( not selected )",
         Content = "Select item from dropdown"
     })
-
     _G.SelectedShopItem = nil
     local ShopItemDropdown = nil
     local LastShopItemsStr = ""
     local ShopDropdownInitialized = false
-
     local function UpdateShopDropdown(items)
         if #items == 0 then return end
         local itemsStr = table.concat(items, ",")
         if itemsStr == LastShopItemsStr and ShopItemDropdown then return end
         LastShopItemsStr = itemsStr
-
         if not ShopItemDropdown then
             ShopItemDropdown = ShopRaidCard:Dropdown({
                 Title = "Select Items to Purchase",
@@ -3191,7 +3203,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end
-
     ShopRaidCard:Button({
         Title = "BUY!!",
         Callback = function()
@@ -3205,7 +3216,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             _G.SeaNotify("✅ Purchased", _G.SelectedShopItem, 3)
         end
     })
-
     _G.MysteryBoxSelected = "Time Mystery Box"
     _G.MysteryBoxAmount = 1
     _G.MysteryBoxAuto = false
@@ -3213,22 +3223,18 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
     _G.MysteryBoxLastOpen = 0
     _G.MysteryBoxLastInfo = 0
     _G.MysteryBoxOutNotified = false
-
     local MYSTERY_REWARD_FRAMES = {
         "Frame_CompactRandom",
         "Frame_RandomItem",
     }
-
     _G.MysteryBoxCloseAt = _G.MysteryBoxCloseAt or {}
     _G.MysteryBoxHookedFrames = _G.MysteryBoxHookedFrames or {}
     _G.MysteryBoxFrameConns = _G.MysteryBoxFrameConns or {}
-
     local MysteryBoxList = {"Time Mystery Box", "Thunder Mystery Box", "Lava Mystery Box"}
     local MysteryBoxInfo = TimeMysteryCard:Paragraph({
         Title = "🎁 Mystery Box: ---",
         Content = "Select the box below"
     })
-
     TimeMysteryCard:Dropdown({
         Title = "🎁 Select Mystery Box",
         Options = MysteryBoxList, Multi = false, Value = "Time Mystery Box",
@@ -3293,7 +3299,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             if v then else end
         end
     })
-
     local ShopDunInfoPara = ShopDunInfoCard:Paragraph({
         Title = "DungeonPoint: ( loading... )",
         Content = "Select Auto Buy item on the left"
@@ -3302,12 +3307,10 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Title = "Item: ( not selected )",
         Content = "Select item from dropdown"
     })
-
     _G.AutoBuyDunItem = nil
     _G.AutoBuyDunRunning = false
     local AutoBuyDunDropdown = nil
     local LastAutoBuyDunStr = ""
-
     local function GetAllShopDunItems()
         local items, seen = {}, {}
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
@@ -3336,13 +3339,11 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         table.sort(items)
         return items
     end
-
     local function UpdateDunDropdown(items)
         if #items == 0 then return end
         local itemsStr = table.concat(items, ",")
         if itemsStr == LastAutoBuyDunStr and AutoBuyDunDropdown then return end
         LastAutoBuyDunStr = itemsStr
-
         if not AutoBuyDunDropdown then
             AutoBuyDunDropdown = ShopDunCard:Dropdown({
                 Title = "Auto Buy Items",
@@ -3378,7 +3379,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end
-
     ShopDunCard:Toggle({
         Title = "Auto Buy",
         Value = false,
@@ -3392,27 +3392,18 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             _G.SeaNotify(Value and "▶️ Enable Auto Buy" or "⏹️ Disable Auto Buy", _G.AutoBuyDunItem or "N/A", 3)
         end
     })
-	
     local Tab3 = Window:CreateTab("Other", false, false)
     local RandomM = Tab3:CreatePage("Random Chest")
     local CraftTablePage = Tab3:CreatePage("Craft Table")
     local GokuPage = Tab3:CreatePage("Npc Goku Gods")
-	
-	    -- ══════════════════════════════════════════════════════
-    -- [SH-C] SERVER HOP — UI
-    -- ══════════════════════════════════════════════════════
-
     local SH_Page = Tab3:CreatePage("Server Hop")
     local SH_Section = SH_Page:CreateSection("🌀 Server Hop", "Left")
     local SH_StatusSec = SH_Page:CreateSection("📊 Status", "Right")
-
     local SH_MobOptions = {"Bacon Thief", "DevilBoat", "Kraken", "Piccolo", "Duck Monster"}
-
     local SH_StatusPara = SH_StatusSec:Paragraph({
         Title = "🎯 Đang chờ",
         Content = "Chọn mob và bật Auto Join"
     })
-
     SH_Section:Dropdown({
         Title = "🎯 Chọn Mob ưu tiên",
         Options = SH_MobOptions,
@@ -3430,10 +3421,8 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             _G.SH_Config.PriorityMobs = list
             local str = table.concat(list, ", ")
             SH_StatusPara:SetContent("Đã chọn: " .. str)
-            print("[SH] ✅ Đã set PriorityMobs = {" .. str .. "}")
         end
     })
-
     SH_Section:Toggle({
         Title = "🤖 Auto Join khi hết mob",
         Value = _G.SH_Config.AutoMode,
@@ -3446,7 +3435,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     task.spawn(function()
         while task.wait(2) do
             pcall(function()
@@ -3473,13 +3461,10 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
     local DiamondChest = RandomM:CreateSection("💎 Diamond Chest", "Right")
     local MoonChest = RandomM:CreateSection("🌙 Moon Chest", "Left")
     local GuaranteeDiamond = RandomM:CreateSection("🎖️ Guarantee Gem Point", "Right")
     local GuaranteeMoon = RandomM:CreateSection("☄️ Guarantee Moon Point", "Left")
-
-    -- ===== Diamond Chest =====
     local DiamondChestInfo = DiamondChest:Paragraph({
         Title = "💎 Diamond: ---",
         Content = "📊 PointItem: ---"
@@ -3506,8 +3491,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = false,
         Callback = function(v) _G.Auto_RandomChest = v end
     })
-
-    -- ===== Moon Chest =====
     local MoonChestInfo = MoonChest:Paragraph({
         Title = "🌙 MoonStone: ---",
         Content = "📊 MoonPoint: ---"
@@ -3542,8 +3525,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = false,
         Callback = function(v) _G.Auto_RandomChest_Moon = v end
     })
-
-    -- ===== Guarantee Diamond =====
     local GuaranteeDiamondInfo = GuaranteeDiamond:Paragraph({
         Title = "💎 Diamond: ---",
         Content = "📊 PointItem: ---"
@@ -3576,7 +3557,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
             itemName = tostring(itemName):match("^(.-) /") or tostring(itemName)
             itemName = itemName:gsub("^%s+", ""):gsub("%s+$", "")
-
             local pointItem = tonumber(LocalPlayer:GetAttribute("PointItem")) or 0
             local price = (PointItemM and PointItemM[itemName]) or 0
             if price <= 0 then
@@ -3599,8 +3579,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = false,
         Callback = function(v) _G.Auto_Guarantee = v end
     })
-
-    -- ===== Guarantee Moon =====
     local GuaranteeMoonInfo = GuaranteeMoon:Paragraph({
         Title = "🌙 MoonPoint: ---",
         Content = "💠 MoonStone: ---"
@@ -3633,7 +3611,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
             itemName = tostring(itemName):match("^(.-) /") or tostring(itemName)
             itemName = itemName:gsub("^%s+", ""):gsub("%s+$", "")
-
             local moonPoint = tonumber(LocalPlayer:GetAttribute("MoonPoint")) or 0
             local price = (PointItemMoon and PointItemMoon[itemName]) or 0
             if price <= 0 then
@@ -3656,8 +3633,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = false,
         Callback = function(v) _G.Auto_Guarantee_Moon = v end
     })
-
-    -- ===== Thông tin realtime =====
     task.spawn(function()
         while task.wait(1) do
             pcall(function()
@@ -3665,17 +3640,14 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 local pointItem = tonumber(LocalPlayer:GetAttribute("PointItem")) or 0
                 local moonStone = tonumber(LocalPlayer:GetAttribute("MoonStone")) or 0
                 local moonPoint = tonumber(LocalPlayer:GetAttribute("MoonPoint")) or 0
-
                 DiamondChestInfo:SetTitle("💎 Diamond: " .. FormatNumber(diamond))
                 DiamondChestInfo:SetContent("📊 PointItem: " .. FormatNumber(pointItem))
                 MoonChestInfo:SetTitle("🌙 MoonStone: " .. FormatNumber(moonStone))
                 MoonChestInfo:SetContent("📊 MoonPoint: " .. FormatNumber(moonPoint))
-
                 GuaranteeDiamondInfo:SetTitle("💎 Diamond: " .. FormatNumber(diamond))
                 GuaranteeDiamondInfo:SetContent("📊 PointItem: " .. FormatNumber(pointItem))
                 GuaranteeMoonInfo:SetTitle("🌙 MoonPoint: " .. FormatNumber(moonPoint))
                 GuaranteeMoonInfo:SetContent("💠 MoonStone: " .. FormatNumber(moonStone))
-
                 if _G.Select_Guarantee and _G.Select_Guarantee ~= "" then
                     local itemName = tostring(_G.Select_Guarantee):match("^(.-) /") or tostring(_G.Select_Guarantee)
                     itemName = itemName:gsub("^%s+", ""):gsub("%s+$", "")
@@ -3684,7 +3656,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                     GuaranteeDiamondSelectInfo:SetTitle("🎯 " .. itemName)
                     GuaranteeDiamondSelectInfo:SetContent("Price: " .. FormatNumber(price) .. " | " .. status)
                 end
-
                 if _G.Select_Guarantee_Moon and _G.Select_Guarantee_Moon ~= "" then
                     local itemName = tostring(_G.Select_Guarantee_Moon):match("^(.-) /") or tostring(_G.Select_Guarantee_Moon)
                     itemName = itemName:gsub("^%s+", ""):gsub("%s+$", "")
@@ -3696,8 +3667,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
-    -- ===== Mystery Box helper =====
     local function MysteryBox_CloseFrame(frame)
         if not frame or not frame.Parent then return false end
         local closeBtn = frame:FindFirstChild("Close_") or frame:FindFirstChild("Close")
@@ -3715,7 +3684,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         end
         return true
     end
-
     local function MysteryBox_AttachAllHooks()
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
         local main = hud and hud:FindFirstChild("Main")
@@ -3736,9 +3704,7 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end
-
     MysteryBox_AttachAllHooks()
-
     task.spawn(function()
         while task.wait(0.1) do
             pcall(function()
@@ -3764,20 +3730,17 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                         end
                     end
                 end
-
                 if now - _G.MysteryBoxLastInfo >= 0.5 then
                     _G.MysteryBoxLastInfo = now
                     local boxName = _G.MysteryBoxSelected or "Time Mystery Box"
                     local Inv = GetInventory()
                     local have = (Inv[boxName] and Inv[boxName].amount) or 0
-
                     local function Fmt(n)
                         n = tonumber(n) or 0
                         if n < 1000 then return tostring(math.floor(n)) end
                         if n < 1000000 then return string.format("%.1fK", n / 1000) end
                         return string.format("%.1fM", n / 1000000)
                     end
-
                     if MysteryBoxInfo then
                         local status = "OFF"
                         if _G.MysteryBoxAuto then
@@ -3795,7 +3758,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                         )
                     end
                 end
-
                 if not _G.MysteryBoxAuto then return end
                 local boxName = _G.MysteryBoxSelected or "Time Mystery Box"
                 local amount = tonumber(_G.MysteryBoxAmount) or 1
@@ -3804,7 +3766,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 local delay = tonumber(_G.MysteryBoxAutoDelay) or 0.5
                 if delay < 0.1 then delay = 0.1 end
                 if now - (_G.MysteryBoxLastOpen or 0) < delay then return end
-
                 local Inv = GetInventory()
                 local have = (Inv[boxName] and Inv[boxName].amount) or 0
                 if have <= 0 then
@@ -3816,7 +3777,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                     return
                 end
                 if _G.MysteryBoxOutNotified then _G.MysteryBoxOutNotified = false end
-
                 local useCount = math.min(amount, have)
                 local NetworkEvent = ReplicatedStorage
                     :FindFirstChild("Modules") and ReplicatedStorage.Modules
@@ -3830,12 +3790,9 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
-    -- ===== Craft Table page =====
     local CraftCard = CraftTablePage:CreateSection("🔨 Craft Table", "Left")
     local CraftStatusCard = CraftTablePage:CreateSection("📊 Status", "Right")
     local CraftInfoCard = CraftTablePage:CreateSection("📋 Craft Info", "Right")
-
     local CraftMainPara = CraftInfoCard:Paragraph({
         Title = "🔨 No Item selected",
         Content = "Choose item to start"
@@ -3848,12 +3805,10 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Title = "🎁 Guarantee: ---/---",
         Content = "Waiting for item"
     })
-	
     _G.SelectedCraftItem = nil
     _G.CraftDelay = 1.0
     local CraftCountSinceClaim = 0
     local LastCraftTimeSync = 0
-
     local function GetAllCraftItems()
         local items = {}
         if not CraftingTable then return items end
@@ -3865,7 +3820,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         table.sort(items)
         return items
     end
-
     local function GetMaxCraftTimes(itemName)
         if not itemName or itemName == "" then return 0 end
         if not CraftingTable then return 0 end
@@ -3882,7 +3836,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         if minCraft == math.huge then return 0 end
         return minCraft
     end
-
     local function GetGuaranteeCount(itemName)
         if not itemName or itemName == "" then return 0, 0 end
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
@@ -3902,13 +3855,11 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         local max = tonumber(txt:match("/(%d+)")) or 0
         return cur, max
     end
-
     local function HasGuaranteeItemReady(itemName)
         local cur, max = GetGuaranteeCount(itemName)
         if max > 0 and cur >= max then return true end
         return false
     end
-
     local function ClaimGuaranteeItem(itemName)
         if not itemName or itemName == "" then return false end
         ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer(
@@ -3916,7 +3867,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         )
         return true
     end
-
     local function BuildCraftInfo(itemName)
         if not itemName or itemName == "" then
             return "🔨 No Item selected", "Choose item to start"
@@ -3939,7 +3889,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         text = text .. "\n🔨 Can craft: " .. maxCraft .. " times"
         return "🔨 " .. itemName, text
     end
-
     CraftCard:Dropdown({
         Title = "Select Items to Craft",
         Options = GetAllCraftItems(),
@@ -3956,7 +3905,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         Value = true,
         Callback = function(v) _G.AutoClaimGuarantee = v end
     })
-
     task.spawn(function()
         local lastGuaranteeFire = 0
         local GUARANTEE_FIRE_DELAY = 0.3
@@ -3974,14 +3922,12 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end)
-
     task.spawn(function()
         local lastCraftTime = 0
         local lastUICheck = 0
         local phase = "waiting"
         local UI_UPDATE_DELAY = 0.3
         local GUARANTEE_CLEAR_WAIT = 0.5
-
         while task.wait(0.05) do
             local now = tick()
             if now - lastUICheck >= UI_UPDATE_DELAY then
@@ -3990,18 +3936,14 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                     local title, content = BuildCraftInfo(_G.SelectedCraftItem)
                     CraftMainPara:SetTitle(title)
                     CraftMainPara:SetContent(content)
-
                     local canMake = GetMaxCraftTimes(_G.SelectedCraftItem)
                     local cur, max = GetGuaranteeCount(_G.SelectedCraftItem)
-
                     local statusIcon = "⏸️"
                     if phase == "crafting" then statusIcon = "🔨"
                     elseif phase == "waiting_guarantee" then statusIcon = "🛑"
                     elseif phase == "syncing" then statusIcon = "🔄"
                     elseif phase == "waiting" then statusIcon = "⏸️" end
-
                     CraftCanMakePara:SetTitle(statusIcon .. " Can craft: " .. canMake .. " times")
-
                     if phase == "crafting" then
                         local timeLeft = math.max(0, (_G.CraftDelay or 1.0) - (now - lastCraftTime))
                         CraftCanMakePara:SetContent("▶️ CRAFTING — " .. CraftCountSinceClaim ..
@@ -4013,7 +3955,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                     elseif phase == "waiting" then
                         CraftCanMakePara:SetContent("⏸️ Waiting")
                     end
-
                     if max > 0 then
                         local gIcon = cur >= max and "🛑" or "🎁"
                         CraftGuaranteePara:SetTitle(gIcon .. " Guarantee: " .. cur .. "/" .. max)
@@ -4035,7 +3976,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                     CraftGuaranteePara:SetContent("Waiting for item")
                 end
             end
-
             if not _G.AutoCraftRunning then
                 if phase ~= "waiting" then
                     phase = "waiting"
@@ -4043,17 +3983,14 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 end
                 continue
             end
-
             if not _G.SelectedCraftItem or _G.SelectedCraftItem == "" then continue end
             local Data = CraftingTable and CraftingTable[_G.SelectedCraftItem]
             if not Data or not Data.need then continue end
-
             local cur, max = GetGuaranteeCount(_G.SelectedCraftItem)
             if max > 0 and cur >= max then
                 if phase ~= "waiting_guarantee" then phase = "waiting_guarantee" end
                 continue
             end
-
             if phase == "waiting_guarantee" and (max == 0 or cur < max) then
                 phase = "syncing"
                 _G.LastSyncTime = now
@@ -4061,7 +3998,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 lastCraftTime = now
                 continue
             end
-
             if phase == "syncing" then
                 if now - (_G.LastSyncTime or 0) >= GUARANTEE_CLEAR_WAIT then
                     phase = "waiting"
@@ -4069,7 +4005,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 end
                 continue
             end
-
             local CanCraft = true
             for Item, Need in pairs(Data.need) do
                 if GetItemAmount(Item) < Need then CanCraft = false break end
@@ -4079,7 +4014,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 task.wait(0.5)
                 continue
             end
-
             local craftDelay = tonumber(_G.CraftDelay) or 1.0
             if craftDelay < 0.1 then craftDelay = 0.1 end
             local timeSinceLastCraft = now - lastCraftTime
@@ -4093,27 +4027,21 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end)
-
-    -- ===== Goku NPC Page =====
     local GokuCurrentCard = GokuPage:CreateSection("📍 Available NPCs", "Left")
     local GokuActionCard = GokuPage:CreateSection("⚙️ Actions", "Right")
     local GokuCurrentPara = GokuCurrentCard:Paragraph({
         Title = "Npc Count: 0 / 5",
         Content = "Searching NPC..."
     })
-
     local GOKU_NPC_KEYWORDS = {"goku", "vegeta", "gohan", "goten", "trunk", "bardock"}
     local MAX_NPC_PER_SESSION = 5
     local MISS_THRESHOLD = 5
-
     _G.AutoGokuFind = false
     _G.AutoGokuTP = false
-
     local GokuSpawnData = {}
     local SessionSpawnedCount = 0
     local SessionNPCSpawned = {}
     local IgnoreNPCSpawned = {}
-
     local function FormatDuration(sec)
         sec = math.max(0, math.floor(sec))
         local h = math.floor(sec / 3600)
@@ -4122,12 +4050,10 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         if h > 0 then return string.format("%02d:%02d:%02d", h, m, s) end
         return string.format("%02d:%02d", m, s)
     end
-
     local function FormatClock(t)
         local d = os.date("*t", t)
         return string.format("%02d:%02d:%02d", d.hour, d.min, d.sec)
     end
-
     local function ResetGokuSession(reason)
         for npcName in pairs(SessionNPCSpawned) do
             IgnoreNPCSpawned[npcName] = true
@@ -4137,7 +4063,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         SessionNPCSpawned = {}
         _G.SeaNotify("🔄 Reset NPC session", reason or "5 NPCs reached", 5)
     end
-
     local function ScanGokuNPCs()
         local results = {}
         local powerGod = workspace:FindFirstChild("Power God")
@@ -4145,12 +4070,10 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         local char = LocalPlayer.Character
         local myHrp = char and char:FindFirstChild("HumanoidRootPart")
         local now = tick()
-
         if SessionSpawnedCount >= MAX_NPC_PER_SESSION then
             ResetGokuSession("5 NPCs reached — reset session")
             return results
         end
-
         for _, obj in ipairs(powerGod:GetChildren()) do
             if obj:IsA("Model") then
                 local lower = obj.Name:lower()
@@ -4163,7 +4086,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                     local hum = obj:FindFirstChild("Humanoid")
                     local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
                     local dist = (myHrp and hrp) and (myHrp.Position - hrp.Position).Magnitude or -1
-
                     local data = GokuSpawnData[obj.Name]
                     if not data then
                         local isNewNPC = not IgnoreNPCSpawned[obj.Name] and not SessionNPCSpawned[obj.Name]
@@ -4192,7 +4114,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                             end
                         end
                     end
-
                     table.insert(results, {
                         Name = obj.Name,
                         Model = obj,
@@ -4208,13 +4129,11 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 end
             end
         end
-
         for name, data in pairs(GokuSpawnData) do
             if now - data.lastSeen > MISS_THRESHOLD and data.isAlive then
                 data.isAlive = false
             end
         end
-
         table.sort(results, function(a, b)
             if a.Distance < 0 then return false end
             if b.Distance < 0 then return true end
@@ -4222,7 +4141,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         end)
         return results
     end
-
     local function RenderGokuCurrent(npcs)
         local text = {}
         table.insert(text, "Session: " .. SessionSpawnedCount .. "/" .. MAX_NPC_PER_SESSION)
@@ -4245,7 +4163,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         GokuCurrentPara:SetTitle("Npc Count: " .. SessionSpawnedCount .. " / " .. MAX_NPC_PER_SESSION)
         GokuCurrentPara:SetContent(table.concat(text, "\n"))
     end
-
     local function ClickGokuNPC(npcData)
         if not npcData or not npcData.Model or not npcData.Model.Parent then return false end
         local prompt = npcData.Prompt
@@ -4258,7 +4175,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         pcall(function() fireproximityprompt(prompt) end)
         return true
     end
-
     GokuActionCard:Toggle({
         Title = "🎯 Auto Find & Click NPC",
         Value = false,
@@ -4277,13 +4193,11 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 "TP to nearest NPC", 3)
         end
     })
-
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
                 local npcs = ScanGokuNPCs()
                 RenderGokuCurrent(npcs)
-
                 if _G.AutoGokuTP and #npcs > 0 then
                     local npc = npcs[1]
                     if npc.Model and npc.Model.Parent then
@@ -4293,7 +4207,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                         end
                     end
                 end
-
                 if _G.AutoGokuFind and #npcs > 0 then
                     for _, npc in ipairs(npcs) do
                         if npc.HasPrompt then
@@ -4306,27 +4219,21 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-	
-    -- ===== Teleport Tab =====
     local TabTP = Window:CreateTab("Teleport", false, false)
     local TPPage = TabTP:CreatePage("Teleport Sea 1")
     local IslandCard = TPPage:CreateSection("🏝️ Sea 1 Islands", "Left")
     local SeaCard = TPPage:CreateSection("🌊 Sea Travel", "Right")
     local TPInfoCard = TPPage:CreateSection("📊 Information", "Right")
-
     local IslandCache = {}
     local IslandList = {}
     local SelectedIsland = nil
-
     local TPInfoPara = TPInfoCard:Paragraph({Title = "Sea 1", Content = "Loading..."})
     local SeaInfoPara = SeaCard:Paragraph({Title = "Sea", Content = "Loading..."})
-
     local function ScanIslands()
         IslandCache = {}
         IslandList = {}
         local islandFolder = workspace:FindFirstChild("island")
         if not islandFolder then return end
-
         local orderMap = {}
         local gates = workspace:FindFirstChild("Gates")
         local tpPart = gates and gates:FindFirstChild("TeleportPart")
@@ -4335,7 +4242,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 if part:IsA("BasePart") then orderMap[part.Name] = i end
             end
         end
-
         local tempList = {}
         for _, obj in ipairs(islandFolder:GetChildren()) do
             if obj:IsA("Model") then
@@ -4348,7 +4254,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 table.insert(tempList, obj.Name)
             end
         end
-
         table.sort(tempList, function(a, b)
             local ia, ib = orderMap[a], orderMap[b]
             if ia and ib then return ia < ib end
@@ -4356,12 +4261,9 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             if not ia and ib then return false end
             return a < b
         end)
-
         IslandList = tempList
     end
-
     ScanIslands()
-
     IslandCard:Dropdown({
         Title = "🏝️ Select Sea 1 Island",
         Options = IslandList,
@@ -4379,7 +4281,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     IslandCard:Button({
         Title = "✈️ Teleport To Island",
         Callback = function()
@@ -4410,7 +4311,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
     SeaCard:Button({
         Title = "🌊 Go To Sea 2 (2SeaSoon)",
         Callback = function()
@@ -4435,16 +4335,12 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     })
-
-    -- ===== Config Tab =====
     local ConfigTab = Window:CreateTab("Config", false, false)
     MySaveManager:BuildConfigTab(ConfigTab)
-
     task.spawn(function()
         task.wait(1)
         MySaveManager:LoadAutoloadConfig()
     end)
-
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -4464,7 +4360,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -4480,7 +4375,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
@@ -4495,7 +4389,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
@@ -4506,7 +4399,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
     task.spawn(function()
         while task.wait() do
             xpcall(function()
@@ -4520,10 +4412,9 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                         end
                     end
                 end
-            end, print)
+            end, function() end)
         end
     end)
-
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -4535,7 +4426,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
     task.spawn(function()
         while task.wait(0.1) do
             local hasAuto = _G.Auto_Farm_Level or _G.Auto_Farm_Material or _G.Auto_FarmBoss
@@ -4548,7 +4438,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end)
-	
     local QTE_KEY_MAP = {
         A=Enum.KeyCode.A, B=Enum.KeyCode.B, C=Enum.KeyCode.C, D=Enum.KeyCode.D,
         E=Enum.KeyCode.E, F=Enum.KeyCode.F, G=Enum.KeyCode.G, H=Enum.KeyCode.H,
@@ -4565,7 +4454,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
     local QTE_LastKey = nil
     local QTE_LastKeyTime = 0
     local QTE_WasOpen = false
-
     local function QTE_PressKey(keyCode, btn)
         pcall(function()
             if VirtualInputManager then
@@ -4589,7 +4477,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end)
     end
-
     local function AntiLaunchFix(hrp)
         if not hrp or not hrp.Parent then return end
         local target = _G.CurrentFarmTarget
@@ -4615,7 +4502,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             )
         end
     end
-
     task.spawn(function()
         while task.wait(0.02) do
             pcall(function()
@@ -4654,8 +4540,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-	
-    -- ===== Potion auto-use & info loop =====
     task.spawn(function()
         local lastUseTime = {}
         local lastInfoUpdate = 0
@@ -4666,16 +4550,13 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             ["X2 Rebirth 15min."] = "x2RebirthTime",
             ["X2 Item 15min."] = "x2ItemTime",
         }
-
         while task.wait(0.3) do
             pcall(function()
                 local now = tick()
-
                 if now - lastInfoUpdate >= 0.5 then
                     lastInfoUpdate = now
                     local Inv = GetInventory()
                     local lines = {}
-
                     for _, potionName in ipairs(X2List) do
                         local have = (Inv[potionName] and Inv[potionName].amount) or 0
                         local attrName = POTION_TIME_MAP[potionName]
@@ -4683,7 +4564,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                         if attrName then
                             timeLeft = tonumber(LocalPlayer:GetAttribute(attrName)) or 0
                         end
-
                         local statusText = ""
                         if timeLeft > 0 then
                             local m = math.floor(timeLeft / 60)
@@ -4692,30 +4572,24 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                         else
                             statusText = " [Hết]"
                         end
-
                         local icon = have > 0 and "✅" or "❌"
                         local selectedMark = ""
                         if _G.Select_Potion and table.find(_G.Select_Potion, potionName) then
                             selectedMark = " ⭐"
                         end
-
                         table.insert(lines, string.format("%s %s: %d%s%s",
                             icon, potionName, have, statusText, selectedMark))
                     end
-
                     if PotionInfoPara then
                         PotionInfoPara:SetTitle("🍦 X2 Potions (⭐ = selected)")
                         PotionInfoPara:SetContent(table.concat(lines, "\n"))
                     end
                 end
-
                 if not _G.Auto_Use_Potion then return end
                 if type(_G.Select_Potion) ~= "table" or #_G.Select_Potion == 0 then return end
-
                 local remote = ReplicatedStorage:FindFirstChild("Remotes")
                 remote = remote and remote:FindFirstChild("Inventory")
                 if not remote then return end
-
                 local Inv = GetInventory()
                 for _, potionName in ipairs(_G.Select_Potion) do
                     local attrName = POTION_TIME_MAP[potionName]
@@ -4736,8 +4610,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
-    -- ===== Auto Equip Accessory =====
     task.spawn(function()
         while task.wait(1) do
             pcall(function()
@@ -4745,7 +4617,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 local Inventory = HttpService:JSONDecode(LocalPlayer:GetAttribute("Inventory") or "{}")
                 local Equipped = HttpService:JSONDecode(LocalPlayer:GetAttribute("UseAccessory") or "{}")
                 local Best = {}
-
                 for Name in pairs(Inventory) do
                     local Info = AccessoryModule[Name]
                     if Info then
@@ -4758,7 +4629,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                         end
                     end
                 end
-
                 for Type, Data in pairs(Best) do
                     local EquippedName
                     for Name, Info in pairs(Equipped) do
@@ -4772,8 +4642,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
-    -- ===== Auto Rebirth =====
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -4785,8 +4653,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
-    -- ===== Auto Buy Guarantee Moon (loop) =====
     task.spawn(function()
         while task.wait() do
             if _G.Auto_Guarantee_Moon and PointItemMoon then
@@ -4800,8 +4666,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end)
-
-    -- ===== Auto Buy Guarantee Diamond (loop) =====
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
@@ -4826,8 +4690,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
-    -- ===== Shop Dungeon info loop =====
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
@@ -4840,8 +4702,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-
-    -- ===== Auto Buy Dungeon Shop =====
     task.spawn(function()
         while task.wait(0.3) do
             if _G.AutoBuyDunRunning and _G.AutoBuyDunItem then
@@ -4854,8 +4714,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end)
-
-    -- ===== Shop Raid info loop =====
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
@@ -4888,8 +4746,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end)
         end
     end)
-	
-	-- ===== Update Portal Gun info =====
     task.spawn(function()
     while task.wait(0.5) do
         pcall(function()
@@ -4901,7 +4757,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
                 needPerRaid = RaidBossData[selectedBoss].PortalCost or 1
             end
             local canRun = math.floor(portalGun / needPerRaid)
-
             PortalGunPara:SetTitle("🔫 Portal Gun: " .. FormatNumber(portalGun))
             if selectedBoss then
                 PortalGunPara:SetContent(string.format(
@@ -4917,20 +4772,13 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         end)
     end
 end)
-	
--- ===== Auto Farm Level (NO SKILL → CANCEL) =====
--- Thay toàn bộ task.spawn cũ của "Auto Farm Level".
--- Thêm: 15 giây không fire skill nào → huỷ quest.
--- Track: AutoSkill() có fire không (dùng _G.LastSkillTime / _G.LastSkillKey có sẵn).
-
 _G.LVL_NoDmgTime    = 4
 _G.LVL_NoMobTimeout = 5
-_G.LVL_NoSkillTimeout = 15    -- giây không fire skill → huỷ quest
+_G.LVL_NoSkillTimeout = 15
 _G.LVL_MaxY         = 300
 _G.LVL_MinY         = -80
 _G.LVL_MaxDist      = 2000
 _G.LVL_Skip         = {}
-
 local function LVL_Valid(mob, myHrp)
     if not mob or not mob.Parent then return false end
     local hrp, hum = mob:FindFirstChild("HumanoidRootPart"), mob:FindFirstChild("Humanoid")
@@ -4940,7 +4788,6 @@ local function LVL_Valid(mob, myHrp)
     if myHrp and (myHrp.Position - hrp.Position).Magnitude > _G.LVL_MaxDist then return false end
     return true
 end
-
 local function LVL_PickMob(monster, myHrp)
     local best, bestD = nil, math.huge
     for _, v in pairs(workspace.Mob:GetChildren()) do
@@ -4952,7 +4799,6 @@ local function LVL_PickMob(monster, myHrp)
     end
     return best
 end
-
 local function LVL_GotoNPC(npcModel, myHrp)
     local npc = npcModel and npcModel:FindFirstChild("HumanoidRootPart")
     if not npc or not myHrp then return end
@@ -4967,12 +4813,10 @@ local function LVL_GotoNPC(npcModel, myHrp)
         pcall(function() fireproximityprompt(p, p.HoldDuration + 0.1) end)
     end
 end
-
 task.spawn(function()
     local target, hpMark, hpTime, lastQuest = nil, 0, 0, nil
     local lastMobSeen = tick()
     local lastSkillTick = 0
-
     while task.wait() do
         xpcall(function()
             if not _G.Auto_Farm_Level then
@@ -4983,11 +4827,9 @@ task.spawn(function()
                 lastSkillTick = 0
                 return
             end
-
             local level = tonumber(LocalPlayer:GetAttribute("Level")) or 1
             local quest = GetQuest_Level(level)
             if not quest then return end
-
             if lastQuest ~= quest.Monster then
                 lastQuest = quest.Monster
                 _G.LVL_Skip = {}
@@ -4995,13 +4837,11 @@ task.spawn(function()
                 lastMobSeen = tick()
                 lastSkillTick = 0
             end
-
             local Frame = GetQuestFrame()
             local Text = Frame.Title.Text or ""
             local char = LocalPlayer.Character
             local myHrp = char and char:FindFirstChild("HumanoidRootPart")
             if not myHrp then return end
-
             local showingQuest = Frame.Visible and string.find(Text, quest.Monster) ~= nil
             local hasNewerQuest = false
             for _, q in ipairs(Quest_List) do
@@ -5010,7 +4850,6 @@ task.spawn(function()
                     break
                 end
             end
-
             if not showingQuest or hasNewerQuest then
                 if Frame.Visible and not showingQuest then
                     ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer("fire", nil, "Quest", "Cancel")
@@ -5025,8 +4864,6 @@ task.spawn(function()
                 end
                 return
             end
-
-            -- Theo dõi skill fire (AutoSkill cập nhật _G.LastSkillTime)
             local curSkill = _G.LastSkillTime or 0
             if lastSkillTick == 0 then lastSkillTick = curSkill end
             if curSkill > lastSkillTick then
@@ -5041,8 +4878,6 @@ task.spawn(function()
                 task.wait(0.5)
                 return
             end
-
-            -- Theo dõi mob quest tồn tại
             local anyMobExists = false
             for _, v in pairs(workspace.Mob:GetChildren()) do
                 if v:IsA("Model") and v.Name == quest.Monster then
@@ -5053,7 +4888,6 @@ task.spawn(function()
                     end
                 end
             end
-
             if anyMobExists then
                 lastMobSeen = tick()
             elseif tick() - lastMobSeen >= _G.LVL_NoMobTimeout then
@@ -5066,9 +4900,7 @@ task.spawn(function()
                 task.wait(0.5)
                 return
             end
-
             if target and not LVL_Valid(target, myHrp) then target = nil end
-
             if not target then
                 target = LVL_PickMob(quest.Monster, myHrp)
                 if target then
@@ -5081,9 +4913,7 @@ task.spawn(function()
                     return
                 end
             end
-
             local hum, tHrp = target.Humanoid, target.HumanoidRootPart
-
             if hum.Health < hpMark then
                 hpMark = hum.Health
                 hpTime = tick()
@@ -5093,7 +4923,6 @@ task.spawn(function()
                 _G.CanAutoSkill = false
                 return
             end
-
             hum.WalkSpeed = 0
             hum.JumpPower = 0
             _G.CurrentFarmTarget = target
@@ -5102,22 +4931,17 @@ task.spawn(function()
             AutoSkill()
             Attack()
             Teleport(tHrp.CFrame * MethodFarm)
-
-            -- Cập nhật skill tick nếu vừa fire
             local afterSkill = _G.LastSkillTime or 0
             if afterSkill > lastSkillTick then lastSkillTick = afterSkill end
-        end, print)
+        end, function() end)
     end
 end)
-
-    -- ===== Auto Farm Material =====
     task.spawn(function()
         local lastMaterialLog = 0
         local lastTargetLog = 0
         local lastSpawnTPTime = 0
         local SPAWN_TP_COOLDOWN = 2
         local lastSpawnTPName = nil
-
         while task.wait() do
             xpcall(function()
                 if not _G.Auto_Farm_Material then
@@ -5129,22 +4953,18 @@ end)
                     if tick() - lastMaterialLog > 5 then lastMaterialLog = tick() end
                     return
                 end
-
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 local hum = char and char:FindFirstChild("Humanoid")
                 if not hrp or not hum or hum.Health <= 0 then return end
-
                 local mobFolder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
                 if not mobFolder then
                     if tick() - lastTargetLog > 5 then lastTargetLog = tick() end
                     return
                 end
-
                 local Target = nil
                 local TargetName = nil
                 local minDist = math.huge
-
                 for _, Material in ipairs(_G.Select_Material) do
                     local MobNames = ItemDrop[Material]
                     if MobNames then
@@ -5165,7 +4985,6 @@ end)
                         end
                     end
                 end
-
                 if not Target then
                     _G.CanAutoSkill = false
                     if tick() - lastSpawnTPTime >= SPAWN_TP_COOLDOWN then
@@ -5191,16 +5010,13 @@ end)
                     hrp.AssemblyAngularVelocity = Vector3.zero
                     return
                 end
-
                 local tHrp = Target.HumanoidRootPart
                 if not tHrp then return end
-
                 _G.CurrentFarmTarget = Target
                 lastSpawnTPName = nil
                 Target.Humanoid.WalkSpeed = 0
                 Target.Humanoid.JumpPower = 0
                 _G.CanAutoSkill = true
-
                 EquipWeapon()
                 AutoSkill()
                 Attack()
@@ -5210,15 +5026,12 @@ end)
             end)
         end
     end)
-	
-    -- ===== Auto Farm Boss (Full) =====
     task.spawn(function()
         local lastSummonTime = 0
         local summonCooldown = 1.5
         while task.wait() do
             xpcall(function()
                 if not _G.Auto_FarmBoss then return end
-
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 local hum = char and char:FindFirstChild("Humanoid")
@@ -5226,7 +5039,6 @@ end)
                     _G.CanAutoSkill = false
                     return
                 end
-
                 local Boss = nil
                 for _, v in pairs(workspace.Boss:GetChildren()) do
                     if table.find(Bosses, v.Name)
@@ -5237,7 +5049,6 @@ end)
                         break
                     end
                 end
-
                 if Boss then
                     _G.CurrentFarmTarget = Boss
                     _G.CanAutoSkill = true
@@ -5251,13 +5062,10 @@ end)
                     Teleport(tHrp.CFrame * MethodFarm)
                     return
                 end
-
                 _G.CanAutoSkill = false
                 lastBossKey = nil
-
                 local now = tick()
                 if now - lastSummonTime < summonCooldown then return end
-
                 local orbBoss = GetItemAmount("Orb Boss")
                 if orbBoss >= 1 and _G.Select_Boss then
                     ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer(
@@ -5266,7 +5074,6 @@ end)
                     lastSummonTime = now
                     return
                 end
-
                 _G.Auto_FarmBoss = false
                 _G.SeaNotify("❌ Out of Orb Boss", "Auto Farm Boss (Full) disabled!", 5)
             end, function(err)
@@ -5274,8 +5081,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Auto Boss All =====
     task.spawn(function()
         local lastTargetKey = nil
         local lastSummonTime = 0
@@ -5287,7 +5092,6 @@ end)
                     lastTargetKey = nil
                     return
                 end
-
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 local hum = char and char:FindFirstChild("Humanoid")
@@ -5295,10 +5099,8 @@ end)
                     _G.CanAutoSkill = false
                     return
                 end
-
                 local mobFolder = workspace:FindFirstChild("Mob") or workspace:FindFirstChild("Mobs")
                 if not mobFolder then return end
-
                 local BossNames = {"Piccolo", "Kraken", "Devil Boat", "DevilBoat", "Bacon Thief"}
                 local Target = nil
                 local TargetName = nil
@@ -5315,32 +5117,25 @@ end)
                     end
                     if Target then break end
                 end
-
                 if not Target then
                     _G.CanAutoSkill = false
                     lastTargetKey = nil
                     return
                 end
-
                 local tHrp = Target:FindFirstChild("HumanoidRootPart")
                 if not tHrp then return end
-
                 _G.CurrentFarmTarget = Target
                 local targetKey = TargetName .. "|" .. tostring(Target)
                 if targetKey ~= lastTargetKey then
                     lastTargetKey = targetKey
-                    print("[BossAll] ⚔️ Target: " .. TargetName)
                 end
-
                 Target.Humanoid.WalkSpeed = 0
                 Target.Humanoid.JumpPower = 0
                 _G.CanAutoSkill = true
-
                 EquipWeapon()
                 AutoSkill()
                 Attack()
                 Teleport(tHrp.CFrame * MethodFarm)
-
                 if TargetName == "Bacon Thief" then
                     task.spawn(function()
                         local startTime = tick()
@@ -5389,8 +5184,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Auto Piccolo =====
     task.spawn(function()
         while task.wait() do
             if _G.Auto_Piccolo then
@@ -5420,15 +5213,12 @@ end)
             end
         end
     end)
-
-    -- ===== Auto Duck (Full) =====
     task.spawn(function()
         local lastSummonTime = 0
         local summonCooldown = 2.5
         while task.wait() do
             xpcall(function()
                 if not _G.Auto_DuckAutomatically then return end
-
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 local hum = char and char:FindFirstChild("Humanoid")
@@ -5436,7 +5226,6 @@ end)
                     _G.CanAutoSkill = false
                     return
                 end
-
                 local Duck = nil
                 for _, v in pairs(workspace.Mob:GetChildren()) do
                     if v:IsA("Model") and v.Name == "Duck Monster"
@@ -5447,7 +5236,6 @@ end)
                         break
                     end
                 end
-
                 if Duck then
                     _G.CurrentFarmTarget = Duck
                     _G.CanAutoSkill = true
@@ -5461,13 +5249,10 @@ end)
                     Teleport(tHrp.CFrame * MethodFarm)
                     return
                 end
-
                 _G.CanAutoSkill = false
                 lastDuckKey = nil
-
                 local now = tick()
                 if now - lastSummonTime < summonCooldown then return end
-
                 local DuckItems = {"Duck","Duck2","Duck3","Duck4","Duck5","Duck6","Duck7"}
                 local missingItems = {}
                 local HaveAll = true
@@ -5477,7 +5262,6 @@ end)
                         table.insert(missingItems, Item)
                     end
                 end
-
                 if HaveAll then
                     local npcPrompt = workspace:FindFirstChild("NpcPrompt")
                     local duckNPC = npcPrompt and npcPrompt:FindFirstChild("DuckMonster")
@@ -5496,7 +5280,6 @@ end)
                     end
                     return
                 end
-
                 _G.Auto_DuckAutomatically = false
                 _G.SeaNotify("❌ Missing Duck Items", table.concat(missingItems, ", "), 6)
             end, function(err)
@@ -5504,8 +5287,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Auto Devil Boat =====
     task.spawn(function()
         while task.wait() do
             if _G.Auto_DevilBoat then
@@ -5534,8 +5315,6 @@ end)
             end
         end
     end)
-
-    -- ===== Auto Kraken =====
     task.spawn(function()
         local lastTargetKey = nil
         local jitterSeed = 0
@@ -5547,7 +5326,6 @@ end)
                     lastTargetKey = nil
                     return
                 end
-
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 local hum = char and char:FindFirstChild("Humanoid")
@@ -5555,7 +5333,6 @@ end)
                     _G.CanAutoSkill = false
                     return
                 end
-
                 local Kraken = nil
                 local mobFolder = workspace:FindFirstChild("Mob")
                 if mobFolder then
@@ -5569,13 +5346,11 @@ end)
                         end
                     end
                 end
-
                 if not Kraken then
                     _G.CanAutoSkill = false
                     lastTargetKey = nil
                     return
                 end
-
                 _G.CanAutoSkill = true
                 _G.CurrentFarmTarget = Kraken
                 Kraken.Humanoid.WalkSpeed = 0
@@ -5590,8 +5365,6 @@ end)
             end)
         end
     end)
-	
-    -- ===== Auto Craft Weapon =====
     task.spawn(function()
         local lastNotifyTime = 0
         local lastCraftTime = 0
@@ -5599,11 +5372,9 @@ end)
         local NOTIFY_INTERVAL = 5
         local lastMissingKey = nil
         local lastMissingNotify = 0
-
         while task.wait(0.1) do
             xpcall(function()
                 if not _G.Auto_CraftWeapon then return end
-
                 if not _G.Select_Item or _G.Select_Item == "" then
                     if tick() - lastNotifyTime > NOTIFY_INTERVAL then
                         lastNotifyTime = tick()
@@ -5611,10 +5382,8 @@ end)
                     end
                     return
                 end
-
                 local Data = UseItems and UseItems[_G.Select_Item]
                 if not Data then return end
-
                 if Data.NeedClass then
                     local PlayerClass = LocalPlayer:GetAttribute("UseClass")
                     if PlayerClass ~= Data.NeedClass then
@@ -5626,7 +5395,6 @@ end)
                         return
                     end
                 end
-
                 local needBeli = (Data.PlayerData and Data.PlayerData.Beli) or 0
                 local currentBeli = LocalPlayer:GetAttribute("Beli") or 0
                 if needBeli > 0 and currentBeli < needBeli then
@@ -5637,7 +5405,6 @@ end)
                     end
                     return
                 end
-
                 local Inv = GetInventory()
                 local missingItems = {}
                 local haveAll = true
@@ -5648,7 +5415,6 @@ end)
                         table.insert(missingItems, Item .. " (" .. Have .. "/" .. Need .. ")")
                     end
                 end
-
                 if not haveAll then
                     local missingKey = table.concat(missingItems, ",")
                     if missingKey ~= lastMissingKey or tick() - lastMissingNotify > NOTIFY_INTERVAL then
@@ -5658,47 +5424,38 @@ end)
                     end
                     return
                 end
-
                 lastMissingKey = nil
-
                 if tick() - lastCraftTime >= CRAFT_INTERVAL then
                     lastCraftTime = tick()
                     ReplicatedStorage.Modules.NetworkFramework.NetworkEvent:FireServer(
                         "fire", nil, "Craft", _G.Select_Item, Data.Type
                     )
                 end
-            end, print)
+            end, function() end)
         end
     end)
-
-    -- ===== Item Requirements display =====
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
                 if not UseItems then return end
-
                 if not _G.Select_Item or _G.Select_Item == "" then
                     Item_Auto:SetTitle("Item Requirements ( Not selected )")
                     Item_Auto:SetContent("📖 Guide:\n 1. Select Weapon from dropdown\n 2. TP to Material NPC\n 3. Enable Auto Craft")
                     return
                 end
-
                 local Data = UseItems[_G.Select_Item]
                 if not Data then
                     Item_Auto:SetTitle("Item Requirements ( No data )")
                     Item_Auto:SetContent("❌ Weapon: " .. _G.Select_Item .. "\n Not found in UseItems")
                     return
                 end
-
                 local Inv = GetInventory()
                 local HaveWeapon = Inv[_G.Select_Item] and (Inv[_G.Select_Item].amount or 0) > 0
-
                 local Text = {}
                 table.insert(Text, "📦 Weapon: " .. _G.Select_Item)
                 table.insert(Text, "━━━━━━━━━━━━━━━━━━━━")
                 table.insert(Text, "🎓 Need Class: " .. (Data.NeedClass or "None"))
                 table.insert(Text, "💰 Need Beli: " .. tostring((Data.PlayerData and Data.PlayerData.Beli) or 0))
-
                 local LowestSet = math.huge
                 local MaterialsText = {}
                 local missingCount = 0
@@ -5709,7 +5466,6 @@ end)
                     if Have < Need then missingCount = missingCount + 1 end
                 end
                 if LowestSet == math.huge then LowestSet = 0 end
-
                 table.insert(Text, "🎯 Have Set: " .. LowestSet)
                 table.insert(Text, "━━━━━━━━━━━━━━━━━━━━")
                 table.insert(Text, "📋 Materials:")
@@ -5719,28 +5475,23 @@ end)
                     local status = Have >= Need and "✅" or "❌"
                     table.insert(Text, string.format(" %s %s: %d/%d (Set: %d)", status, Item, Have, Need, Set))
                 end
-
                 local statusIcon = "❌"
                 if HaveWeapon then
                     statusIcon = "✅ (Already have)"
                 elseif missingCount == 0 then
                     statusIcon = "✅ (Enough)"
                 end
-
                 Item_Auto:SetTitle("Item Requirements \n( " .. _G.Select_Item .. " " .. statusIcon .. " )")
                 Item_Auto:SetContent(table.concat(Text, "\n"))
             end)
         end
     end)
-
-    -- ===== Auto Farm Set Weapon =====
     task.spawn(function()
         while task.wait() do
             if _G.Auto_Farm_Set then
                 pcall(function()
                     local Data = UseItems and UseItems[_G.Select_Item]
                     if not Data then return end
-
                     local Inv = GetInventory()
                     local NeedFarmItem = nil
                     local LowestSet = math.huge
@@ -5755,14 +5506,11 @@ end)
                         end
                     end
                     if not NeedFarmItem then return end
-
                     local NeedAmount = Data.Inventory[NeedFarmItem]
                     local Have = Inv[NeedFarmItem] and Inv[NeedFarmItem].amount or 0
                     if Have >= (LowestSet + 1) * NeedAmount then return end
-
                     local MobNames = ItemDrop[NeedFarmItem]
                     if not MobNames then return end
-
                     for _, MobName in ipairs(MobNames) do
                         local Target
                         for _, Mob in ipairs(workspace.Mob:GetChildren()) do
@@ -5803,14 +5551,11 @@ end)
             end
         end
     end)
-	
-    -- ===== Bacon Raid: khai báo state =====
     _G.RaidBossRemoteNames = {
         Bacon = "Bacon of Grudge",
         Dragon = "Dragon",
         Lava = "LavaTitan",
     }
-
     function _G.SummonRaidBoss(bossKey)
         local rs = game:GetService("ReplicatedStorage")
         local modules = rs:FindFirstChild("Modules")
@@ -5824,7 +5569,6 @@ end)
         if not ok then return false, "fire_fail:" .. tostring(err) end
         return true, remoteName
     end
-
     _G.AutoRaidRunning = false
     _G.RaidLastFireTime = 0
     _G.RaidLastAttack = 0
@@ -5865,7 +5609,6 @@ end)
     _G.BaconFbLavaThanosCount = 0
     _G.BaconFbLavaSurfaced = false
     _G.BaconFbLavaSurfacedTime = 0
-
     _G.LAVA_UNDER_LAVA_Y = -100
     _G.LAVA_AIM_HEIGHT = 25
     _G.BACON_AIM_HEIGHT = 25
@@ -5877,12 +5620,10 @@ end)
     _G.BACON_SAFE_HEIGHT = 500
     _G.BACON_HOVER_DELAY = 0.8
     _G.BACON_BUFF_LIST = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
-
     function Bacon_GetMethodFarm(height)
         height = height or _G.BACON_AIM_HEIGHT
         return CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
     end
-
     function Bacon_FindThanosTool()
 	    if not _G.UseThanosF then return nil, "none" end
         local char = LocalPlayer.Character
@@ -5908,7 +5649,6 @@ end)
         end
         return nil, "none"
     end
-
     function Bacon_EnsureThanosEquipped()
         local char = LocalPlayer.Character
         if not char then return nil end
@@ -5921,14 +5661,12 @@ end)
             task.wait(0.2)
             for _, t in ipairs(char:GetChildren()) do
                 if t:IsA("Tool") and t.Name:lower():find("thanos") then
-                    print("[Bacon] 🗡️ Đã trang bị Thanos")
                     return t
                 end
             end
         end
         return nil
     end
-
     function Bacon_FindBuffTool()
         local char = LocalPlayer.Character
         if not char then return nil, nil end
@@ -5951,14 +5689,11 @@ end)
         end
         return nil, nil
     end
-
     function Bacon_BuffSpamLoop()
         local tool, buffName = Bacon_FindBuffTool()
         if not tool then
-            print("[Bacon] ⚠️ Không có buff tool, bỏ qua")
             return false
         end
-        print("[Bacon] ⚡ Bắt đầu spam F buff: " .. buffName)
         local startTime = tick()
         local lastFTime = 0
         local fireCount = 0
@@ -5989,7 +5724,6 @@ end)
                     end
                 end
                 if not currentTool then break end
-
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main = hud and hud:FindFirstChild("Main")
                 local skillList = main and main:FindFirstChild("Frame_SkillList_" .. buffName)
@@ -6006,23 +5740,18 @@ end)
                         if isUnready or isCooldownVisible then fOnCooldown = true end
                     end
                 end
-
                 if fOnCooldown and fireCount > 0 then
-                    print("[Bacon] ⏹️ Buff F cooldown sau " .. fireCount .. " lần → dừng spam")
                     break
                 end
-
                 if Action then
                     pcall(function() Action:FireServer(currentTool.Name, "f") end)
                     fireCount = fireCount + 1
-                    print("[Bacon] ⚡ Buff F #" .. fireCount .. ": " .. buffName)
                 end
             end
             task.wait(0.1)
         end
         return true
     end
-
     function Bacon_TryUseThanosF(hrp)
         if not hrp then return "no_tool" end
         local char = LocalPlayer.Character
@@ -6052,7 +5781,6 @@ end)
         end
         return "no_tool"
     end
-
     function Bacon_CloseFrame(frame)
         if not frame then return false end
         local closeBtn = frame:FindFirstChild("Close_") or frame:FindFirstChild("Close")
@@ -6070,7 +5798,6 @@ end)
         pcall(function() frame.Visible = false end)
         return true
     end
-
     function Bacon_GetTarget()
         local bf = workspace:FindFirstChild("Boss Fight")
         if not bf then return nil, nil, nil end
@@ -6087,11 +5814,9 @@ end)
         if bossAlive then return BossBacon, "Boss Bacon Sad", "Boss" end
         return nil, nil, nil
     end
-
     function Bacon_GetAnyBoss()
         local bf = workspace:FindFirstChild("Boss Fight")
         if not bf then return nil, nil, nil, nil end
-
         local lavaFolder = bf:FindFirstChild("LavaTitan")
         if lavaFolder then
             for _, obj in ipairs(lavaFolder:GetChildren()) do
@@ -6104,7 +5829,6 @@ end)
                 end
             end
         end
-
         local dragonFolder = bf:FindFirstChild("Dragon")
         if dragonFolder then
             local bossModel = dragonFolder:FindFirstChild("Dragon Boss")
@@ -6116,7 +5840,6 @@ end)
                 end
             end
         end
-
         for _, obj in ipairs(bf:GetDescendants()) do
             if obj:IsA("Model") then
                 local hum = obj:FindFirstChild("Humanoid")
@@ -6131,19 +5854,14 @@ end)
         end
         return nil, nil, nil, nil
     end
-	
     function Bacon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp, now)
         if not bossModel or not bossHrp or not bossHum or not myHrp then return end
         _G.BaconBuffSpamActive = false
-
         if _G.BaconFbBossName ~= bossModel.Name then _G.BaconFbBossName = bossModel.Name end
         if _G.BaconFbType ~= bossType then _G.BaconFbType = bossType end
-
         bossHum.WalkSpeed = 0
         bossHum.JumpPower = 0
         local hpPct = (bossHum.Health / bossHum.MaxHealth) * 100
-
-        -- ============ DRAGON ============
         if bossType == "Dragon" then
             local safePart = nil
             if _G.BaconFbDragonSafePart and _G.BaconFbDragonSafePart.Parent then
@@ -6169,7 +5887,6 @@ end)
                     end
                 end
             end
-
             if safePart then
                 if not _G.BaconFbDragonSafeActive then _G.BaconFbDragonSafeActive = true end
                 _G.CanAutoSkill = false
@@ -6182,7 +5899,6 @@ end)
                 _G.BaconFbDragonSafeActive = false
                 _G.BaconFbDragonSafePart = nil
             end
-
             if _G.BaconFbDragonWaiting then
                 if _G.BaconFbDragonSafePos then
                     myHrp.CFrame = CFrame.new(_G.BaconFbDragonSafePos, bossHrp.Position)
@@ -6191,7 +5907,6 @@ end)
                 end
                 return
             end
-
             if hpPct <= 50 then
                 if not Bacon_FindThanosTool() then
                     _G.CanAutoSkill = true
@@ -6212,21 +5927,17 @@ end)
                     end
                     return
                 end
-
                 _G.CanAutoSkill = false
                 local thanosTool = Bacon_EnsureThanosEquipped()
                 if not thanosTool then return end
-
                 if _G.BaconFbDragonThanosStart == 0 then
                     _G.BaconFbDragonThanosStart = now
                     _G.BaconFbDragonThanosCount = 0
                 end
-
                 local tPos = bossHrp.Position + Vector3.new(0, 25, 0)
                 myHrp.CFrame = CFrame.new(tPos, bossHrp.Position)
                 myHrp.AssemblyLinearVelocity = Vector3.zero
                 myHrp.AssemblyAngularVelocity = Vector3.zero
-
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main = hud and hud:FindFirstChild("Main")
                 local sl = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -6241,7 +5952,6 @@ end)
                         if (rd and rd.Text == "UnReady") or (cd and cd.Visible) then fCd = true end
                     end
                 end
-
                 if fCd and _G.BaconFbDragonThanosCount > 0 then
                     if not _G.BaconFbDragonWaiting then
                         _G.BaconFbDragonWaiting = true
@@ -6257,13 +5967,11 @@ end)
                     myHrp.AssemblyAngularVelocity = Vector3.zero
                     return
                 end
-
                 if not fCd and now - _G.RaidLastThanosTime >= 0.5 then
                     _G.RaidLastThanosTime = now
                     _G.BaconFbDragonThanosCount = _G.BaconFbDragonThanosCount + 1
                     local ok, err = pcall(function() Action:FireServer(thanosTool.Name, "f") end)
                     if ok then
-                        print(string.format("[Bacon] ⚡ Dragon F #%d (HP: %.1f%%)", _G.BaconFbDragonThanosCount, hpPct))
                     else
                         warn("[Bacon] ❌ Dragon F fail: " .. tostring(err))
                     end
@@ -6289,14 +5997,10 @@ end)
                 return
             end
         end
-
-        -- ============ LAVA ============
         if bossType == "Lava" then
             if not _G.BaconFbLavaOriginPos then
                 _G.BaconFbLavaOriginPos = bossHrp.Position
-                print("[Bacon] 🌋 Lava fallback: OriginPos lưu")
             end
-
             if _G.BaconFbLavaWaiting then
                 if _G.BaconFbLavaSafePos then
                     myHrp.CFrame = CFrame.new(_G.BaconFbLavaSafePos, bossHrp.Position)
@@ -6305,7 +6009,6 @@ end)
                 end
                 return
             end
-
             local bossY = bossHrp.Position.Y
             local bossUnderLava = bossY < _G.LAVA_UNDER_LAVA_Y
             if bossUnderLava then
@@ -6336,7 +6039,6 @@ end)
                     _G.BaconFbLavaSurfacedTime = 0
                 end
             end
-
             if hpPct <= 50 then
                 if not Bacon_FindThanosTool() then
                     _G.CanAutoSkill = true
@@ -6357,21 +6059,17 @@ end)
                     end
                     return
                 end
-
                 _G.CanAutoSkill = false
                 local thanosTool = Bacon_EnsureThanosEquipped()
                 if not thanosTool then return end
-
                 if _G.BaconFbLavaThanosStart == 0 then
                     _G.BaconFbLavaThanosStart = now
                     _G.BaconFbLavaThanosCount = 0
                 end
-
                 local tPos = bossHrp.Position + Vector3.new(0, 25, 0)
                 myHrp.CFrame = CFrame.new(tPos, bossHrp.Position)
                 myHrp.AssemblyLinearVelocity = Vector3.zero
                 myHrp.AssemblyAngularVelocity = Vector3.zero
-
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main = hud and hud:FindFirstChild("Main")
                 local sl = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -6386,7 +6084,6 @@ end)
                         if (rd and rd.Text == "UnReady") or (cd and cd.Visible) then fCd = true end
                     end
                 end
-
                 if fCd and _G.BaconFbLavaThanosCount > 0 then
                     if not _G.BaconFbLavaWaiting then
                         _G.BaconFbLavaWaiting = true
@@ -6396,21 +6093,17 @@ end)
                             myHrp.Position.Z
                         )
                         _G.CanAutoSkill = false
-                        print(string.format("[Bacon] 🌋 Lava F #%d → cooldown → bay 300m đợi boss chết",
-                            _G.BaconFbLavaThanosCount))
                     end
                     myHrp.CFrame = CFrame.new(_G.BaconFbLavaSafePos, bossHrp.Position)
                     myHrp.AssemblyLinearVelocity = Vector3.zero
                     myHrp.AssemblyAngularVelocity = Vector3.zero
                     return
                 end
-
                 if not fCd and now - _G.RaidLastThanosTime >= 0.3 then
                     _G.RaidLastThanosTime = now
                     _G.BaconFbLavaThanosCount = _G.BaconFbLavaThanosCount + 1
                     local ok, err = pcall(function() Action:FireServer(thanosTool.Name, "f") end)
                     if ok then
-                        print(string.format("[Bacon] 🌋 Lava F #%d (HP: %.1f%%)", _G.BaconFbLavaThanosCount, hpPct))
                     else
                         warn("[Bacon] ❌ Lava F fail: " .. tostring(err))
                     end
@@ -6421,7 +6114,6 @@ end)
                 _G.BaconFbLavaThanosStart = 0
                 _G.BaconFbLavaThanosCount = 0
             end
-
             local mF = Bacon_GetMethodFarm(25)
             myHrp.CFrame = bossHrp.CFrame * mF
             myHrp.AssemblyLinearVelocity = Vector3.new(0, myHrp.AssemblyLinearVelocity.Y, 0)
@@ -6437,8 +6129,6 @@ end)
             end
             return
         end
-
-        -- ============ GENERIC ============
         local mF = Bacon_GetMethodFarm(25)
         myHrp.CFrame = bossHrp.CFrame * mF
         myHrp.AssemblyLinearVelocity = Vector3.new(0, myHrp.AssemblyLinearVelocity.Y, 0)
@@ -6453,7 +6143,6 @@ end)
             if hs then AutoSkill() else Attack() end
         end
     end
-	
     local function IsOtherRaidOccupied()
         local bf = workspace:FindFirstChild("Boss Fight")
         if not bf then return false, nil end
@@ -6474,41 +6163,32 @@ end)
         end
         return false, nil
     end
-
     function Bacon_OpenPortal()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return false end
         if tick() < _G.RaidPortalFireLock then return false end
-
         local bf = workspace:FindFirstChild("Boss Fight")
         if bf and bf:FindFirstChild("Bacon of Grudge") then
             _G.RaidPortalPhase = "IDLE"
             return true
         end
-
-        -- Check buff tool 1 lần
         if _G.RaidBuffCheckDone == nil then
             _G.RaidBuffCheckDone = true
             local tool, buffName = Bacon_FindBuffTool()
             if tool then
                 _G.RaidBuffToolName = buffName
                 _G.RaidHasBuffTool = true
-                print("[Bacon] ✅ Có buff tool: " .. buffName .. " → sẽ buff trước khi summon")
             else
                 _G.RaidBuffToolName = nil
                 _G.RaidHasBuffTool = false
-                print("[Bacon] ⚠️ Không có buff tool (SSJ...) → bỏ buff, summon luôn")
                 _G.RaidBuffUsed = true
                 _G.RaidBuffFinishTime = tick()
             end
         end
-
-        -- Spam buff trước khi summon
         if _G.RaidHasBuffTool and not _G.RaidBuffUsed then
             _G.RaidBuffUsed = true
             local buffName = _G.RaidBuffToolName
-            print("[Bacon] ⚡ Equip " .. buffName .. " + spam F trước khi summon")
             task.spawn(function()
                 local c = LocalPlayer.Character
                 if not c then
@@ -6538,15 +6218,11 @@ end)
                 Bacon_BuffSpamLoop()
                 task.wait(0.2)
                 _G.RaidBuffFinishTime = tick()
-                print("[Bacon] ✅ Buff F xong → summon boss")
             end)
             return false
         end
-
         if _G.RaidBuffFinishTime == 0 then return false end
         if tick() - _G.RaidBuffFinishTime < 0.3 then return false end
-
-        -- Phase IDLE: summon boss
         if _G.RaidPortalPhase == "IDLE" or _G.RaidPortalPhase == nil then
             if tick() - _G.RaidLastFireTime >= _G.BACON_MIN_FIRE_GAP then
                 _G.RaidLastFireTime = tick()
@@ -6554,23 +6230,18 @@ end)
                 _G.RaidPortalStartTime = tick()
                 local ok, name = _G.SummonRaidBoss("Bacon")
                 if ok then
-                    print("[Bacon] 🌀 Summon qua remote: " .. tostring(name))
                 else
-                    print("[Bacon] ❌ Summon fail: " .. tostring(name))
                     _G.RaidPortalPhase = "IDLE"
                 end
                 return true
             end
         end
-
-        -- Phase GUI_OPENING: TP vào portal
         if _G.RaidPortalPhase == "GUI_OPENING" then
             local tz = workspace:FindFirstChild("TeleportBossFightZone")
             if tz and tz:FindFirstChild("Hitbox") then
                 hrp.CFrame = tz.Hitbox.CFrame
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
-                print("[Bacon] 🌀 TP vào portal")
                 _G.RaidEnterTime = tick()
                 _G.RaidPortalPhase = "ENTERED"
                 _G.RaidPortalFireLock = tick() + _G.BACON_PORTAL_FIRE_LOCK
@@ -6582,8 +6253,6 @@ end)
             end
             return true
         end
-
-        -- Phase WAITING: TP vào portal sau summon
         if _G.RaidPortalPhase == "WAITING" then
             local elapsed = tick() - _G.RaidPortalStartTime
             local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
@@ -6591,7 +6260,6 @@ end)
                 hrp.CFrame = tz2.Hitbox.CFrame
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
-                print("[Bacon] 🌀 TP vào portal (sau summon)")
                 _G.RaidEnterTime = tick()
                 _G.RaidPortalPhase = "ENTERED"
                 _G.RaidPortalFireLock = tick() + _G.BACON_PORTAL_FIRE_LOCK
@@ -6610,11 +6278,8 @@ end)
             end
             return true
         end
-
         return false
     end
-
-    -- ===== Respawn reset =====
     LocalPlayer.CharacterAdded:Connect(function(newChar)
         task.wait(1)
         if not _G.AutoRaidRunning then return end
@@ -6652,10 +6317,7 @@ end)
         _G.RaidBuffCheckDone = nil
         _G.RaidHasBuffTool = nil
         _G.RaidBuffToolName = nil
-        print("[Bacon] 💀 Respawn → reset")
     end)
-
-    -- ===== Main Bacon raid loop =====
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -6695,15 +6357,12 @@ end)
                     _G.RaidBuffToolName = nil
                     return
                 end
-
                 local char = LocalPlayer.Character
                 local hum = char and char:FindFirstChild("Humanoid")
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hum or not hrp or hum.Health <= 0 then return end
-
                 local now = tick()
                 local target, targetName, targetType = Bacon_GetTarget()
-
                 if not target then
                     local anyBoss, anyHrp, anyHum, anyType = Bacon_GetAnyBoss()
                     if anyBoss and anyHrp and anyHum then
@@ -6717,7 +6376,6 @@ end)
                     end
                     return
                 end
-
                 if _G.BaconFbBossName then
                     _G.BaconFbBossName = nil
                     _G.BaconFbType = nil
@@ -6731,11 +6389,9 @@ end)
                     _G.BaconFbLavaSurfaced = false
                     _G.BaconFbLavaSurfacedTime = 0
                 end
-
                 local targetHum = target:FindFirstChild("Humanoid")
                 local targetHrp = target:FindFirstChild("HumanoidRootPart")
                 if not targetHum or not targetHrp then return end
-
                 if targetHum.Health <= 0 then
                     if targetType == "Boss" then
                         if not _G.RaidBossDeadHandled then
@@ -6796,14 +6452,10 @@ end)
                         return
                     end
                 end
-
                 _G.RaidBossDeadHandled = false
                 if _G.RaidEnterTime == 0 then _G.RaidEnterTime = tick() end
-
                 targetHum.WalkSpeed = 0
                 targetHum.JumpPower = 0
-
-                -- ArmorBall
                 if targetType == "ArmorBall" then
                     if _G.RaidCurrentTargetType ~= "ArmorBall" then
                         _G.RaidCurrentTargetType = "ArmorBall"
@@ -6823,13 +6475,10 @@ end)
                     end
                     return
                 end
-
-                -- Boss Bacon
                 if targetType == "Boss" then
                     local hpPercent = (targetHum.Health / targetHum.MaxHealth) * 100
                     local threshold = _G.RaidThanosHPPercent or 50
                     local isThanosPriority = hpPercent <= threshold
-
                     if isThanosPriority then
                         if _G.RaidThanosFlyPos then
                             hrp.CFrame = CFrame.new(_G.RaidThanosFlyPos, targetHrp.Position)
@@ -6837,7 +6486,6 @@ end)
                             hrp.AssemblyAngularVelocity = Vector3.zero
                             return
                         end
-
                         if not Bacon_FindThanosTool() then
                             _G.CanAutoSkill = true
                             _G.RaidCurrentTargetType = "Boss_Normal_NoThanos"
@@ -6856,26 +6504,21 @@ end)
                             end
                             return
                         end
-
                         _G.CanAutoSkill = false
                         if _G.RaidCurrentTargetType ~= "Boss_Thanos" then
                             _G.RaidCurrentTargetType = "Boss_Thanos"
                             _G.RaidThanosSpamStartTime = 0
                         end
-
                         local thanosEquipped = Bacon_EnsureThanosEquipped()
                         if not thanosEquipped then return end
-
                         if _G.RaidThanosSpamStartTime == 0 then
                             _G.RaidThanosSpamStartTime = now
                             _G.RaidThanosFSuccessCount = 0
                         end
-
                         local tPos = targetHrp.Position + Vector3.new(0, _G.BACON_BOSS_HEIGHT, 0)
                         hrp.CFrame = CFrame.new(tPos, targetHrp.Position)
                         hrp.AssemblyLinearVelocity = Vector3.zero
                         hrp.AssemblyAngularVelocity = Vector3.zero
-
                         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                         local main = hud and hud:FindFirstChild("Main")
                         local sl = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -6890,7 +6533,6 @@ end)
                                 if (rd and rd.Text == "UnReady") or (cd and cd.Visible) then fCd = true end
                             end
                         end
-
                         if fCd and _G.RaidThanosFSuccessCount > 0 then
                             _G.RaidThanosFlyPos = Vector3.new(
                                 hrp.Position.X,
@@ -6903,7 +6545,6 @@ end)
                             hrp.AssemblyAngularVelocity = Vector3.zero
                             return
                         end
-
                         if not fCd and now - _G.RaidLastThanosTime >= 0.5 then
                             _G.RaidLastThanosTime = now
                             _G.RaidThanosFSuccessCount = _G.RaidThanosFSuccessCount + 1
@@ -6941,8 +6582,6 @@ end)
             end)
         end
     end)
-	
-    -- ===== Stop hover khi tắt raid =====
     task.spawn(function()
         while task.wait(0.5) do
             if not _G.AutoRaidRunning then
@@ -6958,8 +6597,6 @@ end)
             end
         end
     end)
-
-    -- ===== Thief chest loop =====
     local CurrentSpawn = 1
     task.spawn(function()
         while task.wait() do
@@ -7009,8 +6646,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Auto Raid (Moon) =====
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -7092,8 +6727,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Auto Dungeon =====
     task.spawn(function()
         while task.wait() do
             xpcall(function()
@@ -7104,19 +6737,16 @@ end)
                 local hum = Character:FindFirstChild("Humanoid")
                 local hrp = Character:FindFirstChild("HumanoidRootPart")
                 if not hum or not hrp then return end
-
                 local HpPercent = (hum.Health / hum.MaxHealth) * 100
                 if HpPercent < _G.HealthPercent then
                     hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + 200, hrp.Position.Z)
                     task.wait(0.5)
                     return
                 end
-
                 local Dungeon
                 local DungeonId = Character:GetAttribute("Dungeon")
                 local GuiService = game:GetService("GuiService")
                 local VirtualInputManager = game:GetService("VirtualInputManager")
-
                 if Player.PlayerGui:FindFirstChild("WaveUI")
                     and Player.PlayerGui.WaveUI.AutoSkip.BackgroundColor3 == Color3.fromRGB(255, 69, 69) then
                     GuiService.SelectedObject = Player.PlayerGui.WaveUI.AutoSkip
@@ -7126,11 +6756,9 @@ end)
                     task.wait(0.1)
                     GuiService.SelectedObject = nil
                 end
-
                 if DungeonId then
                     Dungeon = workspace.DungeonMap:FindFirstChild("Dungeon_" .. DungeonId)
                 end
-
                 if Dungeon then
                     local Target, MinDist = nil, math.huge
                     for _, Mob in ipairs(workspace.Mob:GetChildren()) do
@@ -7233,11 +6861,9 @@ end)
                         end
                     end
                 end
-            end, print)
+            end, function() end)
         end
     end)
-
-    -- ===== Reward-frame closer =====
     task.spawn(function()
         while task.wait(0.5) do
             pcall(function()
@@ -7268,8 +6894,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Anti-fling loop =====
     task.spawn(function()
         while task.wait() do
             if _G.Auto_Farm_Level or _G.Auto_CraftWeapon or _G.Auto_Farm_Material
@@ -7288,8 +6912,6 @@ end)
             end
         end
     end)
-
-    -- ===== Noclip =====
     task.spawn(function()
         pcall(function()
             RunService.Stepped:Connect(function()
@@ -7318,8 +6940,6 @@ end)
             end)
         end)
     end)
-	
-    -- ===== Dragon Raid: khai báo state =====
     _G.AutoRaidDragon = false
     _G.DragonLastFireTime = 0
     _G.DragonLastAttack = 0
@@ -7359,7 +6979,6 @@ end)
     _G.DragonFbBaconWaitBoss = nil
     _G.DragonFbLavaWaiting2 = false
     _G.DragonFbLavaSafePos = nil
-
     _G.DRAGON_AIM_HEIGHT = 25
     _G.DRAGON_MIN_FIRE_GAP = 3
     _G.DRAGON_PORTAL_TIMEOUT = 15
@@ -7368,12 +6987,10 @@ end)
     _G.DRAGON_THANOS_COOLDOWN = 0.3
     _G.DRAGON_BUFF_COOLDOWN = 0.3
     _G.DRAGON_BUFF_LIST = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
-
     function Dragon_GetMethodFarm(height)
         height = height or _G.DRAGON_AIM_HEIGHT
         return CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
     end
-
     function Dragon_FindThanosTool()
 	    if not _G.UseThanosF then return nil, "none" end
         local char = LocalPlayer.Character
@@ -7399,7 +7016,6 @@ end)
         end
         return nil, "none"
     end
-
     function Dragon_FindBuffTool()
         local char = LocalPlayer.Character
         if not char then return nil, nil end
@@ -7422,7 +7038,6 @@ end)
         end
         return nil, nil
     end
-
     function Dragon_EnsureThanosEquipped()
         local char = LocalPlayer.Character
         if not char then return nil end
@@ -7445,7 +7060,6 @@ end)
         end
         return nil
     end
-
     function Dragon_TryUseThanosF(hrp)
         if not hrp then return "no_tool" end
         local char = LocalPlayer.Character
@@ -7461,7 +7075,6 @@ end)
             end
         end
         if not thanosTool then return "no_tool" end
-
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
         local main = hud and hud:FindFirstChild("Main")
         local skillList = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -7485,21 +7098,17 @@ end)
         end
         return "no_tool"
     end
-
     function Dragon_OnAlert(text)
         if not text then return end
         local lower = text:lower()
         if lower:find("gathering power", 1, true) then
-            print("[Dragon] ⚠️ GATHERING POWER")
         end
         if lower:find("hide in the green zone", 1, true) or lower:find("green zone", 1, true) then
             if not _G.DragonAlertTriggered then
                 _G.DragonAlertTriggered = true
-                print("[Dragon] 🚨 PHASE 2: HIDE IN THE GREEN ZONE!")
             end
         end
     end
-
     function Dragon_HookText(container)
         for _, obj in ipairs(container:GetDescendants()) do
             if obj:IsA("TextLabel") or obj:IsA("TextButton") then
@@ -7510,7 +7119,6 @@ end)
             end
         end
     end
-
     function Dragon_GetBoss()
         local bf = workspace:FindFirstChild("Boss Fight")
         if not bf then return nil, nil, nil end
@@ -7523,13 +7131,11 @@ end)
         if bossHrp and bossHum then return bossModel, bossHrp, bossHum end
         return nil, nil, nil
     end
-
     function Dragon_IsSafeZoneColor(c)
         return math.abs(c.R - 0.27) < 0.05
             and math.abs(c.G - 1.00) < 0.05
             and math.abs(c.B - 0.55) < 0.05
     end
-
     function Dragon_FindSafeZone()
         if _G.DragonSafeZonePart and _G.DragonSafeZonePart.Parent then
             return _G.DragonSafeZonePart
@@ -7553,7 +7159,6 @@ end)
         end
         return nil
     end
-
     function Dragon_CloseFrame(frame)
         if not frame then return false end
         local closeBtn = frame:FindFirstChild("Close_")
@@ -7572,11 +7177,9 @@ end)
         pcall(function() frame.Visible = false end)
         return true
     end
-
     function Dragon_GetAnyBoss()
         local bf = workspace:FindFirstChild("Boss Fight")
         if not bf then return nil, nil, nil, nil end
-
         local baconFolder = bf:FindFirstChild("Bacon of Grudge")
         if baconFolder then
             local a1 = baconFolder:FindFirstChild("ArmorBall1")
@@ -7589,7 +7192,6 @@ end)
             if a2A then return a2, a2.HumanoidRootPart, a2.Humanoid, "Bacon" end
             if bbA then return bb, bb.HumanoidRootPart, bb.Humanoid, "Bacon" end
         end
-
         local lavaFolder = bf:FindFirstChild("LavaTitan")
         if lavaFolder then
             for _, obj in ipairs(lavaFolder:GetChildren()) do
@@ -7602,7 +7204,6 @@ end)
                 end
             end
         end
-
         for _, obj in ipairs(bf:GetDescendants()) do
             if obj:IsA("Model") then
                 local hum = obj:FindFirstChild("Humanoid")
@@ -7617,20 +7218,16 @@ end)
         end
         return nil, nil, nil, nil
     end
-
     function Dragon_OpenPortal()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return false end
         if tick() < _G.DragonPortalFireLock then return false end
-
         local bf = workspace:FindFirstChild("Boss Fight")
         if bf and bf:FindFirstChild("Dragon") then
             _G.DragonPortalPhase = "IDLE"
             return true
         end
-
-        -- Spam buff F trước summon
         if not _G.DragonBuffUsed then
             local tool, buffName = Dragon_FindBuffTool()
             if tool then
@@ -7667,7 +7264,6 @@ end)
                                 end
                             end
                             if not currentTool then break end
-
                             local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                             local main = hud and hud:FindFirstChild("Main")
                             local skillList = main and main:FindFirstChild("Frame_SkillList_" .. buffName)
@@ -7685,7 +7281,6 @@ end)
                                 end
                             end
                             if fOnCooldown then break end
-
                             if Action then
                                 pcall(function() Action:FireServer(currentTool.Name, "f") end)
                             end
@@ -7708,11 +7303,8 @@ end)
                 end
             end
         end
-
         if _G.DragonBuffFinishTime == 0 then return false end
         if tick() - _G.DragonBuffFinishTime < 0.3 then return false end
-
-        -- TP vào portal nếu có sẵn
         local tz = workspace:FindFirstChild("TeleportBossFightZone")
         if tz and tz:FindFirstChild("Hitbox") then
             if _G.DragonPortalPhase ~= "ENTERED" then
@@ -7725,8 +7317,6 @@ end)
             end
             return true
         end
-
-        -- Phase IDLE: summon boss
         if _G.DragonPortalPhase == "IDLE" then
             if tick() - _G.DragonLastFireTime >= _G.DRAGON_MIN_FIRE_GAP then
                 _G.DragonLastFireTime = tick()
@@ -7740,8 +7330,6 @@ end)
                 return true
             end
         end
-
-        -- Phase GUI_OPENING
         if _G.DragonPortalPhase == "GUI_OPENING" then
             local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
             if tz2 and tz2:FindFirstChild("Hitbox") then
@@ -7758,8 +7346,6 @@ end)
             end
             return true
         end
-
-        -- Phase WAITING
         if _G.DragonPortalPhase == "WAITING" then
             local elapsed = tick() - _G.DragonPortalStartTime
             local tz3 = workspace:FindFirstChild("TeleportBossFightZone")
@@ -7784,11 +7370,8 @@ end)
             end
             return true
         end
-
         return false
     end
-
-    -- Hook text alert toàn bộ PlayerGui
     Dragon_HookText(LocalPlayer.PlayerGui)
     LocalPlayer.PlayerGui.DescendantAdded:Connect(function(obj)
         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
@@ -7799,28 +7382,20 @@ end)
             end)
         end
     end)
-	
     function Dragon_FallbackSmart(bossModel, bossHrp, bossHum, bossType, myHrp)
         if not bossModel or not bossHrp or not bossHum or not myHrp then return end
         _G.DragonBuffSpamActive = false
         local now = tick()
-
         if _G.DragonFallbackBossName ~= bossModel.Name then
             _G.DragonFallbackBossName = bossModel.Name
-            print("[Dragon] ⚠️ Fallback đánh: " .. bossModel.Name .. " [" .. bossType .. "]")
         end
         if _G.DragonFallbackType ~= bossType then
             _G.DragonFallbackType = bossType
-            print("[Dragon] 🔄 Fallback type: " .. bossType)
         end
-
         bossHum.WalkSpeed = 0
         bossHum.JumpPower = 0
-
-        -- ============ BACON ============
         if bossType == "Bacon" then
             local isArmorBall = bossModel.Name:find("ArmorBall") ~= nil
-
             if _G.DragonFbBaconLastBossName ~= bossModel.Name then
                 _G.DragonFbBaconLastBossName = bossModel.Name
                 if not isArmorBall then
@@ -7830,7 +7405,6 @@ end)
                     end
                 end
             end
-
             if isArmorBall then
                 _G.DragonFbBaconThanosStart = 0
                 _G.DragonFbBaconFiredDone = false
@@ -7851,9 +7425,7 @@ end)
                 end
                 return
             end
-
             local hpPct = (bossHum.Health / bossHum.MaxHealth) * 100
-
             if _G.DragonFbBaconWaitBoss ~= bossModel.Name then
                 _G.DragonFbBaconWaitBoss = bossModel.Name
                 _G.DragonFbBaconWaiting = false
@@ -7861,7 +7433,6 @@ end)
                 _G.DragonFbBaconThanosStart = 0
                 _G.DragonFbBaconFiredDone = false
             end
-
             if hpPct <= 50 then
                 if _G.DragonFbBaconWaiting then
                     if _G.DragonFbBaconSafePos then
@@ -7871,7 +7442,6 @@ end)
                     end
                     return
                 end
-
                 if not Dragon_FindThanosTool() then
                     _G.CanAutoSkill = true
                     _G.DragonFbBaconThanosStart = 0
@@ -7890,21 +7460,17 @@ end)
                     end
                     return
                 end
-
                 _G.CanAutoSkill = false
                 if _G.DragonFbBaconThanosStart == 0 then
                     _G.DragonFbBaconThanosStart = now
                     _G.DragonFbBaconThanosCount = 0
                 end
-
                 local thanosTool = Dragon_EnsureThanosEquipped()
                 if not thanosTool then return end
-
                 local tPos = bossHrp.Position + Vector3.new(0, _G.BaconBossHeight or 55, 0)
                 myHrp.CFrame = CFrame.new(tPos, bossHrp.Position)
                 myHrp.AssemblyLinearVelocity = Vector3.zero
                 myHrp.AssemblyAngularVelocity = Vector3.zero
-
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main = hud and hud:FindFirstChild("Main")
                 local sl = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -7919,7 +7485,6 @@ end)
                         if (rd and rd.Text == "UnReady") or (cd and cd.Visible) then fCd = true end
                     end
                 end
-
                 if fCd and _G.DragonFbBaconThanosCount > 0 then
                     if not _G.DragonFbBaconWaiting then
                         _G.DragonFbBaconWaiting = true
@@ -7935,7 +7500,6 @@ end)
                     myHrp.AssemblyAngularVelocity = Vector3.zero
                     return
                 end
-
                 if not fCd and now - _G.DragonLastThanosTime >= 0.5 then
                     _G.DragonLastThanosTime = now
                     _G.DragonFbBaconThanosCount = _G.DragonFbBaconThanosCount + 1
@@ -7966,14 +7530,11 @@ end)
                 return
             end
         end
-
-        -- ============ LAVA ============
         if bossType == "Lava" then
             local now2 = tick()
             if not _G.DragonFbLavaOriginPos then
                 _G.DragonFbLavaOriginPos = bossHrp.Position
             end
-
             if _G.DragonFbLavaWaiting2 then
                 if _G.DragonFbLavaSafePos then
                     myHrp.CFrame = CFrame.new(_G.DragonFbLavaSafePos, bossHrp.Position)
@@ -7982,7 +7543,6 @@ end)
                 end
                 return
             end
-
             local bossY = bossHrp.Position.Y
             local bossUnderLava = bossY < _G.LAVA_UNDER_LAVA_Y
             if bossUnderLava then
@@ -8015,7 +7575,6 @@ end)
                     _G.DragonFbLavaSurfacedTime = 0
                 end
             end
-
             local hpPct2 = (bossHum.Health / bossHum.MaxHealth) * 100
             if hpPct2 <= 50 then
                 if not Dragon_FindThanosTool() then
@@ -8036,16 +7595,13 @@ end)
                     end
                     return
                 end
-
                 _G.CanAutoSkill = false
                 local thanosTool2 = Dragon_EnsureThanosEquipped()
                 if not thanosTool2 then return end
-
                 if _G.DragonFbLavaThanosStart == 0 then
                     _G.DragonFbLavaThanosStart = now2
                     _G.DragonFbLavaThanosCount = 0
                 end
-
                 local hud2 = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main2 = hud2 and hud2:FindFirstChild("Main")
                 local sl2 = main2 and main2:FindFirstChild("Frame_SkillList_Thanos")
@@ -8060,7 +7616,6 @@ end)
                         if (rd2 and rd2.Text == "UnReady") or (cd2 and cd2.Visible) then fCd2 = true end
                     end
                 end
-
                 if fCd2 and _G.DragonFbLavaThanosCount > 0 then
                     if not _G.DragonFbLavaWaiting2 then
                         _G.DragonFbLavaWaiting2 = true
@@ -8075,13 +7630,11 @@ end)
                     myHrp.AssemblyAngularVelocity = Vector3.zero
                     return
                 end
-
                 local bossPos2 = bossHrp.Position
                 local targetPos2 = bossPos2 + Vector3.new(0, 25, 0)
                 myHrp.CFrame = CFrame.new(targetPos2, bossPos2)
                 myHrp.AssemblyLinearVelocity = Vector3.zero
                 myHrp.AssemblyAngularVelocity = Vector3.zero
-
                 if not fCd2 and now2 - _G.DragonLastThanosTime >= 0.3 then
                     _G.DragonLastThanosTime = now2
                     _G.DragonFbLavaThanosCount = _G.DragonFbLavaThanosCount + 1
@@ -8097,7 +7650,6 @@ end)
                 _G.DragonFbLavaThanosStart = 0
                 _G.DragonFbLavaThanosCount = 0
             end
-
             local mF = Dragon_GetMethodFarm(25)
             myHrp.CFrame = bossHrp.CFrame * mF
             myHrp.AssemblyLinearVelocity = Vector3.new(0, myHrp.AssemblyLinearVelocity.Y, 0)
@@ -8113,8 +7665,6 @@ end)
             end
             return
         end
-
-        -- ============ GENERIC ============
         local mF = Dragon_GetMethodFarm(25)
         myHrp.CFrame = bossHrp.CFrame * mF
         myHrp.AssemblyLinearVelocity = Vector3.new(0, myHrp.AssemblyLinearVelocity.Y, 0)
@@ -8129,8 +7679,6 @@ end)
             if hs then AutoSkill() else Attack() end
         end
     end
-	
-    -- ===== Dragon respawn reset =====
     LocalPlayer.CharacterAdded:Connect(function(newChar)
         task.wait(1)
         if not _G.AutoRaidDragon then return end
@@ -8163,8 +7711,6 @@ end)
         _G.DragonFbLavaSafePos = nil
         _G.DragonFbBaconWaitBoss = nil
     end)
-
-    -- ===== Dragon main loop =====
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -8198,12 +7744,10 @@ end)
                     _G.DragonFbBaconWaitBoss = nil
                     return
                 end
-
                 local char = LocalPlayer.Character
                 local hum = char and char:FindFirstChild("Humanoid")
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hum or not hrp or hum.Health <= 0 then return end
-
                 local bossModel, bossHrp, bossHum = Dragon_GetBoss()
                 if not bossModel or not bossHrp or not bossHum then
                     local anyBoss, anyHrp, anyHum, anyType = Dragon_GetAnyBoss()
@@ -8218,7 +7762,6 @@ end)
                     end
                     return
                 end
-
                 if _G.DragonFallbackBossName then
                     _G.DragonFallbackBossName = nil
                     _G.DragonFallbackType = nil
@@ -8234,7 +7777,6 @@ end)
                     _G.DragonFbLavaWaiting2 = false
                     _G.DragonFbLavaSafePos = nil
                 end
-
                 if bossHum.Health <= 0 then
                     if not _G.DragonBossDeadHandled then
                         _G.DragonBossDeadHandled = true
@@ -8285,15 +7827,11 @@ end)
                     end
                     return
                 end
-
                 _G.DragonBossDeadHandled = false
                 if _G.DragonEnterTime == 0 then _G.DragonEnterTime = tick() end
-
                 bossHum.WalkSpeed = 0
                 bossHum.JumpPower = 0
                 local now = tick()
-
-                -- Check safe zone (green zone)
                 local safePart = Dragon_FindSafeZone()
                 if safePart then
                     if not _G.DragonSafeZoneActive then
@@ -8310,10 +7848,8 @@ end)
                         _G.DragonSafeZonePart = nil
                     end
                 end
-
                 local hpPercent = (bossHum.Health / bossHum.MaxHealth) * 100
                 local isThanosPriority = hpPercent <= 50
-
                 if isThanosPriority then
                     if not Dragon_FindThanosTool() then
                         _G.CanAutoSkill = true
@@ -8330,22 +7866,18 @@ end)
                         end
                         return
                     end
-
                     _G.CanAutoSkill = false
                     local thanosEquipped = Dragon_EnsureThanosEquipped()
                     if not thanosEquipped then return end
-
                     if _G.DragonThanosSpamStartTime == 0 then
                         _G.DragonThanosSpamStartTime = now
                         _G.DragonThanosFSuccessCount = 0
                     end
-
                     local bossPos = bossHrp.Position
                     local targetPos = bossPos + Vector3.new(0, _G.DRAGON_AIM_HEIGHT, 0)
                     hrp.CFrame = CFrame.new(targetPos, bossPos)
                     hrp.AssemblyLinearVelocity = Vector3.zero
                     hrp.AssemblyAngularVelocity = Vector3.zero
-
                     local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                     local main = hud and hud:FindFirstChild("Main")
                     local skillList = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -8362,7 +7894,6 @@ end)
                             if isUnready or isCooldownVisible then fOnCooldown = true end
                         end
                     end
-
                     if fOnCooldown and _G.DragonThanosFSuccessCount > 0 then
                         if not _G.DragonThanosFlyPos then
                             _G.DragonThanosFlyPos = Vector3.new(
@@ -8377,7 +7908,6 @@ end)
                         hrp.AssemblyAngularVelocity = Vector3.zero
                         return
                     end
-
                     if not fOnCooldown and now - _G.DragonLastThanosTime >= 0.5 then
                         _G.DragonLastThanosTime = now
                         local result = Dragon_TryUseThanosF(hrp)
@@ -8395,7 +7925,6 @@ end)
                     _G.DragonThanosSpamStartTime = 0
                     _G.DragonThanosFSuccessCount = 0
                 end
-
                 if not _G.DragonBuffSpamActive then
                     local methodFarm = Dragon_GetMethodFarm(_G.DRAGON_AIM_HEIGHT)
                     hrp.CFrame = bossHrp.CFrame * methodFarm
@@ -8414,8 +7943,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Auto close reward frames (Dragon) =====
     task.spawn(function()
         while task.wait(0.3) do
             pcall(function()
@@ -8464,8 +7991,6 @@ end)
             end)
         end
     end)
-	
-    -- ===== Lava Titan: khai báo state =====
     _G.AutoRaidLava = false
     _G.LavaLastFireTime = 0
     _G.LavaLastAttack = 0
@@ -8501,7 +8026,6 @@ end)
     _G.LavaFbDragonSafeActive = false
     _G.LavaFbDragonThanosStart = 0
     _G.LavaFbDragonFlyPos = nil
-
     _G.LAVA_AIM_HEIGHT = 25
     _G.LAVA_UNDER_LAVA_Y = -100
     _G.LAVA_MIN_FIRE_GAP = 3
@@ -8511,12 +8035,10 @@ end)
     _G.LAVA_PORTAL_FIRE_LOCK = 5
     _G.LAVA_SAFE_HEIGHT = 500
     _G.LAVA_BUFF_LIST = {"Kaioken", "SSJ", "SSJ2", "SSJ3", "SSJG", "SSJB"}
-
     function Lava_GetMethodFarm(height)
         height = height or _G.LAVA_AIM_HEIGHT
         return CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
     end
-
     function Lava_FindThanosTool()
 	    if not _G.UseThanosF then return nil, "none" end
         local char = LocalPlayer.Character
@@ -8542,7 +8064,6 @@ end)
         end
         return nil, "none"
     end
-
     function Lava_EnsureThanosEquipped()
         local char = LocalPlayer.Character
         if not char then return false end
@@ -8557,7 +8078,6 @@ end)
         end
         return false
     end
-
     function Lava_FindBuffTool()
         local char = LocalPlayer.Character
         if not char then return nil, nil end
@@ -8580,7 +8100,6 @@ end)
         end
         return nil, nil
     end
-
     function Lava_BuffSpamLoop()
         local tool, buffName = Lava_FindBuffTool()
         if not tool then return false end
@@ -8613,7 +8132,6 @@ end)
                     end
                 end
                 if not currentTool then break end
-
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main = hud and hud:FindFirstChild("Main")
                 local skillList = main and main:FindFirstChild("Frame_SkillList_" .. buffName)
@@ -8639,7 +8157,6 @@ end)
         end
         return true
     end
-
     function Lava_TryUseThanosF(hrp)
         if not hrp then return "no_tool" end
         local char = LocalPlayer.Character
@@ -8656,7 +8173,6 @@ end)
             end
         end
         if not thanosTool then return "no_tool" end
-
         local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
         local main = hud and hud:FindFirstChild("Main")
         local skillList = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -8680,7 +8196,6 @@ end)
         end
         return "no_tool"
     end
-
     function Lava_OnAlert(text)
         if not text then return end
         local lower = text:lower()
@@ -8688,7 +8203,6 @@ end)
             if not _G.LavaPhase2Active then _G.LavaPhase2Active = true end
         end
     end
-
     function Lava_HookText(container)
         for _, obj in ipairs(container:GetDescendants()) do
             if obj:IsA("TextLabel") or obj:IsA("TextButton") then
@@ -8699,12 +8213,10 @@ end)
             end
         end
     end
-
     function Lava_IsBossUnderLava(bossHrp)
         if not bossHrp then return false end
         return bossHrp.Position.Y < _G.LAVA_UNDER_LAVA_Y
     end
-
     function Lava_GetBoss()
         local bf = workspace:FindFirstChild("Boss Fight")
         if not bf then return nil, nil, nil end
@@ -8719,11 +8231,9 @@ end)
         end
         return nil, nil, nil
     end
-
     function Lava_GetAnyBoss()
         local bf = workspace:FindFirstChild("Boss Fight")
         if not bf then return nil, nil, nil end
-
         local baconFolder = bf:FindFirstChild("Bacon of Grudge")
         if baconFolder then
             local a1 = baconFolder:FindFirstChild("ArmorBall1")
@@ -8736,7 +8246,6 @@ end)
             if a2A then return a2, a2.HumanoidRootPart, a2.Humanoid end
             if bbA then return bb, bb.HumanoidRootPart, bb.Humanoid end
         end
-
         local dragonFolder = bf:FindFirstChild("Dragon")
         if dragonFolder then
             local bossModel = dragonFolder:FindFirstChild("Dragon Boss")
@@ -8748,7 +8257,6 @@ end)
                 end
             end
         end
-
         for _, obj in ipairs(bf:GetDescendants()) do
             if obj:IsA("Model") then
                 local hum = obj:FindFirstChild("Humanoid")
@@ -8763,12 +8271,10 @@ end)
         end
         return nil, nil, nil
     end
-	
     function Lava_FallbackSmart(bossModel, bossHrp, bossHum, myHrp, now)
         if not bossModel or not bossHrp or not bossHum or not myHrp then return end
         _G.CanAutoSkill = true
         _G.LavaBuffSpamActive = false
-
         local bf = workspace:FindFirstChild("Boss Fight")
         local bType = "Generic"
         if bf then
@@ -8780,15 +8286,11 @@ end)
                 bType = "Dragon"
             end
         end
-
         if _G.LavaFbBossName ~= bossModel.Name then _G.LavaFbBossName = bossModel.Name end
         _G.LavaFbType = bType
-
         bossHum.WalkSpeed = 0
         bossHum.JumpPower = 0
         local hpPct = (bossHum.Health / bossHum.MaxHealth) * 100
-
-        -- ============ BACON ============
         if bType == "Bacon" then
             local isArmorBall = bossModel.Name:find("ArmorBall") ~= nil
             if isArmorBall then
@@ -8810,7 +8312,6 @@ end)
                 end
                 return
             end
-
             if hpPct <= 50 then
                 if _G.DragonFbBaconWaiting then
                     if _G.DragonFbBaconSafePos then
@@ -8820,7 +8321,6 @@ end)
                     end
                     return
                 end
-
                 if not Dragon_FindThanosTool() then
                     _G.CanAutoSkill = true
                     _G.DragonFbBaconThanosStart = 0
@@ -8841,21 +8341,17 @@ end)
                     end
                     return
                 end
-
                 _G.CanAutoSkill = false
                 if _G.DragonFbBaconThanosStart == 0 then
                     _G.DragonFbBaconThanosStart = now
                     _G.DragonFbBaconThanosCount = 0
                 end
-
                 local thanosTool = Dragon_EnsureThanosEquipped()
                 if not thanosTool then return end
-
                 local tPos = bossHrp.Position + Vector3.new(0, _G.BaconBossHeight or 55, 0)
                 myHrp.CFrame = CFrame.new(tPos, bossHrp.Position)
                 myHrp.AssemblyLinearVelocity = Vector3.zero
                 myHrp.AssemblyAngularVelocity = Vector3.zero
-
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main = hud and hud:FindFirstChild("Main")
                 local sl = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -8870,7 +8366,6 @@ end)
                         if (rd and rd.Text == "UnReady") or (cd and cd.Visible) then fCd = true end
                     end
                 end
-
                 if fCd and _G.DragonFbBaconThanosCount > 0 then
                     _G.DragonFbBaconWaiting = true
                     _G.DragonFbBaconSafePos = Vector3.new(
@@ -8883,7 +8378,6 @@ end)
                     myHrp.AssemblyAngularVelocity = Vector3.zero
                     return
                 end
-
                 if not fCd and now - _G.DragonLastThanosTime >= 0.5 then
                     _G.DragonLastThanosTime = now
                     _G.DragonFbBaconThanosCount = _G.DragonFbBaconThanosCount + 1
@@ -8915,8 +8409,6 @@ end)
                 return
             end
         end
-
-        -- ============ DRAGON ============
         if bType == "Dragon" then
             local safePart = nil
             if _G.LavaFbDragonSafePart and _G.LavaFbDragonSafePart.Parent then
@@ -8943,7 +8435,6 @@ end)
                     end
                 end
             end
-
             if safePart then
                 if not _G.LavaFbDragonSafeActive then _G.LavaFbDragonSafeActive = true end
                 local safePos = safePart.Position + Vector3.new(0, 500, 0)
@@ -8955,7 +8446,6 @@ end)
                 _G.LavaFbDragonSafeActive = false
                 _G.LavaFbDragonSafePart = nil
             end
-
             if hpPct <= 50 then
                 if not Lava_FindThanosTool() then
                     _G.LavaFbDragonThanosStart = 0
@@ -8975,20 +8465,16 @@ end)
                     end
                     return
                 end
-
                 if _G.LavaFbDragonThanosStart == 0 then
                     _G.LavaFbDragonThanosStart = now
                     _G.LavaFbDragonFlyPos = nil
                 end
-
                 local thanosTool = Lava_EnsureThanosEquipped()
                 if not thanosTool then return end
-
                 local tPos = bossHrp.Position + Vector3.new(0, 25, 0)
                 myHrp.CFrame = CFrame.new(tPos, bossHrp.Position)
                 myHrp.AssemblyLinearVelocity = Vector3.zero
                 myHrp.AssemblyAngularVelocity = Vector3.zero
-
                 local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                 local main = hud and hud:FindFirstChild("Main")
                 local sl = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -9003,7 +8489,6 @@ end)
                         if (rd and rd.Text == "UnReady") or (cd and cd.Visible) then fCd = true end
                     end
                 end
-
                 if not fCd and now - _G.LavaLastThanosTime >= 0.5 then
                     _G.LavaLastThanosTime = now
                     local ok, err = pcall(function() Action:FireServer("Thanos", "f") end)
@@ -9014,7 +8499,6 @@ end)
                         _G.LavaFbDragonFFailCount = (_G.LavaFbDragonFFailCount or 0) + 1
                     end
                 end
-
                 if (_G.LavaFbDragonFFailCount or 0) >= 5 then
                     _G.LavaFbDragonFFailCount = 0
                     local safeY = bossHrp.Position.Y + _G.LAVA_SAFE_HEIGHT
@@ -9030,7 +8514,6 @@ end)
                 _G.LavaFbDragonThanosStart = 0
                 _G.LavaFbDragonFlyPos = nil
             end
-
             local mF = Lava_GetMethodFarm(25)
             myHrp.CFrame = bossHrp.CFrame * mF
             myHrp.AssemblyLinearVelocity = Vector3.new(0, myHrp.AssemblyLinearVelocity.Y, 0)
@@ -9046,8 +8529,6 @@ end)
             end
             return
         end
-
-        -- ============ GENERIC ============
         local mF = Lava_GetMethodFarm(25)
         myHrp.CFrame = bossHrp.CFrame * mF
         myHrp.AssemblyLinearVelocity = Vector3.new(0, myHrp.AssemblyLinearVelocity.Y, 0)
@@ -9062,7 +8543,6 @@ end)
             if hs then AutoSkill() else Attack() end
         end
     end
-	
     function Lava_CloseFrame(frame)
         if not frame then return false end
         local closeBtn = frame:FindFirstChild("Close_") or frame:FindFirstChild("Close")
@@ -9080,20 +8560,16 @@ end)
         pcall(function() frame.Visible = false end)
         return true
     end
-
     function Lava_OpenPortal()
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return false end
         if tick() < _G.LavaPortalFireLock then return false end
-
         local bf = workspace:FindFirstChild("Boss Fight")
         if bf and bf:FindFirstChild("LavaTitan") then
             _G.LavaPortalPhase = "IDLE"
             return true
         end
-
-        -- Spam buff F trước summon
         if not _G.LavaBuffUsed then
             _G.LavaBuffUsed = true
             local tool, buffName = Lava_FindBuffTool()
@@ -9115,11 +8591,8 @@ end)
                 _G.LavaBuffSpamActive = false
             end
         end
-
         if _G.LavaBuffFinishTime == 0 then return false end
         if tick() - _G.LavaBuffFinishTime < 0.3 then return false end
-
-        -- TP vào portal nếu có sẵn
         local tz = workspace:FindFirstChild("TeleportBossFightZone")
         if tz and tz:FindFirstChild("Hitbox") then
             if _G.LavaPortalPhase ~= "ENTERED" then
@@ -9132,8 +8605,6 @@ end)
             end
             return true
         end
-
-        -- Phase IDLE: summon boss
         if _G.LavaPortalPhase == "IDLE" then
             if tick() - _G.LavaLastFireTime >= _G.LAVA_MIN_FIRE_GAP then
                 _G.LavaLastFireTime = tick()
@@ -9147,8 +8618,6 @@ end)
                 return true
             end
         end
-
-        -- Phase GUI_OPENING
         if _G.LavaPortalPhase == "GUI_OPENING" then
             local tz2 = workspace:FindFirstChild("TeleportBossFightZone")
             if tz2 and tz2:FindFirstChild("Hitbox") then
@@ -9165,8 +8634,6 @@ end)
             end
             return true
         end
-
-        -- Phase WAITING
         if _G.LavaPortalPhase == "WAITING" then
             local elapsed = tick() - _G.LavaPortalStartTime
             local tz3 = workspace:FindFirstChild("TeleportBossFightZone")
@@ -9191,11 +8658,8 @@ end)
             end
             return true
         end
-
         return false
     end
-
-    -- ===== Lava respawn reset =====
     LocalPlayer.CharacterAdded:Connect(function(newChar)
         task.wait(1)
         if not _G.AutoRaidLava then return end
@@ -9221,8 +8685,6 @@ end)
         _G.LavaFbDragonFlyPos = nil
         _G.LavaFbDragonFFailCount = 0
     end)
-
-    -- Hook text alert
     Lava_HookText(LocalPlayer.PlayerGui)
     LocalPlayer.PlayerGui.DescendantAdded:Connect(function(obj)
         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
@@ -9233,7 +8695,6 @@ end)
             end)
         end
     end)
-	
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -9264,12 +8725,10 @@ end)
                     _G.LavaFbDragonFFailCount = 0
                     return
                 end
-
                 local char = LocalPlayer.Character
                 local hum = char and char:FindFirstChild("Humanoid")
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hum or not hrp or hum.Health <= 0 then return end
-
                 local bossModel, bossHrp, bossHum = Lava_GetBoss()
                 if not bossModel or not bossHrp or not bossHum then
                     local anyBoss, anyHrp, anyHum = Lava_GetAnyBoss()
@@ -9286,7 +8745,6 @@ end)
                     end
                     return
                 end
-
                 if _G.LavaFbBossName then
                     _G.LavaFbBossName = nil
                     _G.LavaFbType = nil
@@ -9302,7 +8760,6 @@ end)
                     _G.LavaFbBaconLastHp = nil
                     _G.LavaFbBaconNoDamageCount = 0
                 end
-
                 if bossHum.Health <= 0 then
                     if not _G.LavaBossDeadHandled then
                         _G.LavaBossDeadHandled = true
@@ -9355,22 +8812,17 @@ end)
                     end
                     return
                 end
-
                 _G.LavaBossDeadHandled = false
                 if _G.LavaEnterTime == 0 then _G.LavaEnterTime = tick() end
-
                 bossHum.WalkSpeed = 0
                 bossHum.JumpPower = 0
                 local now = tick()
-
                 if not _G.LavaBossOriginPos then
                     _G.LavaBossOriginPos = bossHrp.Position
                 end
-
                 local hpPercent = (bossHum.Health / bossHum.MaxHealth) * 100
                 local threshold = _G.LavaThanosHPPercent or 50
                 local isThanosPriority = hpPercent <= threshold
-
                 if isThanosPriority then
                     if not Lava_FindThanosTool() then
                         local methodFarm = Lava_GetMethodFarm(_G.LAVA_AIM_HEIGHT)
@@ -9385,7 +8837,6 @@ end)
                         end
                         return
                     end
-
                     local thanosEquipped = Lava_EnsureThanosEquipped()
                     if not thanosEquipped then
                         local methodFarm = Lava_GetMethodFarm(_G.LAVA_AIM_HEIGHT)
@@ -9400,12 +8851,10 @@ end)
                         end
                         return
                     end
-
                     if _G.LavaThanosSpamStartTime == 0 then
                         _G.LavaThanosSpamStartTime = now
                         _G.LavaThanosFSuccessCount = 0
                     end
-
                     local hud = LocalPlayer.PlayerGui:FindFirstChild("HUD")
                     local main = hud and hud:FindFirstChild("Main")
                     local skillList = main and main:FindFirstChild("Frame_SkillList_Thanos")
@@ -9422,7 +8871,6 @@ end)
                             if isUnready or isCooldownVisible then fOnCooldown = true end
                         end
                     end
-
                     if fOnCooldown then
                         if not _G.LavaThanosFlyPos then
                             _G.LavaThanosFlyPos = Vector3.new(
@@ -9436,7 +8884,6 @@ end)
                         hrp.AssemblyAngularVelocity = Vector3.zero
                         return
                     end
-
                     if now - _G.LavaLastThanosTime >= _G.LAVA_THANOS_COOLDOWN then
                         local bossPos = bossHrp.Position
                         local targetPos = bossPos + Vector3.new(0, _G.LAVA_AIM_HEIGHT, 0)
@@ -9458,10 +8905,6 @@ end)
                             hrp.AssemblyAngularVelocity = Vector3.zero
                             if _G.LavaThanosFSuccessCount <= 5
                                 or _G.LavaThanosFSuccessCount % 5 == 0 then
-                                print(string.format(
-                                    "[LavaTitan] ⚡ F Thanos #%d (HP: %.1f%%) — bay lên 500",
-                                    _G.LavaThanosFSuccessCount, hpPercent
-                                ))
                             end
                         end
                     end
@@ -9473,8 +8916,6 @@ end)
                     _G.LavaThanosSpamStartTime = 0
                     _G.LavaThanosFSuccessCount = 0
                 end
-
-                -- Check boss dưới lava
                 local bossUnderLava = Lava_IsBossUnderLava(bossHrp)
                 if bossUnderLava then
                     if not _G.LavaWaitingSurface then
@@ -9504,7 +8945,6 @@ end)
                         _G.LavaBossSurfacedTime = 0
                     end
                 end
-
                 local methodFarm = Lava_GetMethodFarm(_G.LAVA_AIM_HEIGHT)
                 hrp.CFrame = bossHrp.CFrame * methodFarm
                 hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
@@ -9522,8 +8962,6 @@ end)
             end)
         end
     end)
-	
-    -- ===== Final loop: chống fling + zero velocity =====
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -9538,15 +8976,12 @@ end)
                     or _G.Auto_DuckAutomatically or _G.Auto_BaconThief or _G.Auto_Dungeon
                     or _G.Auto_Raid
                 if not anyActive then return end
-
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
-
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
                 AntiLaunchFix(hrp)
-
                 for _, child in ipairs(hrp:GetChildren()) do
                     if child:IsA("BodyVelocity") or child:IsA("BodyGyro")
                         or child:IsA("AlignPosition") or child:IsA("AlignOrientation")
@@ -9557,8 +8992,6 @@ end)
             end)
         end
     end)
-
-    -- ===== Stepped connection: zero velocity mỗi frame =====
     task.spawn(function()
         pcall(function()
             RunService.Stepped:Connect(function()
@@ -9573,32 +9006,22 @@ end)
                     or _G.Auto_DuckAutomatically or _G.Auto_BaconThief or _G.Auto_Dungeon
                     or _G.Auto_Raid
                 if not anyActive then return end
-
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if not hrp then return end
-
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 hrp.AssemblyAngularVelocity = Vector3.zero
             end)
         end)
     end)
 end
-
-
--- ══════════════════════════════════════════════════════════
--- RAID T.O.P MAP: chỉ dựng các mục được yêu cầu
--- Main > Raid T.O.P | Settings > Chọn vũ khí + Auto Skills | Config
--- ══════════════════════════════════════════════════════════
 if IS_RAID_TOP_MAP then
     local MainTab = Window:CreateTab("Main", true, false)
     BuildRaidTOPPage(MainTab)
-
     local SettingsTab = Window:CreateTab("Settings", false, false)
     local SettingsPage = SettingsTab:CreatePage("Main Settings")
     local WeaponSection = SettingsPage:CreateSection("🗡️ Chọn vũ khí", "Left")
     local AutoSkillsSection = SettingsPage:CreateSection("⚔️ Auto Skills", "Right")
-
     WeaponSection:Dropdown({
         Title = "Main Weapon (Attack)",
         Options = TypeTool, Multi = false, Value = "Melee",
@@ -9609,13 +9032,11 @@ if IS_RAID_TOP_MAP then
         Options = TypeTool, Multi = true,
         Callback = function(value) _G.Select_EquipWeapon = value end
     })
-
     AutoSkillsSection:Toggle({Title = "Auto Skill Z", Id = "SKILLZ", Value = false, Callback = function(v) _G.AutoSkillZ = v end})
     AutoSkillsSection:Toggle({Title = "Auto Skill X", Id = "SKILLX", Value = false, Callback = function(v) _G.AutoSkillX = v end})
     AutoSkillsSection:Toggle({Title = "Auto Skill C", Id = "SKILLC", Value = false, Callback = function(v) _G.AutoSkillC = v end})
     AutoSkillsSection:Toggle({Title = "Auto Skill V", Id = "SKILLV", Value = false, Callback = function(v) _G.AutoSkillV = v end})
     AutoSkillsSection:Toggle({Title = "Auto Skill F", Id = "SKILLF", Value = false, Callback = function(v) _G.AutoSkillF = v end})
-
     local ConfigTab = Window:CreateTab("Config", false, false)
     if MySaveManager then
         pcall(function()
@@ -9630,5 +9051,3 @@ if IS_RAID_TOP_MAP then
         warn("[Raid T.O.P] SaveManager unavailable; Config tab is empty")
     end
 end
-
-print("[Sea 1] ✅ Load successful!")
