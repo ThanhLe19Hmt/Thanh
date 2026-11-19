@@ -6,7 +6,9 @@
 local PLACEID_SEA1 = 119091355492870
 local PLACEID_SEA2 = 132854526011923
 local PLACEID_MOON = 82878101790702
-local PLACEID_SYI  = 77900175935766 -- 👈 CẬU ĐIỀN PLACE ID CỦA MAP "SURVIVE YOUR IDEAS" VÀO ĐÂY
+
+local PLACEID_SYI_1 = 77900175935766
+local PLACEID_SYI_2 = 109001332046330
 
 -- ⚠️ KHAI BÁO URL
 local URL_SEA1 = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MaverSEA1ROCKFRULT.lua"
@@ -16,7 +18,9 @@ local URL_SYI  = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/head
 local placeId = game.PlaceId
 
 -- Hàm tải và chạy script
-local function LoadScript(url)
+local function LoadScript(url, mapName)
+    print("[LOADER] Đang tải script cho: " .. mapName .. "...")
+    
     local success, source = pcall(function()
         return game:HttpGet(url)
     end)
@@ -38,26 +42,24 @@ local function LoadScript(url)
         warn("[LOADER] Lỗi khi chạy script: " .. tostring(execErr))
         return false
     end
+    
+    print("[LOADER] Tải thành công: " .. mapName)
     return true
 end
 
 -- Kiểm tra Place ID và tải script tương ứng
 if placeId == PLACEID_SEA1 then
-    print("[LOADER] Đang tải: Sea 1...")
-    LoadScript(URL_SEA1)
+    LoadScript(URL_SEA1, "Sea 1")
     
 elseif placeId == PLACEID_SEA2 then
-    print("[LOADER] Đang tải: Sea 2...")
-    LoadScript(URL_SEA2)
+    LoadScript(URL_SEA2, "Sea 2")
     
 elseif placeId == PLACEID_MOON then
-    print("[LOADER] Đang tải: Moon...")
-    LoadScript(URL_SEA1) -- Cậu đang dùng URL của Sea 1 cho Moon, nếu muốn đổi thì sửa lại URL_MOON nhé
+    LoadScript(URL_SEA1, "Moon")
     
-elseif placeId == PLACEID_SYI then
-    print("[LOADER] Đang tải: Survive Your Ideas...")
-    LoadScript(URL_SYI)
+elseif placeId == PLACEID_SYI_1 or placeId == PLACEID_SYI_2 then
+    LoadScript(URL_SYI, "Survive Your Ideas")
     
 else
-    print("[LOADER] Game này không nằm trong danh sách hỗ trợ.")
+    print("[LOADER] Game này không nằm trong danh sách hỗ trợ. (Place ID: " .. placeId .. ")")
 end
