@@ -198,7 +198,7 @@ end
 -- ⚠️ THAY ID ẢNH VÀO ĐÂY
 local MAHORAGA_IMAGE_ID = "rbxassetid://87053238076886"
 local NUKE_IMAGE_ID = "rbxassetid://105196171886899"
-local HUB_ICON_ID = "rbxassetid://73243738744141" 
+local HUB_ICON_ID = "rbxassetid://87526284179554" 
 
 -- ============================================
 -- DATA LỆNH (Giữ nguyên)
