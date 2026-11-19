@@ -804,9 +804,81 @@ function Library:CreateWindow(options)
         end
 
         local TabContent = Create("Frame", {Parent = ContentArea, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), Visible = false})
-        local PageNav = Create("Frame", {Parent = TabContent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 35)})
+        local PageNav = Create("ScrollingFrame", {
+            Parent = TabContent,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 35),
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            AutomaticCanvasSize = Enum.AutomaticSize.X,
+            ScrollingDirection = Enum.ScrollingDirection.X,
+            ScrollBarThickness = 2,
+            ScrollBarImageColor3 = Color3.fromRGB(60, 60, 65),
+            ElasticBehavior = Enum.ElasticBehavior.Never,
+            ScrollingEnabled = true
+        })
         local PageNavList = Create("UIListLayout", {Parent = PageNav, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Center})
         local PageContainer = Create("Frame", {Parent = TabContent, BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -35), Position = UDim2.new(0, 0, 0, 35)})
+
+        local navDragging, navDragged, navStartX, navStartCanvas = false, false, 0, 0
+
+        local function navMaxX()
+            return math.max(PageNav.AbsoluteCanvasSize.X - PageNav.AbsoluteWindowSize.X, 0)
+        end
+
+        local function navPress(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                navDragging = true
+                navDragged = false
+                navStartX = input.Position.X
+                navStartCanvas = PageNav.CanvasPosition.X
+            end
+        end
+
+        PageNav.InputBegan:Connect(navPress)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if navDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local delta = input.Position.X - navStartX
+                if math.abs(delta) > 5 then navDragged = true end
+                if navDragged then
+                    PageNav.CanvasPosition = Vector2.new(math.clamp(navStartCanvas - delta, 0, navMaxX()), 0)
+                end
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                navDragging = false
+            end
+        end)
+
+        PageNav.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseWheel then
+                local target = math.clamp(PageNav.CanvasPosition.X - input.Position.Z * 60, 0, navMaxX())
+                Tween(PageNav, {CanvasPosition = Vector2.new(target, 0)}, 0.15)
+            end
+        end)
+
+        local function navReveal(btn)
+            task.defer(function()
+                if not btn or not btn.Parent then return end
+                local viewW = PageNav.AbsoluteWindowSize.X
+                local cur = PageNav.CanvasPosition.X
+                local left = btn.AbsolutePosition.X - PageNav.AbsolutePosition.X + cur
+                local right = left + btn.AbsoluteSize.X
+                local target = cur
+                if left < cur + 10 then
+                    target = left - 10
+                elseif right > cur + viewW - 10 then
+                    target = right - viewW + 10
+                end
+                target = math.clamp(target, 0, navMaxX())
+                if math.abs(target - cur) > 1 then
+                    Tween(PageNav, {CanvasPosition = Vector2.new(target, 0)}, 0.25)
+                end
+            end)
+        end
 
         local TabConfig = {Button = TabBtn, Content = TabContent, Indicator = Indicator, Txt = Txt, Pages = {}, CurrentPage = nil}
         table.insert(Window.Tabs, TabConfig)
@@ -835,6 +907,8 @@ function Library:CreateWindow(options)
             Tween(TabBtn, {BackgroundTransparency = 0}, 0.2)
             Tween(Indicator, {Size = UDim2.new(0, 3, 0, 18)}, 0.3)
             Tween(Txt, {TextColor3 = TextColor}, 0.2)
+
+            PageNav.CanvasPosition = Vector2.new(0, 0)
 
             if #TabConfig.Pages > 0 then
                 local firstPage = TabConfig.Pages[1]
@@ -873,7 +947,11 @@ function Library:CreateWindow(options)
             local PageObj = {Scroll = PageScroll, Btn = PageBtn, Highlight = PageHighlight, Left = true, LeftCol = LeftColumn, RightCol = RightColumn}
             table.insert(TabConfig.Pages, PageObj)
 
+            PageBtn.InputBegan:Connect(navPress)
+
             PageBtn.MouseButton1Click:Connect(function()
+                if navDragged then return end
+                navReveal(PageBtn)
                 if TabConfig.CurrentPage == PageObj then return end
                 if TabConfig.CurrentPage then
                     Tween(TabConfig.CurrentPage.Btn, {TextColor3 = SubTextColor}, 0.2)
