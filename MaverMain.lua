@@ -10,10 +10,13 @@ local PLACEID_MOON = 82878101790702
 local PLACEID_SYI_1 = 77900175935766
 local PLACEID_SYI_2 = 109001332046330
 
+local PLACEID_JOODPIECE = 117676969731858
+
 -- ⚠️ KHAI BÁO URL
 local URL_SEA1 = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MaverSEA1ROCKFRULT.lua"
 local URL_SEA2 = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MaverSEA2ROCKFRULT.lua"
 local URL_SYI  = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/ScriptALL/Survive%20Your%20Ideas.lua"
+local URL_JOODPIECE  = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/ScriptALL/Jood%20Piece.lua"
 
 local placeId = game.PlaceId
 
@@ -59,6 +62,9 @@ elseif placeId == PLACEID_MOON then
     
 elseif placeId == PLACEID_SYI_1 or placeId == PLACEID_SYI_2 then
     LoadScript(URL_SYI, "Survive Your Ideas")
+	
+elseif placeId == PLACEID_JOODPIECE then
+    LoadScript(URL_JOODPIECE, "Jood Piece")
     
 else
     print("[LOADER] Game này không nằm trong danh sách hỗ trợ. (Place ID: " .. placeId .. ")")
