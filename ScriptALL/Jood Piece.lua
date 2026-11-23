@@ -28,6 +28,7 @@ local CONFIG = {
     TargetMobName  = nil,
     FarmPosition   = "Above", -- Above | Below | Behind | Front
     FarmDistance   = 6,       -- studs from the mob
+    WeaponNames    = {},      -- selected weapons (Tool names); empty = default behavior
 
     Skills = {
         Z = { enabled = false, keyCode = Enum.KeyCode.Z },
@@ -195,14 +196,93 @@ local function setTargetMobName(name)
     end
 end
 
+-- ================= WEAPONS (multi-equip) =================
+-- Verified by scan: several Tools can stay in the Character at the same time
+-- (EquipTool on the first one, then Tool.Parent = Character for the rest).
+local function getBackpack()
+    return LP:FindFirstChildOfClass("Backpack") or LP:FindFirstChild("Backpack")
+end
+
+local function listWeaponNames()
+    local names, seen = {}, {}
+    local function add(container)
+        if not container then return end
+        for _, t in ipairs(container:GetChildren()) do
+            if t:IsA("Tool") and not seen[t.Name] then
+                seen[t.Name] = true
+                table.insert(names, t.Name)
+            end
+        end
+    end
+    add(LP.Character)
+    add(getBackpack())
+    table.sort(names)
+    return names
+end
+
+local function selectedSet()
+    local set = {}
+    for _, n in ipairs(CONFIG.WeaponNames) do set[n] = true end
+    return set
+end
+
+local lastEquipSync = 0
+local skillLock = false -- true while Auto Skills is swapping weapons (pauses syncWeapons)
+local function syncWeapons()
+    if skillLock then return end
+    if #CONFIG.WeaponNames == 0 then return end
+    local now = tick()
+    if now - lastEquipSync < 0.4 then return end
+    lastEquipSync = now
+    pcall(function()
+        local char = LP.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local bp = getBackpack()
+        if not (char and hum and bp) then return end
+        local want = selectedSet()
+        -- put away tools that are not selected
+        for _, t in ipairs(char:GetChildren()) do
+            if t:IsA("Tool") and not want[t.Name] then t.Parent = bp end
+        end
+        -- hold every selected tool
+        local holding = false
+        for _, c in ipairs(char:GetChildren()) do
+            if c:IsA("Tool") then holding = true; break end
+        end
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") and want[t.Name] then
+                if holding then
+                    t.Parent = char
+                else
+                    hum:EquipTool(t)
+                    holding = true
+                end
+            end
+        end
+    end)
+end
+
 local function tryAttack()
     local char = LP.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
+
+    -- Selected weapons: activate every selected tool currently held
+    if #CONFIG.WeaponNames > 0 then
+        local want = selectedSet()
+        for _, t in ipairs(char:GetChildren()) do
+            if t:IsA("Tool") and want[t.Name] then
+                pcall(function() t:Activate() end)
+            end
+        end
+        return
+    end
+
+    -- No selection: default behavior (first available tool)
     local tool = char:FindFirstChildWhichIsA("Tool")
     if tool then pcall(function() tool:Activate() end); return end
-    local bp = LP:FindFirstChild("Backpack")
+    local bp = getBackpack()
     if bp then
         local t = bp:FindFirstChildWhichIsA("Tool")
         if t then
@@ -263,6 +343,7 @@ local function autoFarmStep()
     local myRoot = getMyRoot()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not myRoot or not hum or hum.Health <= 0 then return end
+    syncWeapons()
     if currentTarget and (not currentTarget.Parent or currentTarget.Name ~= CONFIG.TargetMobName) then
         currentTarget = nil
     end
@@ -346,6 +427,7 @@ end
 -- ================= BUILD UI (MarvenRiz) =================
 local alive = true
 local conns = {}
+local skillDbg -- Auto Skills status paragraph
 local MySaveManager = Library.SaveManager
 
 local Window = Library:CreateWindow({
@@ -384,7 +466,7 @@ local tabCfg     = Window:CreateTab("Config", false, false)
 
 -- ===================== MAIN =====================
 -- Page: Farm (Auto Farm + mob selection)
-local targetPara, mobPara, mobDropdown
+local targetPara, mobPara, mobDropdown, weaponDropdown
 local labelToMob = {}
 local refreshingDropdown = false
 
@@ -399,12 +481,19 @@ do
     local page = tabMain:CreatePage("Farm")
     local s1 = page:CreateSection("🌾 Auto Farm", "Left")
     local s2 = page:CreateSection("🎯 Select Mob", "Right")
+    local s3 = page:CreateSection("🗡️ Weapons", "Left")
 
     s1:Toggle({Title = "Auto Farm", Id = "FARM_ENABLED", Value = false, Callback = function(v)
         CONFIG.AutoFarm = v
     end})
     targetPara = s1:Paragraph({Title = "Target: (none)", Content = "Pick a mob from the list on the right."})
 
+    weaponDropdown = s3:Dropdown({Title = "Weapons (multi-select)", Options = listWeaponNames(), Multi = true, Value = {}, Callback = function(sel)
+        -- the library passes the same table every time, so copy it
+        local copy = {}
+        for _, n in ipairs(sel or {}) do table.insert(copy, n) end
+        CONFIG.WeaponNames = copy
+    end})
     mobPara = s2:Paragraph({Title = "Scanning...", Content = "Wait 1-2 seconds."})
     mobDropdown = s2:Dropdown({Title = "Target Mob", Options = {}, Multi = false, Callback = function(selected)
         if refreshingDropdown then return end -- ignore callbacks caused by list refresh
@@ -422,16 +511,16 @@ end
 
 -- Page: Roll (Auto Roll)
 do
-    local page = tabMain:CreatePage("Random")
-    local s1 = page:CreateSection("🎰 Auto Random Chance", "Left")
+    local page = tabMain:CreatePage("Roll")
+    local s1 = page:CreateSection("🎰 Auto Roll", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
-    s1:Toggle({Title = "Auto Random", Id = "ROLL_ENABLED", Value = false, Callback = function(v)
+    s1:Toggle({Title = "Auto Roll", Id = "ROLL_ENABLED", Value = false, Callback = function(v)
         CONFIG.AutoRoll = v
     end})
-    s1:Dropdown({Title = "Amount per random", Options = {"x5", "x1"}, Multi = false, Value = "x5", Callback = function(v)
+    s1:Dropdown({Title = "Amount per roll", Options = {"x5", "x1"}, Multi = false, Value = "x5", Callback = function(v)
         CONFIG.RollAmount = (v == "x1") and 1 or 5
     end})
-    rollPara = s2:Paragraph({Title = "Auto Random", Content = "No randoms yet."})
+    rollPara = s2:Paragraph({Title = "Auto Roll", Content = "No rolls yet."})
 end
 
 -- ===================== SETTING =====================
@@ -439,7 +528,7 @@ end
 do
     local page = tabSetting:CreatePage("Setting")
     local sESP   = page:CreateSection("👁️ ESP", "Left")
-    local sSkill = page:CreateSection("⚔️ Auto Skills (while Auto Farm runs)", "Right")
+    local sSkill = page:CreateSection("⚔️ Auto Skills (every selected weapon)", "Right")
     local sFarm  = page:CreateSection("📍 Farm", "Right")
 
     -- ESP
@@ -470,6 +559,8 @@ do
             sk.enabled = v
         end})
     end
+
+    skillDbg = sSkill:Paragraph({Title = "Skill status", Content = "Waiting: Auto Farm is OFF"})
 
     -- Farm (attack position, applied to Auto Farm)
     sFarm:Dropdown({Title = "Attack Position", Options = {"Above", "Below", "Behind", "Front"}, Multi = false, Value = "Above", Callback = function(v)
@@ -562,19 +653,181 @@ task.spawn(function()
     end
 end)
 
--- ================= AUTO SKILLS LOOPS (fast spam, no cooldown) =================
-for _, sk in pairs(CONFIG.Skills) do
-    task.spawn(function()
-        while alive do
-            if sk.enabled and isHackRunning() then
-                local char = LP.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then pressKey(sk.keyCode) end
+-- ================= WEAPON LIST REFRESH =================
+local lastWeaponList = {}
+task.spawn(function()
+    while alive and task.wait(2) do
+        local names = listWeaponNames()
+        local changed = (#names ~= #lastWeaponList)
+        if not changed then
+            for i = 1, #names do
+                if names[i] ~= lastWeaponList[i] then changed = true; break end
             end
-            task.wait(0.05)
         end
-    end)
+        if changed and weaponDropdown then
+            lastWeaponList = names
+            pcall(function() weaponDropdown:Refresh(names) end) -- keeps the selection
+        end
+    end
+end)
+
+-- ================= AUTO SKILLS (all selected weapons) =================
+-- What the scan logs + decompiled client code showed:
+--  * The game's own key handler (GUIHandle) only works for the LAST tool added to the
+--    character and is reset whenever any Tool leaves the character, so pressing keys
+--    after swapping weapons does nothing. => we do NOT press keys; we send the skill
+--    packet ourselves through the game's SkillBridge: {"Skill", key, CFrame}.
+--  * The packet has no weapon name. The SERVER casts the skill of the first Tool it
+--    sees in the character (re-ordering Tools only on the client changes nothing).
+--  * Tool attribute Z/X/C/V == true means that skill is on cooldown.
+--    Character attribute Skilling == true while a skill animation is playing.
+-- So: cast every ready skill of the weapon that is currently first; when it has nothing
+-- ready, move ONLY that first weapon out and back in (it goes to the back of the line)
+-- until the next weapon is first. No weapon is ever swapped for a single cast.
+local SKILL_ORDER = { "Z", "X", "C", "V" }
+local lastTry = {}
+local lastDbg, lastCast = "", "-"
+
+local SkillBridge
+pcall(function()
+    local mod = ReplicatedStorage:FindFirstChild("Modules")
+    mod = mod and mod:FindFirstChild("BridgeNet2")
+    if mod then SkillBridge = require(mod).ReferenceBridge("SkillBridge") end
+end)
+local SkillFolder = ReplicatedStorage:FindFirstChild("Skill")
+
+local function dbg(msg)
+    msg = msg .. "\nLast cast: " .. lastCast
+    if msg == lastDbg then return end
+    lastDbg = msg
+    if skillDbg then pcall(function() skillDbg:SetContent(msg) end) end
 end
+
+local function sendSkill(key)
+    local char = LP.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local packet = { "Skill", key, hrp.CFrame }
+    if SkillBridge then
+        if pcall(function() SkillBridge:Fire(packet) end) then return true end
+    end
+    -- fallback: raw BridgeNet2 packet (identifier "\2" was seen in the log)
+    local bn = ReplicatedStorage:FindFirstChild("BridgeNet2")
+    local remote = bn and bn:FindFirstChild("dataRemoteEvent")
+    if remote then
+        return pcall(function() remote:FireServer({ packet, "\2" }) end)
+    end
+    return false
+end
+
+local function toolHasKey(tool, key)
+    if not SkillFolder then return true end
+    local f = SkillFolder:FindFirstChild(tool.Name)
+    return f ~= nil and f:FindFirstChild(key) ~= nil
+end
+
+local function firstHeldTool()
+    local char = LP.Character
+    if not char then return nil end
+    for _, c in ipairs(char:GetChildren()) do
+        if c:IsA("Tool") then return c end
+    end
+    return nil
+end
+
+-- Selected weapons in Character order (first = the one the server will cast)
+local function heldSkillTools()
+    local char = LP.Character
+    local list = {}
+    if not char then return list end
+    local want = (#CONFIG.WeaponNames > 0) and selectedSet() or nil
+    for _, t in ipairs(char:GetChildren()) do
+        if t:IsA("Tool") and (not want or want[t.Name]) then
+            table.insert(list, t)
+        end
+    end
+    return list
+end
+
+-- Move the current first tool to the back of the line until `target` is first
+local function rotateTo(target, char, bp)
+    for _ = 1, 6 do
+        local f = firstHeldTool()
+        if not f or f == target then return true end
+        f.Parent = bp
+        task.wait(0.25)
+        f.Parent = char
+        task.wait(0.3)
+    end
+    return firstHeldTool() == target
+end
+
+local function castSkill(tool, key, char, bp)
+    skillLock = true -- pauses syncWeapons while we reorder
+    local result = "no response"
+    pcall(function()
+        if firstHeldTool() ~= tool and not rotateTo(tool, char, bp) then
+            result = "could not reorder"
+            return
+        end
+        sendSkill(key)
+        local t0 = tick()
+        repeat task.wait(0.05) until char:GetAttribute("Skilling") == true or tick() - t0 > 1
+        if char:GetAttribute("Skilling") ~= true then return end
+        result = "OK"
+        t0 = tick()
+        repeat task.wait(0.1) until char:GetAttribute("Skilling") ~= true or tick() - t0 > 12
+        task.wait(0.3) -- cooldown attribute is set right after the animation ends
+    end)
+    skillLock = false
+    return result
+end
+
+task.spawn(function()
+    while alive do
+        task.wait(0.05)
+        if not isHackRunning() then dbg("Waiting: Auto Farm is OFF"); continue end
+
+        local anyEnabled = false
+        for _, n in ipairs(SKILL_ORDER) do
+            if CONFIG.Skills[n].enabled then anyEnabled = true; break end
+        end
+        if not anyEnabled then dbg("Waiting: no Auto Skills toggle is ON"); continue end
+
+        local char = LP.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local bp = getBackpack()
+        if not (char and hum and bp) or hum.Health <= 0 then dbg("Waiting: character not ready"); continue end
+        if char:GetAttribute("Skilling") == true then dbg("Waiting: a skill is playing"); continue end
+
+        local tools = heldSkillTools()
+        if #tools == 0 then dbg("Waiting: no weapon is held"); continue end
+
+        local pickTool, pickKey
+        local now = tick()
+        for _, tool in ipairs(tools) do -- Character order: current first tool wins
+            for _, n in ipairs(SKILL_ORDER) do
+                if CONFIG.Skills[n].enabled and toolHasKey(tool, n) and tool:GetAttribute(n) ~= true then
+                    local id = tool.Name .. "|" .. n
+                    if not lastTry[id] or now - lastTry[id] >= 1.5 then
+                        pickTool, pickKey = tool, n
+                        lastTry[id] = now
+                        break
+                    end
+                end
+            end
+            if pickTool then break end
+        end
+
+        if pickTool then
+            dbg(string.format("Casting: %s [%s]", pickTool.Name, pickKey))
+            local res = castSkill(pickTool, pickKey, char, bp)
+            lastCast = string.format("%s [%s] -> %s", pickTool.Name, pickKey, res)
+        else
+            dbg("Waiting: all enabled skills are on cooldown")
+        end
+    end
+end)
 
 -- ================= MAIN LOOPS =================
 table.insert(conns, RunService.RenderStepped:Connect(function()
