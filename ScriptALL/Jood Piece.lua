@@ -686,36 +686,37 @@ local function getInventoryGui()
     return inv, inv and inv:FindFirstChild("BackpackFrame")
 end
 
-local function clickStoreButton(btn)
-    if not getconnections then return false end
-    local ok, cs = pcall(getconnections, btn.MouseButton1Click)
-    if not ok then return false end
-    local fired = false
-    for _, c in ipairs(cs) do
-        if pcall(function() c:Fire() end) then fired = true end
-    end
-    return fired
+local function getInvRemote()
+    local sys = ReplicatedStorage:FindFirstChild("System")
+    local inv = sys and sys:FindFirstChild("Inv")
+    return inv and inv:FindFirstChild("Inventory") -- RemoteFunction
 end
 
 local function storeOnce()
-    local inv, bp = getInventoryGui()
-    if not bp then return 0 end
-    local n = 0
+    local _, bp = getInventoryGui()
+    local remote = getInvRemote()
+    if not bp or not remote then return 0 end
+
+    -- take a snapshot first: the list changes while we store
+    local jobs = {}
     for _, f in ipairs(bp:GetChildren()) do
-        if f.Parent and f:IsA("Frame") and not STORE.skip[f.Name] then
-            local btn = f:FindFirstChild("Button")
-            if btn and btn:IsA("GuiButton") then
-                -- put the whole stack ("x4" -> 4) into the Amount box before clicking
-                local amtBox = inv:FindFirstChild("Amount")
-                local amtLbl = btn:FindFirstChild("Amount")
-                local q = amtLbl and tostring(amtLbl.Text):match("%d+")
-                if q and amtBox and amtBox:IsA("TextBox") then amtBox.Text = q end
-                if clickStoreButton(btn) then
-                    n += 1
-                    task.wait(STORE.delay)
-                end
-            end
+        if f:IsA("Frame") and f:FindFirstChild("Button") and not STORE.skip[f.Name] then
+            local btn = f.Button
+            local lbl = btn:FindFirstChild("Amount") or f:FindFirstChild("Amount", true)
+            local q = lbl and tonumber(tostring(lbl.Text):match("%d+")) or 1 -- "x4" -> 4
+            table.insert(jobs, { name = f.Name, amount = math.max(q, 1) })
         end
+    end
+
+    local n = 0
+    for _, job in ipairs(jobs) do
+        if not STORE.enabled then break end
+        -- same call the game's own Store button makes
+        local ok = pcall(function()
+            remote:InvokeServer("Add", job.name, job.amount)
+        end)
+        if ok then n += 1 end
+        task.wait(STORE.delay)
     end
     return n
 end
