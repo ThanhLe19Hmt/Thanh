@@ -684,16 +684,16 @@ end
 
 -- Page: Roll (Auto Roll)
 do
-    local page = tabMain:CreatePage("Roll")
-    local s1 = page:CreateSection("🎰 Auto Roll", "Left")
+    local page = tabMain:CreatePage("Random")
+    local s1 = page:CreateSection("🎰 Random Chance", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
-    s1:Toggle({Title = "Auto Roll", Id = "ROLL_ENABLED", Value = false, Callback = function(v)
+    s1:Toggle({Title = "Auto Random", Id = "ROLL_ENABLED", Value = false, Callback = function(v)
         CONFIG.AutoRoll = v
     end})
-    s1:Dropdown({Title = "Amount per roll", Options = {"x5", "x1"}, Multi = false, Value = "x5", Callback = function(v)
+    s1:Dropdown({Title = "Amount per Random", Options = {"x5", "x1"}, Multi = false, Value = "x5", Callback = function(v)
         CONFIG.RollAmount = (v == "x1") and 1 or 5
     end})
-    rollPara = s2:Paragraph({Title = "Auto Roll", Content = "No rolls yet."})
+    rollPara = s2:Paragraph({Title = "Auto Random", Content = "No rolls yet."})
 end
 
 -- ===================== SETTING =====================
