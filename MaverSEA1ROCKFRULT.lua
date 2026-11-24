@@ -4438,6 +4438,33 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end
     end)
+    local function AntiLaunchFix(hrp)
+        if not hrp or not hrp.Parent then return end
+        local target = _G.CurrentFarmTarget
+        if not target or not target.Parent then return end
+        if not target:FindFirstChild("HumanoidRootPart") then return end
+        local tHrp = target.HumanoidRootPart
+        if not tHrp or not tHrp.Parent then return end
+        local dist = (hrp.Position - tHrp.Position).Magnitude
+        if dist > 80 then
+            local height = _G.BACON_AIM_HEIGHT or _G.LAVA_AIM_HEIGHT or 25
+            local mF = CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+            hrp.CFrame = tHrp.CFrame * mF
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+            tHrp.CFrame = CFrame.new(tHrp.Position.X, tHrp.Position.Y - 50, tHrp.Position.Z)
+            tHrp.AssemblyLinearVelocity = Vector3.new(
+                tHrp.AssemblyLinearVelocity.X, 0, tHrp.AssemblyLinearVelocity.Z
+            )
+            tHrp.AssemblyAngularVelocity = Vector3.zero
+        else
+            tHrp.AssemblyLinearVelocity = Vector3.new(
+                tHrp.AssemblyLinearVelocity.X, 0, tHrp.AssemblyLinearVelocity.Z
+            )
+        end
+    end
+
+    task.spawn(function()
     local QTE_KEY_MAP = {
         A=Enum.KeyCode.A, B=Enum.KeyCode.B, C=Enum.KeyCode.C, D=Enum.KeyCode.D,
         E=Enum.KeyCode.E, F=Enum.KeyCode.F, G=Enum.KeyCode.G, H=Enum.KeyCode.H,
@@ -4477,32 +4504,6 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
             end
         end)
     end
-    local function AntiLaunchFix(hrp)
-        if not hrp or not hrp.Parent then return end
-        local target = _G.CurrentFarmTarget
-        if not target or not target.Parent then return end
-        if not target:FindFirstChild("HumanoidRootPart") then return end
-        local tHrp = target.HumanoidRootPart
-        if not tHrp or not tHrp.Parent then return end
-        local dist = (hrp.Position - tHrp.Position).Magnitude
-        if dist > 80 then
-            local height = _G.BACON_AIM_HEIGHT or _G.LAVA_AIM_HEIGHT or 25
-            local mF = CFrame.new(0, height, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-            hrp.CFrame = tHrp.CFrame * mF
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
-            tHrp.CFrame = CFrame.new(tHrp.Position.X, tHrp.Position.Y - 50, tHrp.Position.Z)
-            tHrp.AssemblyLinearVelocity = Vector3.new(
-                tHrp.AssemblyLinearVelocity.X, 0, tHrp.AssemblyLinearVelocity.Z
-            )
-            tHrp.AssemblyAngularVelocity = Vector3.zero
-        else
-            tHrp.AssemblyLinearVelocity = Vector3.new(
-                tHrp.AssemblyLinearVelocity.X, 0, tHrp.AssemblyLinearVelocity.Z
-            )
-        end
-    end
-    task.spawn(function()
         while task.wait(0.02) do
             pcall(function()
                 local battle = LocalPlayer.PlayerGui:FindFirstChild("Battle")
