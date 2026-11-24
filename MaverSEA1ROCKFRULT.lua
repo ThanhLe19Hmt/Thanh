@@ -4773,6 +4773,7 @@ if not IS_MOON_MAP and not IS_SEA2_MAP and not IS_RAID_TOP_MAP then
         end)
     end
 end)
+task.spawn(function()
 _G.LVL_NoDmgTime    = 4
 _G.LVL_NoMobTimeout = 5
 _G.LVL_NoSkillTimeout = 15
@@ -4814,7 +4815,6 @@ local function LVL_GotoNPC(npcModel, myHrp)
         pcall(function() fireproximityprompt(p, p.HoldDuration + 0.1) end)
     end
 end
-task.spawn(function()
     local target, hpMark, hpTime, lastQuest = nil, 0, 0, nil
     local lastMobSeen = tick()
     local lastSkillTick = 0
