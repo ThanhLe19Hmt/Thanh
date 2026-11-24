@@ -41,6 +41,7 @@ local CONFIG = {
     AutoRoll   = false,
     RollAmount = 5,   -- 1 or 5 (only 5 was confirmed from the scan log)
 }
+local MAX_WEAPONS     = 2    -- weapon lock: at most this many weapons can be used
 local ATTACK_INTERVAL = 0.05 -- fixed attack speed (seconds)
 local ROLL_INTERVAL   = 1.0  -- fixed delay between rolls (seconds)
 
@@ -481,19 +482,12 @@ do
     local page = tabMain:CreatePage("Farm")
     local s1 = page:CreateSection("🌾 Auto Farm", "Left")
     local s2 = page:CreateSection("🎯 Select Mob", "Right")
-    local s3 = page:CreateSection("🗡️ Weapons", "Left")
 
     s1:Toggle({Title = "Auto Farm", Id = "FARM_ENABLED", Value = false, Callback = function(v)
         CONFIG.AutoFarm = v
     end})
     targetPara = s1:Paragraph({Title = "Target: (none)", Content = "Pick a mob from the list on the right."})
 
-    weaponDropdown = s3:Dropdown({Title = "Weapons (multi-select)", Options = listWeaponNames(), Multi = true, Value = {}, Callback = function(sel)
-        -- the library passes the same table every time, so copy it
-        local copy = {}
-        for _, n in ipairs(sel or {}) do table.insert(copy, n) end
-        CONFIG.WeaponNames = copy
-    end})
     mobPara = s2:Paragraph({Title = "Scanning...", Content = "Wait 1-2 seconds."})
     mobDropdown = s2:Dropdown({Title = "Target Mob", Options = {}, Multi = false, Callback = function(selected)
         if refreshingDropdown then return end -- ignore callbacks caused by list refresh
@@ -528,6 +522,7 @@ end
 do
     local page = tabSetting:CreatePage("Setting")
     local sESP   = page:CreateSection("👁️ ESP", "Left")
+    local sWeapon = page:CreateSection("🗡️ Weapons (max " .. MAX_WEAPONS .. ")", "Left")
     local sSkill = page:CreateSection("⚔️ Auto Skills (every selected weapon)", "Right")
     local sFarm  = page:CreateSection("📍 Farm", "Right")
 
@@ -550,6 +545,31 @@ do
     sESP:ColorPicker({Title = "Highlight Color", Value = CONFIG.HighlightColor, Callback = function(c)
         CONFIG.HighlightColor = c
         clearAllESP(); scanAndApply()
+    end})
+
+    -- Weapons (weapon lock: only MAX_WEAPONS can be selected)
+    weaponDropdown = sWeapon:Dropdown({Title = "Weapons (select up to " .. MAX_WEAPONS .. ")", Options = listWeaponNames(), Multi = true, Value = {}, Callback = function(sel)
+        -- the library passes the same table every time, so copy it
+        if type(sel) ~= "table" then return end
+        if #sel > MAX_WEAPONS then
+            -- Weapon lock: reject the newest pick. The library hands us its own selection
+            -- table, so remove the extra entries in place, then re-sync the dropdown UI.
+            while #sel > MAX_WEAPONS do table.remove(sel) end
+            Library:Notify({
+                Title = "Weapon lock",
+                Description = "Only " .. MAX_WEAPONS .. " weapons allowed. Deselect one to pick another.",
+                Duration = 3,
+            })
+            task.defer(function()
+                -- NOTE: call with a dot, Set takes the selection directly (no self argument)
+                if weaponDropdown then pcall(weaponDropdown.Set, sel) end
+            end)
+            return
+        end
+        -- copy it, the library reuses the same table every time
+        local copy = {}
+        for _, n in ipairs(sel) do table.insert(copy, n) end
+        CONFIG.WeaponNames = copy
     end})
 
     -- Skills (only cast while Auto Farm is running)
@@ -735,35 +755,36 @@ local function firstHeldTool()
     return nil
 end
 
--- Selected weapons in Character order (first = the one the server will cast)
 local function heldSkillTools()
     local char = LP.Character
     local list = {}
     if not char then return list end
     local want = (#CONFIG.WeaponNames > 0) and selectedSet() or nil
+    local first = firstHeldTool()
+    if first and (not want or want[first.Name]) then table.insert(list, first) end
     for _, t in ipairs(char:GetChildren()) do
-        if t:IsA("Tool") and (not want or want[t.Name]) then
+        if t:IsA("Tool") and t ~= first and (not want or want[t.Name]) then
             table.insert(list, t)
         end
     end
     return list
 end
 
--- Move the current first tool to the back of the line until `target` is first
+-- Move the current first tool out and back in (different frames, so the server sees it)
 local function rotateTo(target, char, bp)
-    for _ = 1, 6 do
+    for _ = 1, 5 do
         local f = firstHeldTool()
         if not f or f == target then return true end
         f.Parent = bp
-        task.wait(0.25)
+        task.wait(0.15)
         f.Parent = char
-        task.wait(0.3)
+        task.wait(0.15)
     end
     return firstHeldTool() == target
 end
 
 local function castSkill(tool, key, char, bp)
-    skillLock = true -- pauses syncWeapons while we reorder
+    skillLock = true
     local result = "no response"
     pcall(function()
         if firstHeldTool() ~= tool and not rotateTo(tool, char, bp) then
@@ -772,12 +793,9 @@ local function castSkill(tool, key, char, bp)
         end
         sendSkill(key)
         local t0 = tick()
-        repeat task.wait(0.05) until char:GetAttribute("Skilling") == true or tick() - t0 > 1
-        if char:GetAttribute("Skilling") ~= true then return end
-        result = "OK"
-        t0 = tick()
-        repeat task.wait(0.1) until char:GetAttribute("Skilling") ~= true or tick() - t0 > 12
-        task.wait(0.3) -- cooldown attribute is set right after the animation ends
+        repeat task.wait(0.05)
+        until tool:GetAttribute(key) == true or char:GetAttribute("Skilling") == true or tick() - t0 > 0.6
+        if tool:GetAttribute(key) == true or char:GetAttribute("Skilling") == true then result = "OK" end
     end)
     skillLock = false
     return result
@@ -805,13 +823,12 @@ task.spawn(function()
 
         local pickTool, pickKey
         local now = tick()
-        for _, tool in ipairs(tools) do -- Character order: current first tool wins
+        for _, tool in ipairs(tools) do
             for _, n in ipairs(SKILL_ORDER) do
                 if CONFIG.Skills[n].enabled and toolHasKey(tool, n) and tool:GetAttribute(n) ~= true then
                     local id = tool.Name .. "|" .. n
-                    if not lastTry[id] or now - lastTry[id] >= 1.5 then
+                    if not lastTry[id] or now - lastTry[id] >= 1.0 then
                         pickTool, pickKey = tool, n
-                        lastTry[id] = now
                         break
                     end
                 end
@@ -820,9 +837,11 @@ task.spawn(function()
         end
 
         if pickTool then
+            lastTry[pickTool.Name .. "|" .. pickKey] = now
             dbg(string.format("Casting: %s [%s]", pickTool.Name, pickKey))
             local res = castSkill(pickTool, pickKey, char, bp)
             lastCast = string.format("%s [%s] -> %s", pickTool.Name, pickKey, res)
+            task.wait(0.1)
         else
             dbg("Waiting: all enabled skills are on cooldown")
         end
