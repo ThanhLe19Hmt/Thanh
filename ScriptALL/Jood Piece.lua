@@ -30,6 +30,9 @@ local CONFIG = {
     FarmDistance   = 6,       -- studs from the mob
     WeaponNames    = {},      -- selected weapons (Tool names); empty = default behavior
 
+    IslandESP      = false,
+    IslandColor    = Color3.fromRGB(80, 200, 255),
+
     Skills = {
         Z = { enabled = false, keyCode = Enum.KeyCode.Z },
         X = { enabled = false, keyCode = Enum.KeyCode.X },
@@ -425,10 +428,184 @@ local function autoRollStep()
     end
 end
 
+-- ================= ISLAND ESP =================
+-- ReplicatedStorage.Modules.IslandInfo = { [islandName] = { Position = Vector3, Range = number } }
+-- (the game itself uses it to set the character's "Island" attribute)
+local IslandInfo
+pcall(function()
+    local mod = ReplicatedStorage:FindFirstChild("Modules")
+    mod = mod and mod:FindFirstChild("IslandInfo")
+    if mod then IslandInfo = require(mod) end
+end)
+
+local islandESP = {}      -- name -> { part, label, pos }
+local islandFolder
+local ISLAND_LABEL_HEIGHT = 40 -- studs above the island point so the label is easy to see
+
+local function getIslandPoints()
+    local list = {}
+    if type(IslandInfo) == "table" then
+        for name, info in pairs(IslandInfo) do
+            local pos = type(info) == "table" and (info.Position or info.CFrame or info.Pos or info.Center) or info
+            if typeof(pos) == "CFrame" then pos = pos.Position end
+            if typeof(pos) == "Vector3" then
+                table.insert(list, { name = tostring(name), pos = pos })
+            end
+        end
+    end
+    if #list == 0 then
+        -- fallback: average position of the mobs of each island folder
+        local root = getMobsRoot()
+        if root then
+            for _, island in ipairs(root:GetChildren()) do
+                if island:IsA("Folder") then
+                    local sum, n = Vector3.zero, 0
+                    for _, mob in ipairs(island:GetChildren()) do
+                        local mp = isMobModel(mob) and getMobPart(mob)
+                        if mp then sum = sum + mp.Position; n = n + 1 end
+                    end
+                    if n > 0 then table.insert(list, { name = island.Name, pos = sum / n }) end
+                end
+            end
+        end
+    end
+    return list
+end
+
+local function clearIslandESP()
+    for _, d in pairs(islandESP) do
+        pcall(function() d.part:Destroy() end)
+    end
+    islandESP = {}
+end
+
+local function buildIslandESP()
+    clearIslandESP()
+    if not islandFolder or not islandFolder.Parent then
+        islandFolder = Instance.new("Folder")
+        islandFolder.Name = "SakuraIslandESP"
+        islandFolder.Parent = Workspace
+    end
+    for _, it in ipairs(getIslandPoints()) do
+        local part = Instance.new("Part")
+        part.Name = it.name
+        part.Anchored = true
+        part.CanCollide = false
+        part.CanQuery = false
+        part.CanTouch = false
+        part.Transparency = 1
+        part.Size = Vector3.new(1, 1, 1)
+        part.Position = it.pos + Vector3.new(0, ISLAND_LABEL_HEIGHT, 0)
+        part.Parent = islandFolder
+
+        local bb = Instance.new("BillboardGui")
+        bb.Size = UDim2.new(0, 170, 0, 44)
+        bb.AlwaysOnTop = true
+        bb.MaxDistance = 1e9
+        bb.ResetOnSpawn = false
+        bb.Adornee = part
+        bb.Parent = part
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = CONFIG.IslandColor
+        label.TextStrokeTransparency = 0.2
+        label.Font = Enum.Font.GothamBold
+        label.TextScaled = true
+        label.Text = it.name
+        label.Parent = bb
+
+        islandESP[it.name] = { part = part, label = label, pos = it.pos }
+    end
+end
+
+-- ================= ISLAND TELEPORT =================
+local selectedIsland
+local tpDropdown
+local lastIslandNames = {}
+
+local function getIslandNames()
+    local names = {}
+    for _, it in ipairs(getIslandPoints()) do table.insert(names, it.name) end
+    table.sort(names)
+    return names
+end
+
+local function teleportToIsland(name)
+    local root = getMyRoot()
+    if not root or not name then return false end
+    for _, it in ipairs(getIslandPoints()) do
+        if it.name == name then
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = { LP.Character, islandFolder }
+            local hit = Workspace:Raycast(it.pos + Vector3.new(0, 300, 0), Vector3.new(0, -1000, 0), params)
+            local target = (hit and hit.Position or it.pos) + Vector3.new(0, 6, 0)
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.CFrame = CFrame.new(target)
+            return true
+        end
+    end
+    return false
+end
+
+-- ================= AUTO STORE =================
+-- MainGui.INVENTORY.BackpackFrame ("TO STORE"): each item Frame has a Button whose
+-- MouseButton1Click handler (Monitor script) moves the item into storage.
+local STORE = {
+    enabled  = false,
+    interval = 1,    -- seconds between passes
+    delay    = 0.15, -- seconds between items
+    skip     = {},   -- item names to keep, e.g. { ["Seven"] = true }
+}
+
+local function getInventoryGui()
+    local pg = LP:FindFirstChild("PlayerGui")
+    local main = pg and pg:FindFirstChild("MainGui")
+    local inv = main and main:FindFirstChild("INVENTORY")
+    return inv, inv and inv:FindFirstChild("BackpackFrame")
+end
+
+local function clickStoreButton(btn)
+    if not getconnections then return false end
+    local ok, cs = pcall(getconnections, btn.MouseButton1Click)
+    if not ok then return false end
+    local fired = false
+    for _, c in ipairs(cs) do
+        if pcall(function() c:Fire() end) then fired = true end
+    end
+    return fired
+end
+
+local function storeOnce()
+    local inv, bp = getInventoryGui()
+    if not bp then return 0 end
+    local n = 0
+    for _, f in ipairs(bp:GetChildren()) do
+        if f.Parent and f:IsA("Frame") and not STORE.skip[f.Name] then
+            local btn = f:FindFirstChild("Button")
+            if btn and btn:IsA("GuiButton") then
+                -- put the whole stack ("x4" -> 4) into the Amount box before clicking
+                local amtBox = inv:FindFirstChild("Amount")
+                local amtLbl = btn:FindFirstChild("Amount")
+                local q = amtLbl and tostring(amtLbl.Text):match("%d+")
+                if q and amtBox and amtBox:IsA("TextBox") then amtBox.Text = q end
+                if clickStoreButton(btn) then
+                    n += 1
+                    task.wait(STORE.delay)
+                end
+            end
+        end
+    end
+    return n
+end
+
 -- ================= BUILD UI (MarvenRiz) =================
 local alive = true
 local conns = {}
 local skillDbg -- Auto Skills status paragraph
+local islandPara -- nearest islands paragraph
 local MySaveManager = Library.SaveManager
 
 local Window = Library:CreateWindow({
@@ -453,6 +630,7 @@ local function unload()
     CONFIG.AutoRoll = false
     for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
     pcall(clearAllESP)
+    pcall(clearIslandESP)
     local sg = Window.MainFrame and Window.MainFrame:FindFirstAncestorOfClass("ScreenGui")
     if sg then pcall(function() sg:Destroy() end) end
 end
@@ -463,6 +641,7 @@ end
 
 local tabMain    = Window:CreateTab("Main", true, false)
 local tabSetting = Window:CreateTab("Setting", false, false)
+local tabOther   = Window:CreateTab("Other", false, false)
 local tabCfg     = Window:CreateTab("Config", false, false)
 
 -- ===================== MAIN =====================
@@ -546,6 +725,13 @@ do
         CONFIG.HighlightColor = c
         clearAllESP(); scanAndApply()
     end})
+    sESP:Toggle({Title = "Island ESP", Id = "ISLAND_ESP", Value = false, Callback = function(v)
+        CONFIG.IslandESP = v
+        if v then buildIslandESP() else clearIslandESP() end
+    end})
+    sESP:ColorPicker({Title = "Island Color", Value = CONFIG.IslandColor, Callback = function(c)
+        CONFIG.IslandColor = c
+    end})
 
     -- Weapons (weapon lock: only MAX_WEAPONS can be selected)
     weaponDropdown = sWeapon:Dropdown({Title = "Weapons (select up to " .. MAX_WEAPONS .. ")", Options = listWeaponNames(), Multi = true, Value = {}, Callback = function(sel)
@@ -588,6 +774,31 @@ do
     end})
     sFarm:Slider({Title = "Follow Distance (studs)", Min = 0, Max = 30, Value = 6, Callback = function(v)
         CONFIG.FarmDistance = v
+    end})
+end
+
+-- ===================== OTHER =====================
+do
+    local page = tabOther:CreatePage("Island & Store")
+    local sIsland = page:CreateSection("🏝️ Island", "Left")
+    local sStore  = page:CreateSection("📦 Auto Store", "Right")
+
+    islandPara = sIsland:Paragraph({Title = "Nearest islands", Content = "Turn on Island ESP to see them."})
+    tpDropdown = sIsland:Dropdown({Title = "Teleport to Island", Options = getIslandNames(), Multi = false, Callback = function(v)
+        if type(v) == "table" then v = v[1] end
+        selectedIsland = v
+    end})
+    sIsland:Button({Title = "Teleport", Callback = function()
+        local ok = teleportToIsland(selectedIsland)
+        Library:Notify({
+            Title = ok and "Teleported" or "Teleport failed",
+            Description = ok and tostring(selectedIsland) or "Select an island first.",
+            Duration = 3,
+        })
+    end})
+
+    sStore:Toggle({Title = "Auto Store Items", Id = "AUTO_STORE", Value = false, Callback = function(v)
+        STORE.enabled = v
     end})
 end
 
@@ -670,6 +881,64 @@ task.spawn(function()
         end
 
         mobPara:SetTitle(string.format("Showing: %d groups / %d mobs", #items, total))
+    end
+end)
+
+-- ================= ISLAND ESP UPDATE =================
+task.spawn(function()
+    while alive and task.wait(0.25) do
+        if not CONFIG.IslandESP then continue end
+        if next(islandESP) == nil or not islandFolder or not islandFolder.Parent then
+            pcall(buildIslandESP) -- retry until island data is available
+        end
+        local root = getMyRoot()
+        if not root then continue end
+        local here = LP.Character and LP.Character:GetAttribute("Island")
+        local arr = {}
+        for name, d in pairs(islandESP) do
+            local dist = math.floor((d.pos - root.Position).Magnitude)
+            local isHere = (name == here)
+            d.label.Text = string.format("%s%s\n%dm", name, isHere and " (you are here)" or "", dist)
+            d.label.TextColor3 = isHere and Color3.fromRGB(90, 255, 120) or CONFIG.IslandColor
+            table.insert(arr, { name = name, dist = dist })
+        end
+        table.sort(arr, function(a, b) return a.dist < b.dist end)
+        local lines = {}
+        for i = 1, math.min(6, #arr) do
+            lines[i] = string.format("%d. %s - %dm", i, arr[i].name, arr[i].dist)
+        end
+        if islandPara then
+            pcall(function()
+                islandPara:SetTitle("Current: " .. tostring(here or "?"))
+                islandPara:SetContent(#lines > 0 and table.concat(lines, "\n") or "No islands found.")
+            end)
+        end
+    end
+end)
+
+-- ================= AUTO STORE LOOP =================
+task.spawn(function()
+    while alive do
+        task.wait(STORE.interval)
+        if STORE.enabled then pcall(storeOnce) end
+    end
+end)
+
+-- ================= ISLAND TELEPORT LIST REFRESH =================
+task.spawn(function()
+    while alive and task.wait(3) do
+        if not tpDropdown then continue end
+        local names = getIslandNames()
+        local changed = #names ~= #lastIslandNames
+        if not changed then
+            for i = 1, #names do
+                if names[i] ~= lastIslandNames[i] then changed = true; break end
+            end
+        end
+        if changed then
+            lastIslandNames = names
+            pcall(function() tpDropdown:Refresh(names) end)
+        end
     end
 end)
 
