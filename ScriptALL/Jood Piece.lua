@@ -692,30 +692,40 @@ local function getInvRemote()
     return inv and inv:FindFirstChild("Inventory") -- RemoteFunction
 end
 
-local function storeOnce()
-    local _, bp = getInventoryGui()
-    local remote = getInvRemote()
-    if not bp or not remote then return 0 end
+local lastStoreFail = {} -- item name -> time until we stop retrying it
 
-    -- take a snapshot first: the list changes while we store
-    local jobs = {}
-    for _, f in ipairs(bp:GetChildren()) do
-        if f:IsA("Frame") and f:FindFirstChild("Button") and not STORE.skip[f.Name] then
-            local btn = f.Button
-            local lbl = btn:FindFirstChild("Amount") or f:FindFirstChild("Amount", true)
-            local q = lbl and tonumber(tostring(lbl.Text):match("%d+")) or 1 -- "x4" -> 4
-            table.insert(jobs, { name = f.Name, amount = math.max(q, 1) })
+local function storeOnce()
+    local remote = getInvRemote()
+    local bp = getBackpack()
+    local items = ReplicatedStorage:FindFirstChild("Items")
+    if not remote or not bp or not items then return 0 end
+    local skills = ReplicatedStorage:FindFirstChild("Skill")
+    local keep = selectedSet() -- never store the weapons you selected
+
+    -- storable item = Tool in Backpack that exists in ReplicatedStorage.Items
+    -- and is not a weapon (weapons live in ReplicatedStorage.Skill)
+    local counts = {}
+    for _, t in ipairs(bp:GetChildren()) do
+        local nm = t.Name
+        if t:IsA("Tool")
+            and not STORE.skip[nm] and not keep[nm]
+            and items:FindFirstChild(nm)
+            and not (skills and skills:FindFirstChild(nm))
+            and (not lastStoreFail[nm] or tick() > lastStoreFail[nm]) then
+            counts[nm] = (counts[nm] or 0) + (tonumber(t:GetAttribute("Amount")) or 1)
         end
     end
 
     local n = 0
-    for _, job in ipairs(jobs) do
+    for nm, amount in pairs(counts) do
         if not STORE.enabled then break end
         -- same call the game's own Store button makes
-        local ok = pcall(function()
-            remote:InvokeServer("Add", job.name, job.amount)
-        end)
-        if ok then n += 1 end
+        local ok, res = pcall(function() return remote:InvokeServer("Add", nm, amount) end)
+        if ok and res ~= false then
+            n += 1
+        else
+            lastStoreFail[nm] = tick() + 30 -- back off if the server refuses
+        end
         task.wait(STORE.delay)
     end
     return n
