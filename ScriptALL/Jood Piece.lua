@@ -25,6 +25,8 @@ local CONFIG = {
     HighlightColor = Color3.fromRGB(255, 80, 110),
 
     AutoFarm       = false,
+    AutoBoss       = false,
+    BossNames      = {}, -- selected boss order
     TargetMobName  = nil,
     FarmPosition   = "Above", -- Above | Below | Behind | Front
     FarmDistance   = 6,       -- studs from the mob
@@ -215,19 +217,43 @@ local function getBackpack()
     return LP:FindFirstChildOfClass("Backpack") or LP:FindFirstChild("Backpack")
 end
 
+local knownWeapons = {}          -- weapon name -> last time it was seen in Character/Backpack
+local refreshingWeapons = false  -- true while the dropdown list is being refreshed
+local WEAPON_FORGET_AFTER = 20   -- seconds a weapon must be missing (while alive) to be dropped
+
 local function listWeaponNames()
-    local names, seen = {}, {}
+    local now = tick()
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local bp = getBackpack()
+    local present = {}
     local function add(container)
         if not container then return end
         for _, t in ipairs(container:GetChildren()) do
-            if t:IsA("Tool") and not seen[t.Name] then
-                seen[t.Name] = true
-                table.insert(names, t.Name)
+            if t:IsA("Tool") then
+                present[t.Name] = true
+                knownWeapons[t.Name] = now
             end
         end
     end
-    add(LP.Character)
-    add(getBackpack())
+    add(char)
+    add(bp)
+
+    local alive = hum ~= nil and hum.Health > 0 and bp ~= nil
+    for name, seen in pairs(knownWeapons) do
+        if not present[name] then
+            if alive then
+                -- really gone (sold / stored / traded): forget it after a grace period
+                if now - seen > WEAPON_FORGET_AFTER then knownWeapons[name] = nil end
+            else
+                -- dead or respawning: freeze the timer so death never removes options
+                knownWeapons[name] = now
+            end
+        end
+    end
+
+    local names = {}
+    for n in pairs(knownWeapons) do table.insert(names, n) end
     table.sort(names)
     return names
 end
@@ -306,8 +332,9 @@ local function tryAttack()
     end
 end
 
-local function findTarget()
-    if not CONFIG.TargetMobName then return nil end
+local function findTarget(targetName)
+    targetName = targetName or CONFIG.TargetMobName
+    if not targetName then return nil end
     local root = getMobsRoot()
     if not root then return nil end
     local myRoot = getMyRoot()
@@ -315,7 +342,7 @@ local function findTarget()
     local best, bestDist = nil, math.huge
     -- search every depth under Workspace.Mobs (not only Mobs/<Island>/<Mob>)
     for _, mob in ipairs(root:GetDescendants()) do
-        if mob.Name == CONFIG.TargetMobName and mob:IsA("Model") and isMobModel(mob) then
+        if mob.Name == targetName and mob:IsA("Model") and isMobModel(mob) then
             local hum = mob:FindFirstChildOfClass("Humanoid")
             if hum and hum.Health > 0 then
                 local mp = getMobPart(mob)
@@ -346,30 +373,112 @@ local function getFarmCFrame(mobPart)
     end
 end
 
+local lastBossSelection = ""
+local lastFarmTargetName = nil
+local lastBossName = nil
+
+local function getBossSelectionKey()
+    local names = {}
+    for _, name in ipairs(CONFIG.BossNames) do
+        if type(name) == "string" then table.insert(names, name) end
+    end
+    table.sort(names)
+    return table.concat(names, "|")
+end
+
+local function pickRandomAliveBoss()
+    local candidates = {}
+    for _, name in ipairs(CONFIG.BossNames) do
+        local model = findTarget(name)
+        if model then
+            table.insert(candidates, {name = name, model = model})
+        end
+    end
+    if #candidates == 0 then return nil, nil end
+
+    -- Avoid immediately choosing the same boss again when another boss is alive.
+    local alternatives = {}
+    if #candidates > 1 then
+        for _, candidate in ipairs(candidates) do
+            if candidate.name ~= lastBossName then
+                table.insert(alternatives, candidate)
+            end
+        end
+    end
+    local pool = (#alternatives > 0) and alternatives or candidates
+    local chosen = pool[math.random(1, #pool)]
+    lastBossName = chosen.name
+    return chosen.name, chosen.model
+end
+
 local function autoFarmStep()
     farmEngaged = false
-    if not CONFIG.AutoFarm or not CONFIG.TargetMobName then return end
+    if not CONFIG.AutoFarm and not CONFIG.AutoBoss then return end
+
+    local targetName = CONFIG.TargetMobName
+    local selectionChanged = false
+    if CONFIG.AutoBoss then
+        if #CONFIG.BossNames == 0 then
+            farmStatus("No boss selected.")
+            currentTarget = nil
+            return
+        end
+        local selectionKey = getBossSelectionKey()
+        if selectionKey ~= lastBossSelection then
+            lastBossSelection = selectionKey
+            currentTarget = nil
+            lastFarmTargetName = nil
+            lastBossName = nil
+            selectionChanged = true
+        end
+    end
+
     local char = LP.Character
     local myRoot = getMyRoot()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not myRoot or not hum or hum.Health <= 0 then return end
-    syncWeapons()
-    if currentTarget and (not currentTarget.Parent or currentTarget.Name ~= CONFIG.TargetMobName) then
-        currentTarget = nil
+
+    if CONFIG.AutoBoss then
+        if currentTarget then
+            local h = currentTarget:FindFirstChildOfClass("Humanoid")
+            if not currentTarget.Parent or not h or h.Health <= 0 then
+                currentTarget = nil
+            end
+        end
+        if not currentTarget then
+            targetName, currentTarget = pickRandomAliveBoss()
+        else
+            targetName = lastBossName
+        end
+        if not currentTarget then
+            farmStatus("No selected boss is alive - waiting.")
+            return
+        end
+    else
+        if targetName ~= lastFarmTargetName then
+            currentTarget = nil
+            lastFarmTargetName = targetName
+        end
+        if currentTarget then
+            local h = currentTarget:FindFirstChildOfClass("Humanoid")
+            if not currentTarget.Parent or not h or h.Health <= 0 then
+                currentTarget = nil
+            end
+        end
+        if not currentTarget and targetName then currentTarget = findTarget(targetName) end
     end
-    if currentTarget then
-        local h = currentTarget:FindFirstChildOfClass("Humanoid")
-        if not h or h.Health <= 0 then currentTarget = nil end
-    end
-    if not currentTarget then currentTarget = findTarget() end
-    if not currentTarget then
-        farmStatus('No alive "' .. tostring(CONFIG.TargetMobName) .. '" found - waiting for respawn. Skills paused.')
+
+    if not targetName or not currentTarget then
+        farmStatus('No alive "' .. tostring(targetName) .. '" found - waiting. Skills paused.')
         return
     end
+
     local mobPart = getMobPart(currentTarget)
     if not mobPart then currentTarget = nil; return end
+
     farmEngaged = true
-    farmStatus("Farming: " .. tostring(CONFIG.TargetMobName))
+    syncWeapons()
+    farmStatus((CONFIG.AutoBoss and "Random Boss: " or "Farming: ") .. tostring(targetName))
     pcall(function()
         myRoot.CFrame = getFarmCFrame(mobPart)
         myRoot.Velocity = Vector3.zero
@@ -379,7 +488,6 @@ local function autoFarmStep()
         tryAttack()
     end
 end
-
 -- ================= AUTO SKILLS =================
 local VIM
 pcall(function() VIM = game:GetService("VirtualInputManager") end)
@@ -407,7 +515,7 @@ end
 
 -- Skills only fire while a hack feature (currently Auto Farm) is running
 local function isHackRunning()
-    return CONFIG.AutoFarm and farmEngaged
+    return (CONFIG.AutoFarm or CONFIG.AutoBoss) and farmEngaged
 end
 
 -- ================= AUTO ROLL (Random Chance) =================
@@ -638,6 +746,7 @@ local function unload()
     alive = false
     CONFIG.Enabled = false
     CONFIG.AutoFarm = false
+    CONFIG.AutoBoss = false
     CONFIG.AutoRoll = false
     for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
     pcall(clearAllESP)
@@ -674,7 +783,17 @@ do
     local s2 = page:CreateSection("🎯 Select Mob", "Right")
 
     s1:Toggle({Title = "Auto Farm", Id = "FARM_ENABLED", Value = false, Callback = function(v)
+        if v and CONFIG.AutoBoss then
+            CONFIG.AutoFarm = false
+            Library:Notify({Title = "Cannot enable Auto Farm", Description = "Turn off Auto Boss first.", Duration = 3})
+            task.defer(function()
+                local el = Window.ConfigElements["Auto Farm"]
+                if el then pcall(el.Set, false) end -- dot call: Set takes the value directly
+            end)
+            return
+        end
         CONFIG.AutoFarm = v
+        if not v then currentTarget = nil; farmEngaged = false end
     end})
     targetPara = s1:Paragraph({Title = "Target: (none)", Content = "Pick a mob from the list on the right."})
     farmStatusCallback = function(m) targetPara:SetContent(m) end
@@ -706,6 +825,46 @@ do
         CONFIG.RollAmount = (v == "x1") and 1 or 5
     end})
     rollPara = s2:Paragraph({Title = "Auto Roll", Content = "No rolls yet."})
+end
+
+-- Page: Boss (ordered multi-selection + Auto Boss)
+do
+    local page = tabMain:CreatePage("Boss")
+    local s1 = page:CreateSection("👑 Boss Selection", "Left")
+    local s2 = page:CreateSection("📊 Status", "Right")
+
+    s1:Dropdown({Title = "Select bosses", Options = {"Speed", "Doraemon", "Rune User1", "Rune User2", "Rune User3", "Key Man", "Beast Warriors", "Spaceship"}, Multi = true, Value = {}, Callback = function(selected)
+        if type(selected) ~= "table" then return end
+        local copy = {}
+        for _, name in ipairs(selected) do
+            if name == "Speed" or name == "Doraemon" or name == "Rune User1" or name == "Rune User2" or name == "Rune User3" or name == "Key Man" or name == "Beast Warriors" or name == "Spaceship" then table.insert(copy, name) end
+        end
+        CONFIG.BossNames = copy
+        currentTarget = nil
+        lastBossSelection = ""
+        lastBossName = nil
+    end})
+
+    s1:Toggle({Title = "Auto Boss", Id = "BOSS_ENABLED", Value = false, Callback = function(v)
+        if v and CONFIG.AutoFarm then
+            CONFIG.AutoBoss = false
+            Library:Notify({Title = "Cannot enable Auto Boss", Description = "Turn off Auto Farm first.", Duration = 3})
+            task.defer(function()
+                local el = Window.ConfigElements["Auto Boss"]
+                if el then pcall(el.Set, false) end
+            end)
+            return
+        end
+        CONFIG.AutoBoss = v
+        currentTarget = nil
+        if v then
+            lastBossSelection = ""
+            lastBossName = nil
+        else
+            farmEngaged = false
+        end
+    end})
+    s2:Paragraph({Title = "Random Auto Boss", Content = "A random living boss from your selected list is chosen. After it is defeated, another living selected boss is chosen automatically. Bosses that are not currently spawned are skipped."})
 end
 
 -- ===================== SETTING =====================
@@ -747,6 +906,7 @@ do
 
     -- Weapons (weapon lock: only MAX_WEAPONS can be selected)
     weaponDropdown = sWeapon:Dropdown({Title = "Weapons (select up to " .. MAX_WEAPONS .. ")", Options = listWeaponNames(), Multi = true, Value = {}, Callback = function(sel)
+	    if refreshingWeapons then return end
         -- the library passes the same table every time, so copy it
         if type(sel) ~= "table" then return end
         if #sel > MAX_WEAPONS then
@@ -770,7 +930,7 @@ do
         CONFIG.WeaponNames = copy
     end})
 
-    -- Skills (only cast while Auto Farm is running)
+    -- Skills (cast while Auto Farm or Auto Boss has a live target)
     for _, name in ipairs({"Z", "X", "C", "V"}) do
         local sk = CONFIG.Skills[name]
         sSkill:Toggle({Title = "Auto Skills " .. name, Id = "SKILL" .. name, Value = false, Callback = function(v)
@@ -778,7 +938,7 @@ do
         end})
     end
 
-    skillDbg = sSkill:Paragraph({Title = "Skill status", Content = "Waiting: Auto Farm is OFF"})
+    skillDbg = sSkill:Paragraph({Title = "Skill status", Content = "Waiting: Auto Farm / Auto Boss is OFF"})
 
     -- Farm (attack position, applied to Auto Farm)
     sFarm:Dropdown({Title = "Attack Position", Options = {"Above", "Below", "Behind", "Front"}, Multi = false, Value = "Above", Callback = function(v)
@@ -967,7 +1127,18 @@ task.spawn(function()
         end
         if changed and weaponDropdown then
             lastWeaponList = names
-            pcall(function() weaponDropdown:Refresh(names) end) -- keeps the selection
+            -- keep only selected weapons that still exist in the new list
+            local exists = {}
+            for _, n in ipairs(names) do exists[n] = true end
+            local saved = {}
+            for _, n in ipairs(CONFIG.WeaponNames) do
+                if exists[n] then table.insert(saved, n) end
+            end
+            CONFIG.WeaponNames = saved
+            refreshingWeapons = true
+            pcall(function() weaponDropdown:Refresh(names) end)
+            pcall(weaponDropdown.Set, saved) -- re-apply the selection (UI only)
+            refreshingWeapons = false
         end
     end
 end)
@@ -1086,7 +1257,7 @@ task.spawn(function()
     while alive do
         task.wait(0.05)
         if not isHackRunning() then
-            dbg(CONFIG.AutoFarm and "Waiting: no target mob (respawning / not found)" or "Waiting: Auto Farm is OFF")
+            dbg((CONFIG.AutoFarm or CONFIG.AutoBoss) and "Waiting: no target (respawning / not found)" or "Waiting: Auto Farm / Auto Boss is OFF")
             continue
         end
 
