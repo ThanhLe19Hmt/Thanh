@@ -191,6 +191,14 @@ end
 local currentTarget = nil
 local lastAttack = 0
 local lastTargetName = nil
+local farmEngaged = false      -- true only while a live target mob exists and we are on it
+local farmStatusCallback        -- set by the UI (updates the Target paragraph)
+local lastFarmMsg
+local function farmStatus(msg)
+    if msg == lastFarmMsg then return end
+    lastFarmMsg = msg
+    if farmStatusCallback then pcall(farmStatusCallback, msg) end
+end
 
 local function setTargetMobName(name)
     CONFIG.TargetMobName = name
@@ -305,18 +313,15 @@ local function findTarget()
     local myRoot = getMyRoot()
     if not myRoot then return nil end
     local best, bestDist = nil, math.huge
-    for _, island in ipairs(root:GetChildren()) do
-        if island:IsA("Folder") then
-            for _, mob in ipairs(island:GetChildren()) do
-                if isMobModel(mob) and mob.Name == CONFIG.TargetMobName then
-                    local hum = mob:FindFirstChildOfClass("Humanoid")
-                    if hum and hum.Health > 0 then
-                        local mp = getMobPart(mob)
-                        if mp then
-                            local d = (mp.Position - myRoot.Position).Magnitude
-                            if d < bestDist then best, bestDist = mob, d end
-                        end
-                    end
+    -- search every depth under Workspace.Mobs (not only Mobs/<Island>/<Mob>)
+    for _, mob in ipairs(root:GetDescendants()) do
+        if mob.Name == CONFIG.TargetMobName and mob:IsA("Model") and isMobModel(mob) then
+            local hum = mob:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                local mp = getMobPart(mob)
+                if mp then
+                    local d = (mp.Position - myRoot.Position).Magnitude
+                    if d < bestDist then best, bestDist = mob, d end
                 end
             end
         end
@@ -342,6 +347,7 @@ local function getFarmCFrame(mobPart)
 end
 
 local function autoFarmStep()
+    farmEngaged = false
     if not CONFIG.AutoFarm or not CONFIG.TargetMobName then return end
     local char = LP.Character
     local myRoot = getMyRoot()
@@ -356,9 +362,14 @@ local function autoFarmStep()
         if not h or h.Health <= 0 then currentTarget = nil end
     end
     if not currentTarget then currentTarget = findTarget() end
-    if not currentTarget then return end
+    if not currentTarget then
+        farmStatus('No alive "' .. tostring(CONFIG.TargetMobName) .. '" found - waiting for respawn. Skills paused.')
+        return
+    end
     local mobPart = getMobPart(currentTarget)
-    if not mobPart then return end
+    if not mobPart then currentTarget = nil; return end
+    farmEngaged = true
+    farmStatus("Farming: " .. tostring(CONFIG.TargetMobName))
     pcall(function()
         myRoot.CFrame = getFarmCFrame(mobPart)
         myRoot.Velocity = Vector3.zero
@@ -396,7 +407,7 @@ end
 
 -- Skills only fire while a hack feature (currently Auto Farm) is running
 local function isHackRunning()
-    return CONFIG.AutoFarm
+    return CONFIG.AutoFarm and farmEngaged
 end
 
 -- ================= AUTO ROLL (Random Chance) =================
@@ -666,6 +677,7 @@ do
         CONFIG.AutoFarm = v
     end})
     targetPara = s1:Paragraph({Title = "Target: (none)", Content = "Pick a mob from the list on the right."})
+    farmStatusCallback = function(m) targetPara:SetContent(m) end
 
     mobPara = s2:Paragraph({Title = "Scanning...", Content = "Wait 1-2 seconds."})
     mobDropdown = s2:Dropdown({Title = "Target Mob", Options = {}, Multi = false, Callback = function(selected)
@@ -684,16 +696,16 @@ end
 
 -- Page: Roll (Auto Roll)
 do
-    local page = tabMain:CreatePage("Random")
-    local s1 = page:CreateSection("🎰 Random Chance", "Left")
+    local page = tabMain:CreatePage("Roll")
+    local s1 = page:CreateSection("🎰 Auto Roll", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
-    s1:Toggle({Title = "Auto Random", Id = "ROLL_ENABLED", Value = false, Callback = function(v)
+    s1:Toggle({Title = "Auto Roll", Id = "ROLL_ENABLED", Value = false, Callback = function(v)
         CONFIG.AutoRoll = v
     end})
-    s1:Dropdown({Title = "Amount per Random", Options = {"x5", "x1"}, Multi = false, Value = "x5", Callback = function(v)
+    s1:Dropdown({Title = "Amount per roll", Options = {"x5", "x1"}, Multi = false, Value = "x5", Callback = function(v)
         CONFIG.RollAmount = (v == "x1") and 1 or 5
     end})
-    rollPara = s2:Paragraph({Title = "Auto Random", Content = "No rolls yet."})
+    rollPara = s2:Paragraph({Title = "Auto Roll", Content = "No rolls yet."})
 end
 
 -- ===================== SETTING =====================
@@ -1073,7 +1085,10 @@ end
 task.spawn(function()
     while alive do
         task.wait(0.05)
-        if not isHackRunning() then dbg("Waiting: Auto Farm is OFF"); continue end
+        if not isHackRunning() then
+            dbg(CONFIG.AutoFarm and "Waiting: no target mob (respawning / not found)" or "Waiting: Auto Farm is OFF")
+            continue
+        end
 
         local anyEnabled = false
         for _, n in ipairs(SKILL_ORDER) do
