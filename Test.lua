@@ -193,6 +193,8 @@ end
 local currentTarget = nil
 local lastAttack = 0
 local lastTargetName = nil
+local raidFarmActive = false   -- Auto Castle Raid: farm every mob in the raid map (independent of Auto Farm)
+local lastWildFind = 0
 local farmEngaged = false      -- true only while a live target mob exists and we are on it
 local farmStatusCallback        -- set by the UI (updates the Target paragraph)
 local lastFarmMsg
@@ -338,20 +340,38 @@ end
 local function findTarget(targetName)
     targetName = targetName or CONFIG.TargetMobName
     if not targetName then return nil end
-    local root = getMobsRoot()
-    if not root then return nil end
     local myRoot = getMyRoot()
     if not myRoot then return nil end
+    local wildcard = targetName == "*"
+    if wildcard then
+        if tick() - lastWildFind < 0.5 then return nil end -- throttle the wide scan
+        lastWildFind = tick()
+    end
+
+    -- where to look: Workspace.Mobs (+ Workspace.Raid); in a raid map with neither, the whole Workspace
+    local roots = {}
+    local mobsRoot = getMobsRoot()
+    if mobsRoot then roots[#roots + 1] = mobsRoot end
+    if wildcard then
+        local raidFolder = Workspace:FindFirstChild("Raid")
+        if raidFolder then roots[#roots + 1] = raidFolder end
+        if #roots == 0 then roots[1] = Workspace end
+    end
+    if #roots == 0 then return nil end
+
+    local npcFolder = Workspace:FindFirstChild("NPC")
     local best, bestDist = nil, math.huge
-    -- search every depth under Workspace.Mobs (not only Mobs/<Island>/<Mob>)
-    for _, mob in ipairs(root:GetDescendants()) do
-        if (targetName == "*" or mob.Name == targetName) and mob:IsA("Model") and isMobModel(mob) then
-            local hum = mob:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local mp = getMobPart(mob)
-                if mp then
-                    local d = (mp.Position - myRoot.Position).Magnitude
-                    if d < bestDist then best, bestDist = mob, d end
+    for _, root in ipairs(roots) do
+        for _, mob in ipairs(root:GetDescendants()) do
+            if (wildcard or mob.Name == targetName) and mob:IsA("Model") and isMobModel(mob)
+                and not (wildcard and npcFolder and mob:IsDescendantOf(npcFolder)) then
+                local hum = mob:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    local mp = getMobPart(mob)
+                    if mp then
+                        local d = (mp.Position - myRoot.Position).Magnitude
+                        if d < bestDist then best, bestDist = mob, d end
+                    end
                 end
             end
         end
@@ -416,11 +436,12 @@ end
 
 local function autoFarmStep()
     farmEngaged = false
-    if not CONFIG.AutoFarm and not CONFIG.AutoBoss then return end
+    if not CONFIG.AutoFarm and not CONFIG.AutoBoss and not raidFarmActive then return end
 
-    local targetName = CONFIG.TargetMobName
+    local useBoss = CONFIG.AutoBoss and not raidFarmActive
+    local targetName = raidFarmActive and "*" or CONFIG.TargetMobName
     local selectionChanged = false
-    if CONFIG.AutoBoss then
+    if useBoss then
         if #CONFIG.BossNames == 0 then
             farmStatus("No boss selected.")
             currentTarget = nil
@@ -441,7 +462,7 @@ local function autoFarmStep()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not myRoot or not hum or hum.Health <= 0 then return end
 
-    if CONFIG.AutoBoss then
+    if useBoss then
         if currentTarget then
             local h = currentTarget:FindFirstChildOfClass("Humanoid")
             if not currentTarget.Parent or not h or h.Health <= 0 then
@@ -481,7 +502,7 @@ local function autoFarmStep()
 
     farmEngaged = true
     syncWeapons()
-    farmStatus((CONFIG.AutoBoss and "Random Boss: " or "Farming: ") .. tostring(targetName))
+    farmStatus((useBoss and "Random Boss: " or (raidFarmActive and "Raid farm: nearest mob" or "Farming: " .. tostring(targetName))))
     pcall(function()
         myRoot.CFrame = getFarmCFrame(mobPart)
         myRoot.Velocity = Vector3.zero
@@ -518,7 +539,7 @@ end
 
 -- Skills only fire while a hack feature (currently Auto Farm) is running
 local function isHackRunning()
-    return (CONFIG.AutoFarm or CONFIG.AutoBoss) and farmEngaged
+    return (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive) and farmEngaged
 end
 
 -- ================= AUTO ROLL (Random Chance) =================
@@ -738,6 +759,7 @@ local alive = true -- must be declared BEFORE the loops below (otherwise they se
 -- ================= AUTO CASTLE RAID =================
 local CASTLE = {
     enabled = false,
+    summoned = false, -- a gate was already opened this session: never spend a second ticket automatically
     MAIN_PLACE = 117676969731858,
     RAID_PLACE = 135193584835072,
     HUB_FILE = "Sakura_Hub.lua", -- save THIS script in the executor workspace under this name
@@ -813,14 +835,19 @@ local function castleStep()
         return
     end
 
-    -- no gate yet: open one (clicking while a gate exists does not cost a ticket, but never spam)
+    -- no gate: summon at most ONE per session (an expired gate must not burn another ticket)
+    if CASTLE.summoned then
+        castleStatus("Gate expired / closed - no new ticket used. Toggle Auto Castle Raid OFF then ON to summon again.")
+        return
+    end
     if tick() - lastCastleOpen < 15 then return end
-    if not ensureCastleTicket() then castleStatus("No Castle Ticket (Backpack or storage)"); return end
     local npcs = Workspace:FindFirstChild("NPC")
     local npc = npcs and npcs:FindFirstChild("TowerRaidSummon") -- overhead text "INF Castle" (NOT CastleShop)
-    local cd = npc and npc:FindFirstChildOfClass("ClickDetector")
+    local cd = npc and npc:FindFirstChildWhichIsA("ClickDetector", true)
     if not cd then castleStatus("INF Castle NPC not found"); return end
+    if not ensureCastleTicket() then castleStatus("No Castle Ticket (Backpack or storage)"); return end
     lastCastleOpen = tick()
+    CASTLE.summoned = true
     root.CFrame = CFrame.new(npc:GetPivot().Position + Vector3.new(0, 3, 6))
     task.wait(0.6)
     pcall(fireclickdetector, cd)
@@ -838,13 +865,9 @@ pcall(function()
 end)
 
 local function setRaidFarm(on)
-    if on and CONFIG.AutoBoss then return end
-    if on then CONFIG.TargetMobName = "*" -- "*" = nearest alive mob of any name
-    elseif CONFIG.TargetMobName == "*" then CONFIG.TargetMobName = nil end
-    if CONFIG.AutoFarm ~= on then
-        local el = Window.ConfigElements["Auto Farm"]
-        if el then pcall(el.Set, on) else CONFIG.AutoFarm = on end
-    end
+    if raidFarmActive == on then return end
+    raidFarmActive = on
+    currentTarget = nil
 end
 
 local function pressRaidStart()
@@ -949,9 +972,10 @@ do
     if sg then table.insert(conns, sg.Destroying:Connect(unload)) end
 end
 
+local IN_RAID_MAP = game.PlaceId == CASTLE.RAID_PLACE -- raid map: only Auto Castle Raid, Setting, Config
 local tabMain    = Window:CreateTab("Main", true, false)
 local tabSetting = Window:CreateTab("Setting", false, false)
-local tabOther   = Window:CreateTab("Other", false, false)
+local tabOther   = (not IN_RAID_MAP) and Window:CreateTab("Other", false, false) or nil
 local tabCfg     = Window:CreateTab("Config", false, false)
 
 -- ===================== MAIN =====================
@@ -967,7 +991,7 @@ local function updateTargetLabel()
         or "Pick a mob from the list on the right.")
 end
 
-do
+if not IN_RAID_MAP then
     local page = tabMain:CreatePage("Farm")
     local s1 = page:CreateSection("🌾 Auto Farm", "Left")
     local s2 = page:CreateSection("🎯 Select Mob", "Right")
@@ -1004,7 +1028,7 @@ do
 end
 
 -- Page: Roll (Auto Roll)
-do
+if not IN_RAID_MAP then
     local page = tabMain:CreatePage("Roll")
     local s1 = page:CreateSection("🎰 Auto Roll", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
@@ -1018,7 +1042,7 @@ do
 end
 
 -- Page: Boss (ordered multi-selection + Auto Boss)
-do
+if not IN_RAID_MAP then
     local page = tabMain:CreatePage("Boss")
     local s1 = page:CreateSection("👑 Boss Selection", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
@@ -1064,6 +1088,7 @@ do
     local s2 = page:CreateSection("📊 Status", "Right")
     s1:Toggle({Title = "Auto Castle Raid", Id = "CASTLE_ENABLED", Value = false, Callback = function(v)
         CASTLE.enabled = v
+        if v then CASTLE.summoned = false end -- re-enabling = allowed to summon once
         castleStatus(v and ("ON - PlaceId " .. tostring(game.PlaceId)) or "OFF")
         -- never let Auto Store put the ticket back into storage
         if v then STORE.skip["Castle Ticket"] = true end
@@ -1154,7 +1179,7 @@ do
 end
 
 -- ===================== OTHER =====================
-do
+if not IN_RAID_MAP then
     local page = tabOther:CreatePage("Island & Store")
     local sIsland = page:CreateSection("🏝️ Island", "Left")
     local sStore  = page:CreateSection("📦 Auto Store", "Right")
@@ -1194,7 +1219,7 @@ end
 local lastDropdownList = {}
 task.spawn(function()
     while alive and task.wait(1) do
-        if not CONFIG.Enabled then continue end
+        if not CONFIG.Enabled or not mobPara then continue end
         local root = getMobsRoot()
         if not root then continue end
         local myRoot = getMyRoot()
