@@ -734,6 +734,7 @@ local function storeOnce()
     return n
 end
 
+local alive = true -- must be declared BEFORE the loops below (otherwise they see a nil global and never run)
 -- ================= AUTO CASTLE RAID =================
 local CASTLE = {
     enabled = false,
@@ -749,12 +750,23 @@ local function castleStatus(msg)
     if castlePara then pcall(function() castlePara:SetContent(msg) end) end
 end
 
--- the teleport kills this script: queue it again so it also runs in the raid map
+-- the teleport kills this script: queue it again so it also runs in the next map.
+-- queue_on_teleport needs a STRING of code (the old call executed the hub immediately
+-- and queued its return value), and no local file is required.
+local HUB_URL = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Test"
 local function queueHubForRaid()
     if queuedHub then return end
-    if not (queue_on_teleport and isfile and isfile(CASTLE.HUB_FILE)) then return end
-    queuedHub = true
-    pcall(queue_on_teleport, loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Test"))())
+    local q = queue_on_teleport
+        or (syn and syn.queue_on_teleport)
+        or (fluxus and fluxus.queue_on_teleport)
+    if not q then
+        castleStatus("Your executor has no queue_on_teleport - the script cannot auto-load in the next map")
+        return
+    end
+    local code = 'if not game:IsLoaded() then game.Loaded:Wait() end\n'
+        .. 'getgenv().SakuraCastleResume = true\n'
+        .. 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
+    if pcall(q, code) then queuedHub = true end
 end
 
 local function castleInvRemote()
@@ -859,6 +871,7 @@ local function pressRaidStart()
 end
 
 local function raidStep()
+    queueHubForRaid() -- so the script also reloads when the raid sends us back
     local raid = Workspace:FindFirstChild("Raid")
     local started = raid and raid:GetAttribute("Started") == true
     local ended = raid and raid:GetAttribute("End") == true
@@ -883,23 +896,22 @@ task.spawn(function()
     while alive do
         task.wait(0.5)
         if CASTLE.enabled then
-            if game.PlaceId == CASTLE.RAID_PLACE then
-                pcall(raidStep)
-            elseif game.PlaceId == CASTLE.MAIN_PLACE then
-                if CONFIG.AutoFarm or CONFIG.AutoBoss then
-                    castleStatus("Turn off Auto Farm / Auto Boss first")
-                else
-                    pcall(castleStep)
-                end
+            local inRaidMap = game.PlaceId == CASTLE.RAID_PLACE or Workspace:FindFirstChild("Raid") ~= nil
+            if inRaidMap then
+                local ok, err = pcall(raidStep)
+                if not ok then castleStatus("Raid error: " .. tostring(err)) end
+            elseif CONFIG.AutoFarm or CONFIG.AutoBoss then
+                castleStatus("Turn off Auto Farm / Auto Boss first")
             else
-                castleStatus("Unknown place")
+                local ok, err = pcall(castleStep)
+                if not ok then castleStatus("Castle error: " .. tostring(err)) end
             end
         end
     end
 end)
 
 -- ================= BUILD UI (MarvenRiz) =================
-local alive = true
+alive = true
 local conns = {}
 local skillDbg -- Auto Skills status paragraph
 local islandPara -- nearest islands paragraph
@@ -1052,6 +1064,7 @@ do
     local s2 = page:CreateSection("📊 Status", "Right")
     s1:Toggle({Title = "Auto Castle Raid", Id = "CASTLE_ENABLED", Value = false, Callback = function(v)
         CASTLE.enabled = v
+        castleStatus(v and ("ON - PlaceId " .. tostring(game.PlaceId)) or "OFF")
         -- never let Auto Store put the ticket back into storage
         if v then STORE.skip["Castle Ticket"] = true end
     end})
