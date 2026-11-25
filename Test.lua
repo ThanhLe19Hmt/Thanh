@@ -754,7 +754,7 @@ local function queueHubForRaid()
     if queuedHub then return end
     if not (queue_on_teleport and isfile and isfile(CASTLE.HUB_FILE)) then return end
     queuedHub = true
-    pcall(queue_on_teleport, loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MAIN_ALL.lua"))())
+    pcall(queue_on_teleport, loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Test"))())
 end
 
 local function castleInvRemote()
