@@ -14,7 +14,7 @@ local LP     = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- =================== LOAD MARVENRIZ UI LIB ===================
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/ScriptALL/Jood%20Piece.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MarvenRizLib.lua"))()
 
 -- ================= CONFIG =================
 local CONFIG = {
@@ -778,7 +778,7 @@ end
 -- the teleport kills this script: queue it again so it also runs in the next map.
 -- queue_on_teleport needs a STRING of code (the old call executed the hub immediately
 -- and queued its return value), and no local file is required.
-local HUB_URL = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Test.lua"
+local HUB_URL = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/ScriptALL/Jood%20Piece.lua"
 local function queueHubForRaid()
     if queuedHub then return end
     local q = queue_on_teleport
