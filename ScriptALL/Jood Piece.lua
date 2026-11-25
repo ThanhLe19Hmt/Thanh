@@ -14,7 +14,7 @@ local LP     = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- =================== LOAD MARVENRIZ UI LIB ===================
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/MarvenRizLib.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/ScriptALL/Jood%20Piece.lua"))()
 
 -- ================= CONFIG =================
 local CONFIG = {
@@ -46,7 +46,7 @@ local CONFIG = {
     AutoRoll   = false,
     RollAmount = 5,   -- 1 or 5 (only 5 was confirmed from the scan log)
 }
-local MAX_WEAPONS     = 2    -- weapon lock: at most this many weapons can be used
+local MAX_WEAPONS     = 4    -- weapon lock: at most this many weapons can be used
 local ATTACK_INTERVAL = 0.05 -- fixed attack speed (seconds)
 local ROLL_INTERVAL   = 1.0  -- fixed delay between rolls (seconds)
 
@@ -193,6 +193,8 @@ end
 local currentTarget = nil
 local lastAttack = 0
 local lastTargetName = nil
+local raidFarmActive = false   -- Auto Castle Raid: farm every mob in the raid map (independent of Auto Farm)
+local lastWildFind = 0
 local farmEngaged = false      -- true only while a live target mob exists and we are on it
 local farmStatusCallback        -- set by the UI (updates the Target paragraph)
 local lastFarmMsg
@@ -300,11 +302,14 @@ local function syncWeapons()
     end)
 end
 
+local skillWindowUntil = 0 -- while tick() < this, basic attacks pause so a skill can start
+
 local function tryAttack()
     local char = LP.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
+    if tick() < skillWindowUntil then return end -- <<< new line
 
     -- Selected weapons: activate every selected tool currently held
     if #CONFIG.WeaponNames > 0 then
@@ -335,20 +340,38 @@ end
 local function findTarget(targetName)
     targetName = targetName or CONFIG.TargetMobName
     if not targetName then return nil end
-    local root = getMobsRoot()
-    if not root then return nil end
     local myRoot = getMyRoot()
     if not myRoot then return nil end
+    local wildcard = targetName == "*"
+    if wildcard then
+        if tick() - lastWildFind < 0.5 then return nil end -- throttle the wide scan
+        lastWildFind = tick()
+    end
+
+    -- where to look: Workspace.Mobs (+ Workspace.Raid); in a raid map with neither, the whole Workspace
+    local roots = {}
+    local mobsRoot = getMobsRoot()
+    if mobsRoot then roots[#roots + 1] = mobsRoot end
+    if wildcard then
+        local raidFolder = Workspace:FindFirstChild("Raid")
+        if raidFolder then roots[#roots + 1] = raidFolder end
+        if #roots == 0 then roots[1] = Workspace end
+    end
+    if #roots == 0 then return nil end
+
+    local npcFolder = Workspace:FindFirstChild("NPC")
     local best, bestDist = nil, math.huge
-    -- search every depth under Workspace.Mobs (not only Mobs/<Island>/<Mob>)
-    for _, mob in ipairs(root:GetDescendants()) do
-        if mob.Name == targetName and mob:IsA("Model") and isMobModel(mob) then
-            local hum = mob:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local mp = getMobPart(mob)
-                if mp then
-                    local d = (mp.Position - myRoot.Position).Magnitude
-                    if d < bestDist then best, bestDist = mob, d end
+    for _, root in ipairs(roots) do
+        for _, mob in ipairs(root:GetDescendants()) do
+            if (wildcard or mob.Name == targetName) and mob:IsA("Model") and isMobModel(mob)
+                and not (wildcard and npcFolder and mob:IsDescendantOf(npcFolder)) then
+                local hum = mob:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    local mp = getMobPart(mob)
+                    if mp then
+                        local d = (mp.Position - myRoot.Position).Magnitude
+                        if d < bestDist then best, bestDist = mob, d end
+                    end
                 end
             end
         end
@@ -413,11 +436,12 @@ end
 
 local function autoFarmStep()
     farmEngaged = false
-    if not CONFIG.AutoFarm and not CONFIG.AutoBoss then return end
+    if not CONFIG.AutoFarm and not CONFIG.AutoBoss and not raidFarmActive then return end
 
-    local targetName = CONFIG.TargetMobName
+    local useBoss = CONFIG.AutoBoss and not raidFarmActive
+    local targetName = raidFarmActive and "*" or CONFIG.TargetMobName
     local selectionChanged = false
-    if CONFIG.AutoBoss then
+    if useBoss then
         if #CONFIG.BossNames == 0 then
             farmStatus("No boss selected.")
             currentTarget = nil
@@ -438,7 +462,7 @@ local function autoFarmStep()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not myRoot or not hum or hum.Health <= 0 then return end
 
-    if CONFIG.AutoBoss then
+    if useBoss then
         if currentTarget then
             local h = currentTarget:FindFirstChildOfClass("Humanoid")
             if not currentTarget.Parent or not h or h.Health <= 0 then
@@ -478,7 +502,7 @@ local function autoFarmStep()
 
     farmEngaged = true
     syncWeapons()
-    farmStatus((CONFIG.AutoBoss and "Random Boss: " or "Farming: ") .. tostring(targetName))
+    farmStatus((useBoss and "Random Boss: " or (raidFarmActive and "Raid farm: nearest mob" or "Farming: " .. tostring(targetName))))
     pcall(function()
         myRoot.CFrame = getFarmCFrame(mobPart)
         myRoot.Velocity = Vector3.zero
@@ -515,7 +539,7 @@ end
 
 -- Skills only fire while a hack feature (currently Auto Farm) is running
 local function isHackRunning()
-    return (CONFIG.AutoFarm or CONFIG.AutoBoss) and farmEngaged
+    return (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive) and farmEngaged
 end
 
 -- ================= AUTO ROLL (Random Chance) =================
@@ -731,8 +755,224 @@ local function storeOnce()
     return n
 end
 
+local alive = true -- must be declared BEFORE the loops below (otherwise they see a nil global and never run)
+-- ================= AUTO CASTLE RAID =================
+local CASTLE = {
+    enabled = false,
+    autoReplay = true, -- press Replay on the result board while Castle Tickets remain
+    lastReplay = 0,
+    replayCount = 0,
+    summoned = false, -- a gate was already opened this session: never spend a second ticket automatically
+    MAIN_PLACE = 117676969731858,
+    RAID_PLACE = 135193584835072,
+    HUB_FILE = "Sakura_Hub.lua", -- save THIS script in the executor workspace under this name
+}
+local castlePara
+local lastCastleOpen, queuedHub = 0, false
+local lastStartTry, startAttempt = 0, 0
+
+local function castleStatus(msg)
+    if castlePara then pcall(function() castlePara:SetContent(msg) end) end
+end
+
+-- the teleport kills this script: queue it again so it also runs in the next map.
+-- queue_on_teleport needs a STRING of code (the old call executed the hub immediately
+-- and queued its return value), and no local file is required.
+local HUB_URL = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/Test.lua"
+local function queueHubForRaid()
+    if queuedHub then return end
+    local q = queue_on_teleport
+        or (syn and syn.queue_on_teleport)
+        or (fluxus and fluxus.queue_on_teleport)
+    if not q then
+        castleStatus("Your executor has no queue_on_teleport - the script cannot auto-load in the next map")
+        return
+    end
+    local code = 'if not game:IsLoaded() then game.Loaded:Wait() end\n'
+        .. 'getgenv().SakuraCastleResume = true\n'
+        .. 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
+    if pcall(q, code) then queuedHub = true end
+end
+
+local function castleInvRemote()
+    local sys = ReplicatedStorage:FindFirstChild("System")
+    local inv = sys and sys:FindFirstChild("Inv")
+    return inv and inv:FindFirstChild("Inventory")
+end
+
+local function castleTicketTool()
+    local bp, ch = getBackpack(), LP.Character
+    return (bp and bp:FindFirstChild("Castle Ticket")) or (ch and ch:FindFirstChild("Castle Ticket"))
+end
+
+-- the NPC consumes the ticket Tool from the Backpack; take one out of storage if needed
+local function ensureCastleTicket()
+    if castleTicketTool() then return true end
+    local data = LP:FindFirstChild("InvData")
+    local stored = data and data:FindFirstChild("Castle Ticket")
+    if not stored or (tonumber(stored.Value) or 0) < 1 then return false end
+    local remote = castleInvRemote()
+    if not remote then return false end
+    pcall(function() remote:InvokeServer("Remove", "Castle Ticket", 1) end)
+    local t = tick()
+    repeat task.wait(0.2) until castleTicketTool() or tick() - t > 3
+    return castleTicketTool() ~= nil
+end
+
+-- ---------- main map: click the NPC, stand in the gate ----------
+local function castleStep()
+    local root, char = getMyRoot(), LP.Character
+    if not root or not char then return end
+
+    local portal = Workspace:FindFirstChild("TowerRaidPart")
+    if portal then
+        queueHubForRaid()
+        -- the game flags InRaid when we are above the part's Y and within max(size)/2 horizontally
+        local px, pz = portal.Position.X, portal.Position.Z
+        local flat = Vector3.new(root.Position.X - px, 0, root.Position.Z - pz).Magnitude
+        if flat > 20 then
+            root.CFrame = CFrame.new(px - 8, math.max(portal.Position.Y + 4, root.Position.Y), pz)
+        end
+        root.AssemblyLinearVelocity = Vector3.zero
+        castleStatus("In the gate - waiting for the ~20s teleport (InRaid=" .. tostring(char:GetAttribute("InRaid")) .. ")")
+        return
+    end
+
+    -- no gate: summon at most ONE per session (an expired gate must not burn another ticket)
+    if CASTLE.summoned then
+        castleStatus("Gate expired / closed - no new ticket used. Toggle Auto Castle Raid OFF then ON to summon again.")
+        return
+    end
+    if tick() - lastCastleOpen < 15 then return end
+    local npcs = Workspace:FindFirstChild("NPC")
+    local npc = npcs and npcs:FindFirstChild("TowerRaidSummon") -- overhead text "INF Castle" (NOT CastleShop)
+    local cd = npc and npc:FindFirstChildWhichIsA("ClickDetector", true)
+    if not cd then castleStatus("INF Castle NPC not found"); return end
+    if not ensureCastleTicket() then castleStatus("No Castle Ticket (Backpack or storage)"); return end
+    lastCastleOpen = tick()
+    CASTLE.summoned = true
+    root.CFrame = CFrame.new(npc:GetPivot().Position + Vector3.new(0, 3, 6))
+    task.wait(0.6)
+    pcall(fireclickdetector, cd)
+    castleStatus("Clicked INF Castle - waiting for the gate...")
+    local t = tick()
+    repeat task.wait(0.25) until Workspace:FindFirstChild("TowerRaidPart") or tick() - t > 6
+end
+
+-- ---------- raid map: press Start, then farm every mob ----------
+local RaidBridge
+pcall(function()
+    local mod = ReplicatedStorage:FindFirstChild("Modules")
+    mod = mod and mod:FindFirstChild("BridgeNet2")
+    if mod then RaidBridge = require(mod).ReferenceBridge("Raid") end
+end)
+
+local function setRaidFarm(on)
+    if raidFarmActive == on then return end
+    raidFarmActive = on
+    currentTarget = nil
+end
+
+local function pressRaidStart()
+    if tick() - lastStartTry < 2 then return end
+    lastStartTry = tick()
+    startAttempt = startAttempt + 1
+    if startAttempt % 2 == 1 and RaidBridge then
+        -- same packet the game sends when you click "Click To Start": {1}
+        pcall(function() RaidBridge:Fire({1}) end)
+    else
+        -- fallback: click the GUI button itself
+        local pg = LP:FindFirstChildOfClass("PlayerGui")
+        local gui = pg and pg:FindFirstChild("Raid")
+        local btn = gui and gui:FindFirstChild("Start")
+        if btn and btn:IsA("GuiButton") and getconnections then
+            for _, sig in ipairs({"MouseButton1Click", "Activated"}) do
+                local ok, cs = pcall(getconnections, btn[sig])
+                if ok and cs then
+                    for _, c in ipairs(cs) do pcall(function() c:Fire() end) end
+                end
+            end
+        end
+    end
+end
+
+local function raidStep()
+    queueHubForRaid() -- so the script also reloads when the raid sends us back
+    local raid = Workspace:FindFirstChild("Raid")
+    local started = raid and raid:GetAttribute("Started") == true
+    local ended = raid and raid:GetAttribute("End") == true
+    if ended then
+        setRaidFarm(false)
+        if not CASTLE.autoReplay then
+            castleStatus("Raid ended (Auto Replay is OFF)")
+            return
+        end
+        -- result board: PlayerGui.Raid.Replay, label "Requset" reads "Request : Castle Ticket (have/need)"
+        local pg = LP:FindFirstChildOfClass("PlayerGui")
+        local gui = pg and pg:FindFirstChild("Raid")
+        local replay = gui and gui:FindFirstChild("Replay")
+        if not (replay and replay:IsA("GuiButton") and replay.Visible) then
+            castleStatus("Raid ended - waiting for the Replay button...")
+            return
+        end
+        local req = replay:FindFirstChild("Requset")
+        local have, need = tostring(req and req.Text or ""):match("%((%d+)/(%d+)%)")
+        if have and need and tonumber(have) < tonumber(need) then
+            castleStatus("Out of tickets (" .. have .. "/" .. need .. ") - Auto Replay stopped")
+            return
+        end
+        if tick() - CASTLE.lastReplay < 12 then
+            castleStatus("Replay sent - waiting for the new raid... (tickets " .. tostring(have) .. "/" .. tostring(need) .. ")")
+            return
+        end
+        CASTLE.lastReplay = tick()
+        CASTLE.replayCount = CASTLE.replayCount + 1
+        local sent = false
+        if RaidBridge then
+            -- same packet the Replay button sends: content {4}
+            sent = pcall(function() RaidBridge:Fire({4}) end)
+        end
+        if not sent and getconnections then
+            local ok, cs = pcall(getconnections, replay.MouseButton1Click)
+            if ok and cs then
+                for _, c in ipairs(cs) do pcall(function() c:Fire() end) end
+            end
+        end
+        castleStatus("Replay #" .. CASTLE.replayCount .. " sent (tickets " .. tostring(have) .. "/" .. tostring(need) .. ")")
+        return
+    end
+    if not started then
+        setRaidFarm(false)
+        pressRaidStart()
+        castleStatus("In the raid map - pressing Start...")
+        return
+    end
+    setRaidFarm(true)
+    local pg = LP:FindFirstChildOfClass("PlayerGui")
+    local waveLbl = pg and pg:FindFirstChild("Raid") and pg.Raid:FindFirstChild("Wave")
+    castleStatus("Raiding " .. ((waveLbl and waveLbl:IsA("TextLabel")) and waveLbl.Text or ""))
+end
+
+task.spawn(function()
+    while alive do
+        task.wait(0.5)
+        if CASTLE.enabled then
+            local inRaidMap = game.PlaceId == CASTLE.RAID_PLACE or Workspace:FindFirstChild("Raid") ~= nil
+            if inRaidMap then
+                local ok, err = pcall(raidStep)
+                if not ok then castleStatus("Raid error: " .. tostring(err)) end
+            elseif CONFIG.AutoFarm or CONFIG.AutoBoss then
+                castleStatus("Turn off Auto Farm / Auto Boss first")
+            else
+                local ok, err = pcall(castleStep)
+                if not ok then castleStatus("Castle error: " .. tostring(err)) end
+            end
+        end
+    end
+end)
+
 -- ================= BUILD UI (MarvenRiz) =================
-local alive = true
+alive = true
 local conns = {}
 local skillDbg -- Auto Skills status paragraph
 local islandPara -- nearest islands paragraph
@@ -770,9 +1010,10 @@ do
     if sg then table.insert(conns, sg.Destroying:Connect(unload)) end
 end
 
+local IN_RAID_MAP = game.PlaceId == CASTLE.RAID_PLACE -- raid map: only Auto Castle Raid, Setting, Config
 local tabMain    = Window:CreateTab("Main", true, false)
 local tabSetting = Window:CreateTab("Setting", false, false)
-local tabOther   = Window:CreateTab("Other", false, false)
+local tabOther   = (not IN_RAID_MAP) and Window:CreateTab("Other", false, false) or nil
 local tabCfg     = Window:CreateTab("Config", false, false)
 
 -- ===================== MAIN =====================
@@ -788,7 +1029,7 @@ local function updateTargetLabel()
         or "Pick a mob from the list on the right.")
 end
 
-do
+if not IN_RAID_MAP then
     local page = tabMain:CreatePage("Farm")
     local s1 = page:CreateSection("🌾 Auto Farm", "Left")
     local s2 = page:CreateSection("🎯 Select Mob", "Right")
@@ -825,7 +1066,7 @@ do
 end
 
 -- Page: Roll (Auto Roll)
-do
+if not IN_RAID_MAP then
     local page = tabMain:CreatePage("Roll")
     local s1 = page:CreateSection("🎰 Auto Roll", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
@@ -839,7 +1080,7 @@ do
 end
 
 -- Page: Boss (ordered multi-selection + Auto Boss)
-do
+if not IN_RAID_MAP then
     local page = tabMain:CreatePage("Boss")
     local s1 = page:CreateSection("👑 Boss Selection", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
@@ -876,6 +1117,24 @@ do
         end
     end})
     s2:Paragraph({Title = "Random Auto Boss", Content = "A random living boss from your selected list is chosen. After it is defeated, another living selected boss is chosen automatically. Bosses that are not currently spawned are skipped."})
+end
+
+-- Page: Raid (Castle)
+do
+    local page = tabMain:CreatePage("Raid")
+    local s1 = page:CreateSection("🏰 INF Castle", "Left")
+    local s2 = page:CreateSection("📊 Status", "Right")
+    s1:Toggle({Title = "Auto Castle Raid", Id = "CASTLE_ENABLED", Value = false, Callback = function(v)
+        CASTLE.enabled = v
+        if v then CASTLE.summoned = false end -- re-enabling = allowed to summon once
+        castleStatus(v and ("ON - PlaceId " .. tostring(game.PlaceId)) or "OFF")
+        -- never let Auto Store put the ticket back into storage
+        if v then STORE.skip["Castle Ticket"] = true end
+    end})
+    s1:Toggle({Title = "Auto Replay (until out of tickets)", Id = "CASTLE_REPLAY", Value = true, Callback = function(v)
+        CASTLE.autoReplay = v
+    end})
+    castlePara = s2:Paragraph({Title = "Auto Castle Raid", Content = "OFF"})
 end
 
 -- ===================== SETTING =====================
@@ -961,7 +1220,7 @@ do
 end
 
 -- ===================== OTHER =====================
-do
+if not IN_RAID_MAP then
     local page = tabOther:CreatePage("Island & Store")
     local sIsland = page:CreateSection("🏝️ Island", "Left")
     local sStore  = page:CreateSection("📦 Auto Store", "Right")
@@ -1001,7 +1260,7 @@ end
 local lastDropdownList = {}
 task.spawn(function()
     while alive and task.wait(1) do
-        if not CONFIG.Enabled then continue end
+        if not CONFIG.Enabled or not mobPara then continue end
         local root = getMobsRoot()
         if not root then continue end
         local myRoot = getMyRoot()
@@ -1190,7 +1449,17 @@ local function sendSkill(key)
     local char = LP.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    local packet = { "Skill", key, hrp.CFrame }
+    -- aim the skill at the current farm target (the packet's CFrame is the cast origin/direction)
+    local aim = hrp.CFrame
+    local tp = currentTarget and currentTarget.Parent and getMobPart(currentTarget)
+    if tp then
+        local v = tp.Position - hrp.Position
+        if v.Magnitude > 0.5 then
+            local up = (math.abs(v.Unit.Y) > 0.99) and Vector3.new(0, 0, 1) or Vector3.new(0, 1, 0)
+            aim = CFrame.lookAt(hrp.Position, tp.Position, up)
+        end
+    end
+    local packet = { "Skill", key, aim }
     if SkillBridge then
         if pcall(function() SkillBridge:Fire(packet) end) then return true end
     end
@@ -1233,15 +1502,26 @@ local function heldSkillTools()
     return list
 end
 
--- Move the current first tool out and back in (different frames, so the server sees it)
+-- The server uses the FIRST Tool in the Character for skills. To make `target` first, move
+-- every tool that sits before it out to the Backpack and back in ONE batch (they end up after
+-- the others). The old one-tool-at-a-time rotation cycled through every other weapon when 3-4
+-- were held, which made weapons swap back and forth.
 local function rotateTo(target, char, bp)
-    for _ = 1, 5 do
-        local f = firstHeldTool()
-        if not f or f == target then return true end
-        f.Parent = bp
+    for _ = 1, 3 do
+        local order = {}
+        for _, c in ipairs(char:GetChildren()) do
+            if c:IsA("Tool") then table.insert(order, c) end
+        end
+        local idx = table.find(order, target)
+        if not idx then return false end
+        if idx == 1 then return true end
+        local before = {}
+        for i = 1, idx - 1 do table.insert(before, order[i]) end
+        for _, t in ipairs(before) do t.Parent = bp end
         task.wait(0.15)
-        f.Parent = char
-        task.wait(0.15)
+        for _, t in ipairs(before) do t.Parent = char end
+        task.wait(0.1)
+        if firstHeldTool() == target then return true end
     end
     return firstHeldTool() == target
 end
@@ -1256,17 +1536,22 @@ local function castSkill(tool, key, char, bp)
         end
         sendSkill(key)
         local t0 = tick()
-        repeat task.wait(0.05)
-        until tool:GetAttribute(key) == true or char:GetAttribute("Skilling") == true or tick() - t0 > 0.6
-        if tool:GetAttribute(key) == true or char:GetAttribute("Skilling") == true then result = "OK" end
+        repeat
+            task.wait()
+            if tool:GetAttribute(key) == true or char:GetAttribute("Skilling") == true then
+                result = "OK"
+                return
+            end
+        until tick() - t0 > 0.5
     end)
     skillLock = false
     return result
 end
 
+local rrName, rrUsed = nil, {} -- round-robin weapon turn state
 task.spawn(function()
     while alive do
-        task.wait(0.05)
+        task.wait()
         if not isHackRunning() then
             dbg((CONFIG.AutoFarm or CONFIG.AutoBoss) and "Waiting: no target (respawning / not found)" or "Waiting: Auto Farm / Auto Boss is OFF")
             continue
@@ -1280,37 +1565,80 @@ task.spawn(function()
 
         local char = LP.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local bp = getBackpack()
-        if not (char and hum and bp) or hum.Health <= 0 then dbg("Waiting: character not ready"); continue end
-        if char:GetAttribute("Skilling") == true then dbg("Waiting: a skill is playing"); continue end
+        if not (char and hum and hrp and bp) or hum.Health <= 0 then dbg("Waiting: character not ready"); continue end
+
+        -- only cast once we are standing on the target (otherwise the skill whiffs)
+        local tp = currentTarget and currentTarget.Parent and getMobPart(currentTarget)
+        if not tp or (tp.Position - hrp.Position).Magnitude > (tonumber(CONFIG.FarmDistance) or 6) + 15 then
+            dbg("Waiting: not on the target yet")
+            continue
+        end
 
         local tools = heldSkillTools()
         if #tools == 0 then dbg("Waiting: no weapon is held"); continue end
 
-        local pickTool, pickKey
+        local byName, names = {}, {}
+        for _, t in ipairs(tools) do
+            if not byName[t.Name] then byName[t.Name] = t; table.insert(names, t.Name) end
+        end
+        -- fixed turn order = the order the weapons were selected in the dropdown (up to 4)
+        local order = {}
+        for _, n in ipairs(CONFIG.WeaponNames) do
+            if byName[n] then table.insert(order, n) end
+        end
+        if #order == 0 then order = names end
+
         local now = tick()
-        for _, tool in ipairs(tools) do
-            for _, n in ipairs(SKILL_ORDER) do
-                if CONFIG.Skills[n].enabled and toolHasKey(tool, n) and tool:GetAttribute(n) ~= true then
-                    local id = tool.Name .. "|" .. n
-                    if not lastTry[id] or now - lastTry[id] >= 1.0 then
-                        pickTool, pickKey = tool, n
-                        break
-                    end
+        local function readyKey(tool, usedSet)
+            for _, k in ipairs(SKILL_ORDER) do
+                if CONFIG.Skills[k].enabled and toolHasKey(tool, k) and tool:GetAttribute(k) ~= true
+                    and not (usedSet and usedSet[k]) then
+                    local id = tool.Name .. "|" .. k
+                    if not lastTry[id] or now - lastTry[id] >= 0.6 then return k end
                 end
             end
-            if pickTool then break end
         end
 
-        if pickTool then
-            lastTry[pickTool.Name .. "|" .. pickKey] = now
-            dbg(string.format("Casting: %s [%s]", pickTool.Name, pickKey))
-            local res = castSkill(pickTool, pickKey, char, bp)
-            lastCast = string.format("%s [%s] -> %s", pickTool.Name, pickKey, res)
-            task.wait(0.1)
-        else
-            dbg("Waiting: all enabled skills are on cooldown")
+        -- round-robin: a weapon's "turn" casts each ready skill once; then the turn passes to the
+        -- next weapon in order, so weapons 3 and 4 always get their turn (no ping-pong between two)
+        if not byName[rrName] then rrName, rrUsed = order[1], {} end
+        local pickTool = byName[rrName]
+        local pickKey = readyKey(pickTool, rrUsed)
+        if not pickKey then
+            local start = table.find(order, rrName) or 0
+            for i = 1, #order do
+                local name = order[((start + i - 1) % #order) + 1]
+                local t = byName[name]
+                local k = t and readyKey(t, nil)
+                if k then
+                    rrName, rrUsed = name, {}
+                    pickTool, pickKey = t, k
+                    break
+                end
+            end
         end
+        if not pickKey then dbg("Waiting: all enabled skills are on cooldown (" .. #order .. " weapons held)"); continue end
+
+        -- a skill is ready: pause basic attacks so it can start (the server rejects skills
+        -- while the character is still "Skilling")
+        skillWindowUntil = tick() + 0.4
+        if char:GetAttribute("Skilling") == true then dbg("Waiting: a skill is playing"); continue end
+
+        lastTry[pickTool.Name .. "|" .. pickKey] = now
+        rrUsed[pickKey] = true
+        dbg(string.format("Casting: %s [%s] (%d weapons held)", pickTool.Name, pickKey, #order))
+        local res = castSkill(pickTool, pickKey, char, bp)
+        lastCast = string.format("%s [%s] -> %s", pickTool.Name, pickKey, res)
+    end
+end)
+
+task.delay(2.5, function()
+    if getgenv and getgenv().SakuraCastleResume then
+        getgenv().SakuraCastleResume = nil
+        local el = Window.ConfigElements["Auto Castle Raid"]
+        if el then pcall(el.Set, true) end
     end
 end)
 
