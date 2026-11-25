@@ -46,7 +46,7 @@ local CONFIG = {
     AutoRoll   = false,
     RollAmount = 5,   -- 1 or 5 (only 5 was confirmed from the scan log)
 }
-local MAX_WEAPONS     = 2    -- weapon lock: at most this many weapons can be used
+local MAX_WEAPONS     = 4    -- weapon lock: at most this many weapons can be used
 local ATTACK_INTERVAL = 0.05 -- fixed attack speed (seconds)
 local ROLL_INTERVAL   = 1.0  -- fixed delay between rolls (seconds)
 
@@ -759,6 +759,9 @@ local alive = true -- must be declared BEFORE the loops below (otherwise they se
 -- ================= AUTO CASTLE RAID =================
 local CASTLE = {
     enabled = false,
+    autoReplay = true, -- press Replay on the result board while Castle Tickets remain
+    lastReplay = 0,
+    replayCount = 0,
     summoned = false, -- a gate was already opened this session: never spend a second ticket automatically
     MAIN_PLACE = 117676969731858,
     RAID_PLACE = 135193584835072,
@@ -900,7 +903,42 @@ local function raidStep()
     local ended = raid and raid:GetAttribute("End") == true
     if ended then
         setRaidFarm(false)
-        castleStatus("Raid ended")
+        if not CASTLE.autoReplay then
+            castleStatus("Raid ended (Auto Replay is OFF)")
+            return
+        end
+        -- result board: PlayerGui.Raid.Replay, label "Requset" reads "Request : Castle Ticket (have/need)"
+        local pg = LP:FindFirstChildOfClass("PlayerGui")
+        local gui = pg and pg:FindFirstChild("Raid")
+        local replay = gui and gui:FindFirstChild("Replay")
+        if not (replay and replay:IsA("GuiButton") and replay.Visible) then
+            castleStatus("Raid ended - waiting for the Replay button...")
+            return
+        end
+        local req = replay:FindFirstChild("Requset")
+        local have, need = tostring(req and req.Text or ""):match("%((%d+)/(%d+)%)")
+        if have and need and tonumber(have) < tonumber(need) then
+            castleStatus("Out of tickets (" .. have .. "/" .. need .. ") - Auto Replay stopped")
+            return
+        end
+        if tick() - CASTLE.lastReplay < 12 then
+            castleStatus("Replay sent - waiting for the new raid... (tickets " .. tostring(have) .. "/" .. tostring(need) .. ")")
+            return
+        end
+        CASTLE.lastReplay = tick()
+        CASTLE.replayCount = CASTLE.replayCount + 1
+        local sent = false
+        if RaidBridge then
+            -- same packet the Replay button sends: content {4}
+            sent = pcall(function() RaidBridge:Fire({4}) end)
+        end
+        if not sent and getconnections then
+            local ok, cs = pcall(getconnections, replay.MouseButton1Click)
+            if ok and cs then
+                for _, c in ipairs(cs) do pcall(function() c:Fire() end) end
+            end
+        end
+        castleStatus("Replay #" .. CASTLE.replayCount .. " sent (tickets " .. tostring(have) .. "/" .. tostring(need) .. ")")
         return
     end
     if not started then
@@ -1092,6 +1130,9 @@ do
         castleStatus(v and ("ON - PlaceId " .. tostring(game.PlaceId)) or "OFF")
         -- never let Auto Store put the ticket back into storage
         if v then STORE.skip["Castle Ticket"] = true end
+    end})
+    s1:Toggle({Title = "Auto Replay (until out of tickets)", Id = "CASTLE_REPLAY", Value = true, Callback = function(v)
+        CASTLE.autoReplay = v
     end})
     castlePara = s2:Paragraph({Title = "Auto Castle Raid", Content = "OFF"})
 end
@@ -1461,15 +1502,26 @@ local function heldSkillTools()
     return list
 end
 
--- Move the current first tool out and back in (different frames, so the server sees it)
+-- The server uses the FIRST Tool in the Character for skills. To make `target` first, move
+-- every tool that sits before it out to the Backpack and back in ONE batch (they end up after
+-- the others). The old one-tool-at-a-time rotation cycled through every other weapon when 3-4
+-- were held, which made weapons swap back and forth.
 local function rotateTo(target, char, bp)
-    for _ = 1, 5 do
-        local f = firstHeldTool()
-        if not f or f == target then return true end
-        f.Parent = bp
-        task.wait(0.2)
-        f.Parent = char
-        task.wait(0.2)
+    for _ = 1, 3 do
+        local order = {}
+        for _, c in ipairs(char:GetChildren()) do
+            if c:IsA("Tool") then table.insert(order, c) end
+        end
+        local idx = table.find(order, target)
+        if not idx then return false end
+        if idx == 1 then return true end
+        local before = {}
+        for i = 1, idx - 1 do table.insert(before, order[i]) end
+        for _, t in ipairs(before) do t.Parent = bp end
+        task.wait(0.15)
+        for _, t in ipairs(before) do t.Parent = char end
+        task.wait(0.1)
+        if firstHeldTool() == target then return true end
     end
     return firstHeldTool() == target
 end
@@ -1496,6 +1548,7 @@ local function castSkill(tool, key, char, bp)
     return result
 end
 
+local rrName, rrUsed = nil, {} -- round-robin weapon turn state
 task.spawn(function()
     while alive do
         task.wait()
@@ -1526,23 +1579,47 @@ task.spawn(function()
         local tools = heldSkillTools()
         if #tools == 0 then dbg("Waiting: no weapon is held"); continue end
 
-        -- find a ready skill (not on cooldown)
-        local pickTool, pickKey
+        local byName, names = {}, {}
+        for _, t in ipairs(tools) do
+            if not byName[t.Name] then byName[t.Name] = t; table.insert(names, t.Name) end
+        end
+        -- fixed turn order = the order the weapons were selected in the dropdown (up to 4)
+        local order = {}
+        for _, n in ipairs(CONFIG.WeaponNames) do
+            if byName[n] then table.insert(order, n) end
+        end
+        if #order == 0 then order = names end
+
         local now = tick()
-        for _, tool in ipairs(tools) do
-            for _, n in ipairs(SKILL_ORDER) do
-                if CONFIG.Skills[n].enabled and toolHasKey(tool, n) and tool:GetAttribute(n) ~= true then
-                    local id = tool.Name .. "|" .. n
-                    if not lastTry[id] or now - lastTry[id] >= 0.6 then
-                        pickTool, pickKey = tool, n
-                        break
-                    end
+        local function readyKey(tool, usedSet)
+            for _, k in ipairs(SKILL_ORDER) do
+                if CONFIG.Skills[k].enabled and toolHasKey(tool, k) and tool:GetAttribute(k) ~= true
+                    and not (usedSet and usedSet[k]) then
+                    local id = tool.Name .. "|" .. k
+                    if not lastTry[id] or now - lastTry[id] >= 0.6 then return k end
                 end
             end
-            if pickTool then break end
         end
 
-        if not pickTool then dbg("Waiting: all enabled skills are on cooldown"); continue end
+        -- round-robin: a weapon's "turn" casts each ready skill once; then the turn passes to the
+        -- next weapon in order, so weapons 3 and 4 always get their turn (no ping-pong between two)
+        if not byName[rrName] then rrName, rrUsed = order[1], {} end
+        local pickTool = byName[rrName]
+        local pickKey = readyKey(pickTool, rrUsed)
+        if not pickKey then
+            local start = table.find(order, rrName) or 0
+            for i = 1, #order do
+                local name = order[((start + i - 1) % #order) + 1]
+                local t = byName[name]
+                local k = t and readyKey(t, nil)
+                if k then
+                    rrName, rrUsed = name, {}
+                    pickTool, pickKey = t, k
+                    break
+                end
+            end
+        end
+        if not pickKey then dbg("Waiting: all enabled skills are on cooldown (" .. #order .. " weapons held)"); continue end
 
         -- a skill is ready: pause basic attacks so it can start (the server rejects skills
         -- while the character is still "Skilling")
@@ -1550,7 +1627,8 @@ task.spawn(function()
         if char:GetAttribute("Skilling") == true then dbg("Waiting: a skill is playing"); continue end
 
         lastTry[pickTool.Name .. "|" .. pickKey] = now
-        dbg(string.format("Casting: %s [%s]", pickTool.Name, pickKey))
+        rrUsed[pickKey] = true
+        dbg(string.format("Casting: %s [%s] (%d weapons held)", pickTool.Name, pickKey, #order))
         local res = castSkill(pickTool, pickKey, char, bp)
         lastCast = string.format("%s [%s] -> %s", pickTool.Name, pickKey, res)
     end
