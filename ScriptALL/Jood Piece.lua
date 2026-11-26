@@ -434,7 +434,9 @@ local function pickRandomAliveBoss()
     return chosen.name, chosen.model
 end
 
-local function autoFarmStep()
+local holdCFrame = nil -- last farm position: kept while there is no target so the character does not fall
+
+local function autoFarmStepInner()
     farmEngaged = false
     if not CONFIG.AutoFarm and not CONFIG.AutoBoss and not raidFarmActive then return end
 
@@ -504,13 +506,31 @@ local function autoFarmStep()
     syncWeapons()
     farmStatus((useBoss and "Random Boss: " or (raidFarmActive and "Raid farm: nearest mob" or "Farming: " .. tostring(targetName))))
     pcall(function()
-        myRoot.CFrame = getFarmCFrame(mobPart)
+        holdCFrame = getFarmCFrame(mobPart)
+        myRoot.CFrame = holdCFrame
         myRoot.Velocity = Vector3.zero
     end)
     if tick() - lastAttack >= ATTACK_INTERVAL then
         lastAttack = tick()
         tryAttack()
     end
+end
+local function autoFarmStep()
+    autoFarmStepInner()
+    if not (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive) then
+        holdCFrame = nil
+        return
+    end
+    if farmEngaged or not holdCFrame then return end
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = getMyRoot()
+    if not root or not hum or hum.Health <= 0 then holdCFrame = nil; return end
+    pcall(function()
+        root.CFrame = holdCFrame
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+    end)
 end
 -- ================= AUTO SKILLS =================
 local VIM
@@ -765,33 +785,13 @@ local CASTLE = {
     summoned = false, -- a gate was already opened this session: never spend a second ticket automatically
     MAIN_PLACE = 117676969731858,
     RAID_PLACE = 135193584835072,
-    HUB_FILE = "Sakura_Hub.lua", -- save THIS script in the executor workspace under this name
 }
 local castlePara
-local lastCastleOpen, queuedHub = 0, false
+local lastCastleOpen = 0
 local lastStartTry, startAttempt = 0, 0
 
 local function castleStatus(msg)
     if castlePara then pcall(function() castlePara:SetContent(msg) end) end
-end
-
--- the teleport kills this script: queue it again so it also runs in the next map.
--- queue_on_teleport needs a STRING of code (the old call executed the hub immediately
--- and queued its return value), and no local file is required.
-local HUB_URL = "https://raw.githubusercontent.com/ThanhLe19Hmt/Thanh/refs/heads/main/ScriptALL/Jood%20Piece.lua"
-local function queueHubForRaid()
-    if queuedHub then return end
-    local q = queue_on_teleport
-        or (syn and syn.queue_on_teleport)
-        or (fluxus and fluxus.queue_on_teleport)
-    if not q then
-        castleStatus("Your executor has no queue_on_teleport - the script cannot auto-load in the next map")
-        return
-    end
-    local code = 'if not game:IsLoaded() then game.Loaded:Wait() end\n'
-        .. 'getgenv().SakuraCastleResume = true\n'
-        .. 'loadstring(game:HttpGet("' .. HUB_URL .. '"))()'
-    if pcall(q, code) then queuedHub = true end
 end
 
 local function castleInvRemote()
@@ -826,7 +826,6 @@ local function castleStep()
 
     local portal = Workspace:FindFirstChild("TowerRaidPart")
     if portal then
-        queueHubForRaid()
         -- the game flags InRaid when we are above the part's Y and within max(size)/2 horizontally
         local px, pz = portal.Position.X, portal.Position.Z
         local flat = Vector3.new(root.Position.X - px, 0, root.Position.Z - pz).Magnitude
@@ -897,7 +896,6 @@ local function pressRaidStart()
 end
 
 local function raidStep()
-    queueHubForRaid() -- so the script also reloads when the raid sends us back
     local raid = Workspace:FindFirstChild("Raid")
     local started = raid and raid:GetAttribute("Started") == true
     local ended = raid and raid:GetAttribute("End") == true
@@ -956,6 +954,7 @@ end
 task.spawn(function()
     while alive do
         task.wait(0.5)
+        if not CASTLE.enabled and raidFarmActive then setRaidFarm(false) end
         if CASTLE.enabled then
             local inRaidMap = game.PlaceId == CASTLE.RAID_PLACE or Workspace:FindFirstChild("Raid") ~= nil
             if inRaidMap then
@@ -1126,6 +1125,7 @@ do
     local s2 = page:CreateSection("📊 Status", "Right")
     s1:Toggle({Title = "Auto Castle Raid", Id = "CASTLE_ENABLED", Value = false, Callback = function(v)
         CASTLE.enabled = v
+        if not v then setRaidFarm(false) end
         if v then CASTLE.summoned = false end -- re-enabling = allowed to summon once
         castleStatus(v and ("ON - PlaceId " .. tostring(game.PlaceId)) or "OFF")
         -- never let Auto Store put the ticket back into storage
@@ -1634,13 +1634,24 @@ task.spawn(function()
     end
 end)
 
-task.delay(2.5, function()
-    if getgenv and getgenv().SakuraCastleResume then
-        getgenv().SakuraCastleResume = nil
-        local el = Window.ConfigElements["Auto Castle Raid"]
-        if el then pcall(el.Set, true) end
+-- ================= ANTI AFK =================
+-- Roblox kicks after 20 min without input (LocalPlayer.Idled): disable the default handlers, then fake input.
+do
+    if getconnections then
+        pcall(function()
+            for _, c in ipairs(getconnections(LP.Idled)) do
+                if c.Disable then c:Disable() end
+            end
+        end)
     end
-end)
+    local VU = game:GetService("VirtualUser")
+    table.insert(conns, LP.Idled:Connect(function()
+        pcall(function()
+            VU:CaptureController()
+            VU:ClickButton2(Vector2.new(0, 0))
+        end)
+    end))
+end
 
 -- ================= MAIN LOOPS =================
 table.insert(conns, RunService.RenderStepped:Connect(function()
