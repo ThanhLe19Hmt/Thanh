@@ -363,7 +363,7 @@ local function findTarget(targetName)
     local best, bestDist = nil, math.huge
     for _, root in ipairs(roots) do
         for _, mob in ipairs(root:GetDescendants()) do
-            if (wildcard or mob.Name == targetName) and mob:IsA("Model") and isMobModel(mob)
+            if (wildcard or mob.Name == targetName) and mob.Name ~= "Base" and mob:IsA("Model") and isMobModel(mob)
                 and not (wildcard and npcFolder and mob:IsDescendantOf(npcFolder)) then
                 local hum = mob:FindFirstChildOfClass("Humanoid")
                 if hum and hum.Health > 0 then
@@ -776,7 +776,7 @@ local function storeOnce()
 end
 
 local alive = true -- must be declared BEFORE the loops below (otherwise they see a nil global and never run)
--- ================= AUTO CASTLE RAID =================
+-- ================= AUTO ALL RAID =================
 local CASTLE = {
     enabled = false,
     autoReplay = true, -- press Replay on the result board while Castle Tickets remain
@@ -956,19 +956,225 @@ task.spawn(function()
         task.wait(0.5)
         if not CASTLE.enabled and raidFarmActive then setRaidFarm(false) end
         if CASTLE.enabled then
-            local inRaidMap = game.PlaceId == CASTLE.RAID_PLACE or Workspace:FindFirstChild("Raid") ~= nil
-            if inRaidMap then
+            if game.PlaceId == CASTLE.RAID_PLACE then
                 local ok, err = pcall(raidStep)
                 if not ok then castleStatus("Raid error: " .. tostring(err)) end
-            elseif CONFIG.AutoFarm or CONFIG.AutoBoss then
-                castleStatus("Turn off Auto Farm / Auto Boss first")
             else
-                local ok, err = pcall(castleStep)
-                if not ok then castleStatus("Castle error: " .. tostring(err)) end
+                CASTLE.enabled = false
+                setRaidFarm(false)
             end
         end
     end
 end)
+
+-- ================= WEAPON CRAFT =================
+-- Weapons are sold by the NPCs inside Workspace.NPC.Seller (one child per weapon). Each one shows
+-- three labels: name, recipe ("50KG + 15 Shadow Essence + ...") and type. Clicking the NPC with
+-- the items in your inventory/storage crafts it instantly (no GUI), so Craft = go to the NPC and click.
+local CRAFT = { list = {}, byLabel = {}, selected = nil, lastKey = "" }
+local craftDropdown, craftPara
+
+local function normName(s)
+    return (tostring(s):lower():gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function trimStr(s) return (tostring(s):gsub("^%s+", ""):gsub("%s+$", "")) end
+
+local itemNameMap -- normalized name -> real item name (ReplicatedStorage.Items)
+local function getItemName(name)
+    if not itemNameMap then
+        itemNameMap = {}
+        local items = ReplicatedStorage:FindFirstChild("Items")
+        if items then
+            for _, it in ipairs(items:GetChildren()) do itemNameMap[normName(it.Name)] = it.Name end
+        end
+    end
+    return itemNameMap[normName(name)]
+end
+
+local function suffixMult(suf)
+    if suf == "k" then return 1e3 elseif suf == "m" then return 1e6 elseif suf == "b" then return 1e9 end
+    return 1
+end
+
+-- "50KG + 15 Shadow Essence + Kamish Dagger + \"Some\" Title"  ->  list of requirements
+local function parseRecipe(recipe)
+    local reqs = {}
+    for token in (recipe .. "+"):gmatch("(.-)%+") do
+        token = trimStr(token)
+        if token ~= "" then
+            local low = token:lower()
+            local n, suf, tail = low:match("^([%d%.,]+)%s*([kmb]?)%s*g(e?m?s?)$")
+            local n2, suf2 = low:match("^([%d%.,]+)%s*([kmb]?)%s*%$$")
+            if token:find('"') or low:find("title") or low:find("race") then
+                table.insert(reqs, { kind = "other", text = token })
+            elseif n and (tail == "" or tail == "ems") then
+                local amount = (tonumber((n:gsub(",", ""))) or 0) * suffixMult(suf)
+                table.insert(reqs, { kind = "gems", need = amount, text = token })
+            elseif n2 then
+                local amount = (tonumber((n2:gsub(",", ""))) or 0) * suffixMult(suf2)
+                table.insert(reqs, { kind = "beli", need = amount, text = token })
+            else
+                local count, name = token:match("^(%d+)%s*[xX]?%s*(.+)$")
+                if not count then
+                    local nm, c2 = token:match("^(.-)%s*[xX](%d+)$")
+                    if nm and nm ~= "" then name, count = nm, c2 end
+                end
+                name = trimStr(name or token)
+                count = tonumber(count) or 1
+                local real = getItemName(name)
+                if real then
+                    table.insert(reqs, { kind = "item", item = real, need = count, text = token })
+                else
+                    table.insert(reqs, { kind = "other", text = token })
+                end
+            end
+        end
+    end
+    return reqs
+end
+
+local function ownedCount(itemName)
+    local total = 0
+    local inv = LP:FindFirstChild("InvData")
+    local v = inv and inv:FindFirstChild(itemName)
+    if v and v:IsA("ValueBase") then total += tonumber(v.Value) or 0 end
+    for _, c in ipairs({ getBackpack(), LP.Character }) do
+        if c then
+            for _, t in ipairs(c:GetChildren()) do
+                if t:IsA("Tool") and t.Name == itemName then
+                    total += tonumber(t:GetAttribute("Amount")) or 1
+                end
+            end
+        end
+    end
+    return total
+end
+
+local function dataValue(name)
+    local d = LP:FindFirstChild("Data")
+    local v = d and d:FindFirstChild(name)
+    return (v and v:IsA("ValueBase") and tonumber(v.Value)) or 0
+end
+
+local function fmtNum(n)
+    if n >= 1e9 then return string.format("%.2fB", n / 1e9)
+    elseif n >= 1e6 then return string.format("%.2fM", n / 1e6)
+    elseif n >= 1e4 then return string.format("%.1fK", n / 1e3) end
+    return tostring(math.floor(n))
+end
+
+-- returns lines (text), canCraft
+local function evaluateWeapon(w)
+    local lines, can = {}, true
+    for _, r in ipairs(w.reqs) do
+        local have, ok
+        if r.kind == "item" then
+            have = ownedCount(r.item); ok = have >= r.need
+            table.insert(lines, string.format("%s %d x %s  (have %s)", ok and "[OK]" or "[X]", r.need, r.item, fmtNum(have)))
+        elseif r.kind == "gems" or r.kind == "beli" then
+            have = dataValue(r.kind == "gems" and "Gems" or "Beli"); ok = have >= r.need
+            table.insert(lines, string.format("%s %s %s  (have %s)", ok and "[OK]" or "[X]", fmtNum(r.need),
+                r.kind == "gems" and "Gems" or "Beli", fmtNum(have)))
+        else
+            ok = true
+            table.insert(lines, "[?] " .. r.text .. "  (not checked)")
+        end
+        if not ok then can = false end
+    end
+    if #w.reqs == 0 then table.insert(lines, "(recipe text not found on this NPC)") end
+    return lines, can
+end
+
+local TYPE_WORDS = { melee = true, sword = true, special = true, accessory = true, ["devil fruit"] = true }
+
+local function scanSellers()
+    local npcs = Workspace:FindFirstChild("NPC")
+    local root = npcs and npcs:FindFirstChild("Seller")
+    local skill = ReplicatedStorage:FindFirstChild("Skill")
+    local list = {}
+    if not root then return list end
+    local children = root:GetChildren()
+    if #children == 0 then children = { root } end
+    for _, npc in ipairs(children) do
+        local cd = npc:FindFirstChildWhichIsA("ClickDetector", true)
+        if cd then
+            local texts = {}
+            for _, d in ipairs(npc:GetDescendants()) do
+                if d:IsA("TextLabel") and d.Text ~= "" then table.insert(texts, d.Text) end
+            end
+            local name, recipe, wtype
+            for _, t in ipairs(texts) do
+                local low = trimStr(t):lower()
+                if not name and ((skill and skill:FindFirstChild(trimStr(t))) or getItemName(t)) then name = trimStr(t) end
+                if not recipe and (t:find("+", 1, true) or low:match("^[%d%.,]+%s*[kmb]?%s*[g%$]")) then recipe = t end
+                if not wtype and TYPE_WORDS[low] then wtype = trimStr(t) end
+            end
+            name = name or npc.Name
+            table.insert(list, {
+                name = name, npc = npc, cd = cd, type = wtype or "?",
+                recipeText = recipe or "", reqs = parseRecipe(recipe or ""),
+                label = string.format("%s [%s]", name, wtype or "?"),
+            })
+        end
+    end
+    table.sort(list, function(a, b) return a.label < b.label end)
+    return list
+end
+
+local function refreshCraftList()
+    local list = scanSellers()
+    local labels = {}
+    CRAFT.byLabel = {}
+    for _, w in ipairs(list) do
+        table.insert(labels, w.label)
+        CRAFT.byLabel[w.label] = w
+    end
+    CRAFT.list = list
+    local k = table.concat(labels, "|")
+    if k ~= CRAFT.lastKey then
+        CRAFT.lastKey = k
+        if craftDropdown then
+            pcall(function() craftDropdown:Refresh(#labels > 0 and labels or {"(no sellers loaded)"}) end)
+        end
+    end
+end
+
+local function updateCraftPara()
+    if not craftPara then return end
+    local w = CRAFT.selected and CRAFT.byLabel[CRAFT.selected]
+    if not w then
+        pcall(function()
+            craftPara:SetTitle("Recipe")
+            craftPara:SetContent("Pick a weapon on the left.")
+        end)
+        return
+    end
+    local lines, can = evaluateWeapon(w)
+    pcall(function()
+        craftPara:SetTitle(w.name .. (can and "  - ready to craft" or "  - missing items"))
+        craftPara:SetContent(table.concat(lines, "\n"))
+    end)
+end
+
+local function craftSelected()
+    local w = CRAFT.selected and CRAFT.byLabel[CRAFT.selected]
+    if not w then return false, "Pick a weapon first." end
+    if not (w.cd and w.cd.Parent) then return false, "That seller NPC is not loaded here." end
+    local _, can = evaluateWeapon(w)
+    if not can then return false, "Missing required items." end
+    local root = getMyRoot()
+    if not root then return false, "Character not ready." end
+    local part = w.cd.Parent
+    local target = part:IsA("BasePart") and part.Position or w.npc:GetPivot().Position
+    local back = root.CFrame
+    root.CFrame = CFrame.new(target + Vector3.new(0, 3, 6))
+    task.wait(0.6)
+    pcall(fireclickdetector, w.cd) -- one click = the seller crafts it from your items
+    task.wait(1)
+    root.CFrame = back
+    return true, "Clicked " .. w.name .. " seller."
+end
 
 -- ================= BUILD UI (MarvenRiz) =================
 alive = true
@@ -1012,7 +1218,7 @@ end
 local IN_RAID_MAP = game.PlaceId == CASTLE.RAID_PLACE -- raid map: only Auto Castle Raid, Setting, Config
 local tabMain    = Window:CreateTab("Main", true, false)
 local tabSetting = Window:CreateTab("Setting", false, false)
-local tabOther   = (not IN_RAID_MAP) and Window:CreateTab("Other", false, false) or nil
+local tabOther   = Window:CreateTab("Other", false, false)
 local tabCfg     = Window:CreateTab("Config", false, false)
 
 -- ===================== MAIN =====================
@@ -1118,23 +1324,21 @@ if not IN_RAID_MAP then
     s2:Paragraph({Title = "Random Auto Boss", Content = "A random living boss from your selected list is chosen. After it is defeated, another living selected boss is chosen automatically. Bosses that are not currently spawned are skipped."})
 end
 
--- Page: Raid (Castle)
-do
-    local page = tabMain:CreatePage("Raid")
-    local s1 = page:CreateSection("🏰 INF Castle", "Left")
+-- Page: Auto ALL Raid (only in the raid map)
+if IN_RAID_MAP then
+    local page = tabMain:CreatePage("Auto ALL Raid")
+    local s1 = page:CreateSection("⚔️ Auto ALL Raid", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
-    s1:Toggle({Title = "Auto Castle Raid", Id = "CASTLE_ENABLED", Value = false, Callback = function(v)
+    s1:Toggle({Title = "Auto ALL Raid", Id = "CASTLE_ENABLED", Value = false, Callback = function(v)
         CASTLE.enabled = v
         if not v then setRaidFarm(false) end
-        if v then CASTLE.summoned = false end -- re-enabling = allowed to summon once
-        castleStatus(v and ("ON - PlaceId " .. tostring(game.PlaceId)) or "OFF")
-        -- never let Auto Store put the ticket back into storage
-        if v then STORE.skip["Castle Ticket"] = true end
+        if v then STORE.skip["Castle Ticket"] = true end -- preserve tickets for Auto Replay
+        castleStatus(v and "ON - Auto Start / Farm / Replay" or "OFF")
     end})
     s1:Toggle({Title = "Auto Replay (until out of tickets)", Id = "CASTLE_REPLAY", Value = true, Callback = function(v)
         CASTLE.autoReplay = v
     end})
-    castlePara = s2:Paragraph({Title = "Auto Castle Raid", Content = "OFF"})
+    castlePara = s2:Paragraph({Title = "Auto ALL Raid", Content = "OFF"})
 end
 
 -- ===================== SETTING =====================
@@ -1176,7 +1380,7 @@ do
 
     -- Weapons (weapon lock: only MAX_WEAPONS can be selected)
     weaponDropdown = sWeapon:Dropdown({Title = "Weapons (select up to " .. MAX_WEAPONS .. ")", Options = listWeaponNames(), Multi = true, Value = {}, Callback = function(sel)
-	    if refreshingWeapons then return end
+        if refreshingWeapons then return end
         -- the library passes the same table every time, so copy it
         if type(sel) ~= "table" then return end
         if #sel > MAX_WEAPONS then
@@ -1220,28 +1424,54 @@ do
 end
 
 -- ===================== OTHER =====================
-if not IN_RAID_MAP then
+do
     local page = tabOther:CreatePage("Island & Store")
-    local sIsland = page:CreateSection("🏝️ Island", "Left")
-    local sStore  = page:CreateSection("📦 Auto Store", "Right")
+    local sStore = page:CreateSection("📦 Auto Store", "Right")
 
-    islandPara = sIsland:Paragraph({Title = "Nearest islands", Content = "Turn on Island ESP to see them."})
-    tpDropdown = sIsland:Dropdown({Title = "Teleport to Island", Options = getIslandNames(), Multi = false, Callback = function(v)
-        if type(v) == "table" then v = v[1] end
-        selectedIsland = v
-    end})
-    sIsland:Button({Title = "Teleport", Callback = function()
-        local ok = teleportToIsland(selectedIsland)
-        Library:Notify({
-            Title = ok and "Teleported" or "Teleport failed",
-            Description = ok and tostring(selectedIsland) or "Select an island first.",
-            Duration = 3,
-        })
-    end})
+    if not IN_RAID_MAP then
+        local sIsland = page:CreateSection("🏝️ Island", "Left")
+        islandPara = sIsland:Paragraph({Title = "Nearest islands", Content = "Turn on Island ESP to see them."})
+        tpDropdown = sIsland:Dropdown({Title = "Teleport to Island", Options = getIslandNames(), Multi = false, Callback = function(v)
+            if type(v) == "table" then v = v[1] end
+            selectedIsland = v
+        end})
+        sIsland:Button({Title = "Teleport", Callback = function()
+            local ok = teleportToIsland(selectedIsland)
+            Library:Notify({
+                Title = ok and "Teleported" or "Teleport failed",
+                Description = ok and tostring(selectedIsland) or "Select an island first.",
+                Duration = 3,
+            })
+        end})
+    end
 
     sStore:Toggle({Title = "Auto Store Items", Id = "AUTO_STORE", Value = false, Callback = function(v)
         STORE.enabled = v
     end})
+end
+
+-- Page: Weapon Craft (main map only: the seller NPCs are not in the raid map)
+if not IN_RAID_MAP then
+    local page = tabOther:CreatePage("Weapon Craft")
+    local sLeft  = page:CreateSection("🗡️ Weapons", "Left")
+    local sRight = page:CreateSection("📜 Recipe", "Right")
+
+    refreshCraftList()
+    local firstOptions = {}
+    for _, w in ipairs(CRAFT.list) do table.insert(firstOptions, w.label) end
+    if #firstOptions == 0 then firstOptions = {"(no sellers loaded)"} end
+
+    craftDropdown = sLeft:Dropdown({Title = "Weapon", Options = firstOptions, Multi = false, Callback = function(v)
+        if type(v) == "table" then v = v[1] end
+        CRAFT.selected = v
+        updateCraftPara()
+    end})
+    sLeft:Button({Title = "Craft x1", Callback = function()
+        local ok, msg = craftSelected()
+        Library:Notify({Title = ok and "Craft" or "Cannot craft", Description = msg, Duration = 3})
+        updateCraftPara()
+    end})
+    craftPara = sRight:Paragraph({Title = "Recipe", Content = "Pick a weapon on the left."})
 end
 
 -- ===================== CONFIG =====================
@@ -1354,6 +1584,16 @@ task.spawn(function()
                 islandPara:SetTitle("Current: " .. tostring(here or "?"))
                 islandPara:SetContent(#lines > 0 and table.concat(lines, "\n") or "No islands found.")
             end)
+        end
+    end
+end)
+
+-- ================= WEAPON CRAFT REFRESH =================
+task.spawn(function()
+    while alive and task.wait(2) do
+        if craftDropdown then
+            pcall(refreshCraftList)
+            pcall(updateCraftPara)
         end
     end
 end)
