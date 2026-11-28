@@ -197,7 +197,7 @@ local lastAttack = 0
 local lastTargetName = nil
 local raidFarmActive = false   -- Auto Castle Raid: farm every mob in the raid map (independent of Auto Farm)
 local lastWildFind = 0
-local VON = { enabled = false, busy = false, status = "OFF", farmJester = false, spawnSeq = 0, deathSeq = 0, spawnAtClick = 0, watched = setmetatable({}, { __mode = "k" }), gen = 0, runGen = 0, state = "idle", tries = 0, beat = 0 } -- Auto VON JOESTAR (own loop, see bottom)
+local VON = { enabled = false, busy = false, status = "OFF", farmJester = false, lastIslandTp = 0, spawnSeq = 0, deathSeq = 0, spawnAtClick = 0, watched = setmetatable({}, { __mode = "k" }), gen = 0, runGen = 0, state = "idle", tries = 0, beat = 0 } -- Auto VON JOESTAR (own loop, see bottom)
 local SB = { enabled = false, busy = false, selected = "Jotaro", state = "idle", tries = 0, beat = 0, gen = 0, runGen = 0,
     spawnSeq = 0, spawnAtFire = 0, cooldownUntil = 0, pendingAt = 0, farmMob = nil, lastIslandTp = 0 } -- Auto Boss Summon (NPC "SummonBoss")
 local farmEngaged = false      -- true only while a live target mob exists and we are on it
@@ -806,6 +806,17 @@ local function teleportToIsland(name)
         end
     end
     return false
+end
+
+-- Island change used by the auto features. The old "hold position" (holdCFrame = last farm spot, kept so the
+-- character does not fall) pulled the character straight back to the previous island every frame while the
+-- new island's mobs were not loaded yet -> endless TP / snap-back loop. So the hold point moves with us.
+local function goToIsland(name)
+    if not teleportToIsland(name) then return false end
+    currentTarget = nil
+    local r = getMyRoot()
+    holdCFrame = r and r.CFrame or nil
+    return true
 end
 
 -- ================= AUTO STORE =================
@@ -1420,7 +1431,7 @@ if not IN_RAID_MAP then
         STORE.skip["Von Soul"] = v or nil -- Auto Store must never put the Von Soul back
         -- clean reset every time it is switched (ON or OFF): no stale state survives
         VON.gen = VON.gen + 1
-        VON.busy = false; VON.state = "idle"; VON.tries = 0; VON.cooldownUntil = 0; VON.farmJester = false
+        VON.busy = false; VON.state = "idle"; VON.tries = 0; VON.cooldownUntil = 0; VON.farmJester = false; VON.lastIslandTp = 0
         bossLocked = false; currentTarget = nil; farmEngaged = false
         VON.status = v and "ON" or "OFF"
     end})
@@ -1821,6 +1832,15 @@ local function vonStep(gen)
         vonStatus("Boss did not appear - retrying")
         return
     end
+    -- the whole feature (summon NPC, Jester) works on April Island: go there first (also right after switching ON)
+    local isl = LP.Character and LP.Character:GetAttribute("Island")
+    if type(isl) == "string" and isl ~= "April Island" and tick() - VON.lastIslandTp > 5 then
+        VON.lastIslandTp = tick()
+        vonStatus("Going to April Island...")
+        goToIsland("April Island")
+        return
+    end
+
     -- no Von Soul left: farm Jester until one drops (then stop at once and summon)
     if not vonHasSoul() then
         VON.farmJester = true
@@ -2002,9 +2022,11 @@ local function sbStep(gen)
             SB.farmMob = req.mob
             sbStatus(("Need %d %s (have %d) - farming %s"):format(req.amount, req.item, have, req.mob))
             local char = LP.Character
-            if char and char:GetAttribute("Island") ~= req.island and tick() - SB.lastIslandTp > 5 then
+            local isl = char and char:GetAttribute("Island")
+            if type(isl) == "string" and isl ~= req.island and tick() - SB.lastIslandTp > 5 then
                 SB.lastIslandTp = tick()
-                teleportToIsland(req.island)
+                sbStatus("Going to " .. req.island .. "...")
+                goToIsland(req.island)
             end
             return
         end
