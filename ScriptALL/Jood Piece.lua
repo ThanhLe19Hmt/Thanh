@@ -42,6 +42,8 @@ local CONFIG = {
         V = { enabled = false, keyCode = Enum.KeyCode.V },
     },
 
+    AutoTransform = false, -- cast a weapon's transform skill once when it is not transformed
+
     -- Auto Roll (Random Chance)
     AutoRoll   = false,
     RollAmount = 5,   -- 1 or 5 (only 5 was confirmed from the scan log)
@@ -195,6 +197,7 @@ local lastAttack = 0
 local lastTargetName = nil
 local raidFarmActive = false   -- Auto Castle Raid: farm every mob in the raid map (independent of Auto Farm)
 local lastWildFind = 0
+local VON = { enabled = false, busy = false, status = "OFF", farmJester = false, spawnSeq = 0, deathSeq = 0, spawnAtClick = 0, watched = setmetatable({}, { __mode = "k" }), gen = 0, runGen = 0, state = "idle", tries = 0, beat = 0 } -- Auto VON JOESTAR (own loop, see bottom)
 local farmEngaged = false      -- true only while a live target mob exists and we are on it
 local farmStatusCallback        -- set by the UI (updates the Target paragraph)
 local lastFarmMsg
@@ -436,26 +439,62 @@ end
 
 local holdCFrame = nil -- last farm position: kept while there is no target so the character does not fall
 
+local bossLocked = false -- true while a boss is the locked target (prevents ping-pong with the mob)
+
+local function isAliveModel(m)
+    local h = m and m.Parent and m:FindFirstChildOfClass("Humanoid")
+    return h ~= nil and h.Health > 0
+end
+
+-- the boss is named "Von Joestar" in the game: match case-insensitively, cache the model, rescan at most every 0.5s
+local vonCache, vonScanAt = nil, 0
+function VON.find()
+    if vonCache and isAliveModel(vonCache) then return vonCache end
+    vonCache = nil
+    if tick() - vonScanAt < 0.3 then return nil end -- throttle: never scan every frame
+    vonScanAt = tick()
+    -- the real model name is "Von Joestar" (not upper case): match case-insensitively
+    local function isVon(o)
+        if not o:IsA("Model") then return false end
+        local n = o.Name:lower()
+        if not n:find("joestar", 1, true) or n:find("summon", 1, true) then return false end
+        return isAliveModel(o) and getMobPart(o) ~= nil
+    end
+    local mr = getMobsRoot()
+    if mr then
+        for _, o in ipairs(mr:GetDescendants()) do
+            if isVon(o) then vonCache = o; return o end
+        end
+    end
+    for _, o in ipairs(Workspace:GetChildren()) do
+        if isVon(o) then vonCache = o; return o end
+    end
+    return nil
+end
+
 local function autoFarmStepInner()
     farmEngaged = false
-    if not CONFIG.AutoFarm and not CONFIG.AutoBoss and not raidFarmActive then return end
+    if VON.busy then return end -- summon sequence is moving the character
+    if not CONFIG.AutoFarm and not CONFIG.AutoBoss and not raidFarmActive and not VON.enabled then bossLocked = false; return end
 
-    local useBoss = CONFIG.AutoBoss and not raidFarmActive
+    local wantBoss = CONFIG.AutoBoss and not raidFarmActive and #CONFIG.BossNames > 0
+    local wantMob = CONFIG.AutoFarm or raidFarmActive
     local targetName = raidFarmActive and "*" or CONFIG.TargetMobName
-    local selectionChanged = false
-    if useBoss then
-        if #CONFIG.BossNames == 0 then
-            farmStatus("No boss selected.")
-            currentTarget = nil
-            return
-        end
+    if VON.enabled and VON.farmJester and not raidFarmActive then
+        wantMob = true; targetName = "Jester" -- no Von Soul left: farm Jester until one drops
+    end
+
+    if CONFIG.AutoBoss and not raidFarmActive then
         local selectionKey = getBossSelectionKey()
         if selectionKey ~= lastBossSelection then
             lastBossSelection = selectionKey
-            currentTarget = nil
-            lastFarmTargetName = nil
+            if bossLocked then currentTarget = nil; bossLocked = false end
             lastBossName = nil
-            selectionChanged = true
+        end
+        if #CONFIG.BossNames == 0 and not wantMob then
+            farmStatus("No boss selected.")
+            currentTarget = nil
+            return
         end
     end
 
@@ -464,50 +503,68 @@ local function autoFarmStepInner()
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not myRoot or not hum or hum.Health <= 0 then return end
 
-    if useBoss then
-        if currentTarget then
-            local h = currentTarget:FindFirstChildOfClass("Humanoid")
-            if not currentTarget.Parent or not h or h.Health <= 0 then
-                currentTarget = nil
-            end
-        end
-        if not currentTarget then
-            targetName, currentTarget = pickRandomAliveBoss()
-        else
+    -- 1) keep the locked boss until it dies (no switching back to the mob)
+    if bossLocked then
+        if isAliveModel(currentTarget) then
             targetName = lastBossName
+        else
+            bossLocked = false
+            currentTarget = nil
         end
-        if not currentTarget then
+    end
+
+    -- 2a) VON JOESTAR (own toggle) has the highest priority
+    if not bossLocked and VON.enabled and not raidFarmActive then
+        local vm = VON.find()
+        if vm then
+            bossLocked = true
+            currentTarget = vm
+            targetName = vm.Name
+            lastBossName = vm.Name
+        end
+    end
+
+    -- 2) boss has priority: pick one as soon as any selected boss is alive
+    if not bossLocked and wantBoss then
+        local n, m = pickRandomAliveBoss()
+        if m then
+            bossLocked = true
+            currentTarget = m
+            targetName = n
+        end
+    end
+
+    -- 3) otherwise farm the mob (also the "return to mob" step after a boss dies)
+    if not bossLocked then
+        if not wantMob then
             farmStatus("No selected boss is alive - waiting.")
             return
         end
-    else
         if targetName ~= lastFarmTargetName then
             currentTarget = nil
             lastFarmTargetName = targetName
         end
-        if currentTarget then
-            local h = currentTarget:FindFirstChildOfClass("Humanoid")
-            if not currentTarget.Parent or not h or h.Health <= 0 then
-                currentTarget = nil
-            end
-        end
+        if currentTarget and not isAliveModel(currentTarget) then currentTarget = nil end
         if not currentTarget and targetName then currentTarget = findTarget(targetName) end
     end
 
     if not targetName or not currentTarget then
+        -- no mob left: autoFarmStep keeps holdCFrame (last farm spot), so we stay/return there safely
         farmStatus('No alive "' .. tostring(targetName) .. '" found - waiting. Skills paused.')
         return
     end
 
     local mobPart = getMobPart(currentTarget)
-    if not mobPart then currentTarget = nil; return end
+    if not mobPart then currentTarget = nil; bossLocked = false; return end
 
     farmEngaged = true
     syncWeapons()
-    farmStatus((useBoss and "Random Boss: " or (raidFarmActive and "Raid farm: nearest mob" or "Farming: " .. tostring(targetName))))
+    farmStatus(bossLocked and ("Boss: " .. tostring(targetName)) or (raidFarmActive and "Raid farm: nearest mob" or "Farming: " .. tostring(targetName)))
     pcall(function()
-        holdCFrame = getFarmCFrame(mobPart)
-        myRoot.CFrame = holdCFrame
+        local cf = getFarmCFrame(mobPart)
+        -- keep the mob farm spot as the "home" position; a boss only sets it if none exists yet
+        if not bossLocked or not holdCFrame then holdCFrame = cf end
+        myRoot.CFrame = cf
         myRoot.Velocity = Vector3.zero
     end)
     if tick() - lastAttack >= ATTACK_INTERVAL then
@@ -516,8 +573,9 @@ local function autoFarmStepInner()
     end
 end
 local function autoFarmStep()
+    if VON.busy then return end
     autoFarmStepInner()
-    if not (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive) then
+    if not (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive or VON.enabled) then
         holdCFrame = nil
         return
     end
@@ -559,7 +617,7 @@ end
 
 -- Skills only fire while a hack feature (currently Auto Farm) is running
 local function isHackRunning()
-    return (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive) and farmEngaged
+    return (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive or VON.enabled) and farmEngaged
 end
 
 -- ================= AUTO ROLL (Random Chance) =================
@@ -736,6 +794,20 @@ local function getInvRemote()
     return inv and inv:FindFirstChild("Inventory") -- RemoteFunction
 end
 
+-- RemoteFunction:InvokeServer can yield forever if the server never answers; that froze whole loops.
+local function invokeTimeout(remote, timeout, ...)
+    local args = table.pack(...)
+    local done, ok, res = false, false, nil
+    task.spawn(function()
+        ok, res = pcall(function() return remote:InvokeServer(table.unpack(args, 1, args.n)) end)
+        done = true
+    end)
+    local t = tick()
+    while not done and tick() - t < timeout do task.wait(0.05) end
+    if not done then return false, nil end
+    return ok, res
+end
+
 local lastStoreFail = {} -- item name -> time until we stop retrying it
 
 local function storeOnce()
@@ -764,7 +836,7 @@ local function storeOnce()
     for nm, amount in pairs(counts) do
         if not STORE.enabled then break end
         -- same call the game's own Store button makes
-        local ok, res = pcall(function() return remote:InvokeServer("Add", nm, amount) end)
+        local ok, res = invokeTimeout(remote, 3, "Add", nm, amount)
         if ok and res ~= false then
             n += 1
         else
@@ -1240,17 +1312,8 @@ if not IN_RAID_MAP then
     local s2 = page:CreateSection("🎯 Select Mob", "Right")
 
     s1:Toggle({Title = "Auto Farm", Id = "FARM_ENABLED", Value = false, Callback = function(v)
-        if v and CONFIG.AutoBoss then
-            CONFIG.AutoFarm = false
-            Library:Notify({Title = "Cannot enable Auto Farm", Description = "Turn off Auto Boss first.", Duration = 3})
-            task.defer(function()
-                local el = Window.ConfigElements["Auto Farm"]
-                if el then pcall(el.Set, false) end -- dot call: Set takes the value directly
-            end)
-            return
-        end
         CONFIG.AutoFarm = v
-        if not v then currentTarget = nil; farmEngaged = false end
+        if not v then currentTarget = nil; bossLocked = false; farmEngaged = false end
     end})
     targetPara = s1:Paragraph({Title = "Target: (none)", Content = "Pick a mob from the list on the right."})
     farmStatusCallback = function(m) targetPara:SetContent(m) end
@@ -1303,24 +1366,29 @@ if not IN_RAID_MAP then
     end})
 
     s1:Toggle({Title = "Auto Boss", Id = "BOSS_ENABLED", Value = false, Callback = function(v)
-        if v and CONFIG.AutoFarm then
-            CONFIG.AutoBoss = false
-            Library:Notify({Title = "Cannot enable Auto Boss", Description = "Turn off Auto Farm first.", Duration = 3})
-            task.defer(function()
-                local el = Window.ConfigElements["Auto Boss"]
-                if el then pcall(el.Set, false) end
-            end)
-            return
-        end
         CONFIG.AutoBoss = v
         currentTarget = nil
         if v then
             lastBossSelection = ""
             lastBossName = nil
         else
+            bossLocked = false
             farmEngaged = false
         end
     end})
+    local s3 = page:CreateSection("💀 VON JOESTAR", "Left")
+    local vonPara
+    s3:Toggle({Title = "Auto VON JOESTAR", Id = "VON_ENABLED", Value = false, Callback = function(v)
+        VON.enabled = v
+        STORE.skip["Von Soul"] = v or nil -- Auto Store must never put the Von Soul back
+        -- clean reset every time it is switched (ON or OFF): no stale state survives
+        VON.gen = VON.gen + 1
+        VON.busy = false; VON.state = "idle"; VON.tries = 0; VON.cooldownUntil = 0; VON.farmJester = false
+        bossLocked = false; currentTarget = nil; farmEngaged = false
+        VON.status = v and "ON" or "OFF"
+    end})
+    vonPara = s3:Paragraph({Title = "VON JOESTAR status", Content = "OFF"})
+    VON.setStatus = function(m) VON.status = m; pcall(function() vonPara:SetContent(m) end) end
     s2:Paragraph({Title = "Random Auto Boss", Content = "A random living boss from your selected list is chosen. After it is defeated, another living selected boss is chosen automatically. Bosses that are not currently spawned are skipped."})
 end
 
@@ -1411,6 +1479,10 @@ do
             sk.enabled = v
         end})
     end
+
+    sSkill:Toggle({Title = "Auto Transform (Alucard F / Gohan Beast V)", Id = "AUTO_TRANSFORM", Value = false, Callback = function(v)
+        CONFIG.AutoTransform = v
+    end})
 
     skillDbg = sSkill:Paragraph({Title = "Skill status", Content = "Waiting: Auto Farm / Auto Boss is OFF"})
 
@@ -1594,6 +1666,208 @@ task.spawn(function()
         if craftDropdown then
             pcall(refreshCraftList)
             pcall(updateCraftPara)
+        end
+    end
+end)
+
+-- ================= AUTO VON JOESTAR =================
+-- State machine: idle -> (take 1 Von Soul, stand at NPC, click ONCE) -> pending -> fighting -> idle
+-- Never re-summons while the boss is alive or a summon is pending; failed summons retry max 3 times.
+local function vonStatus(m) if VON.setStatus and m ~= VON.lastMsg then VON.lastMsg = m; VON.setStatus(m) end end
+
+local function vonSoulTool()
+    local bp, ch = getBackpack(), LP.Character
+    return (bp and bp:FindFirstChild("Von Soul")) or (ch and ch:FindFirstChild("Von Soul"))
+end
+local function soulAmount(t) return t and (tonumber(t:GetAttribute("Amount")) or 1) or 0 end
+
+local function ensureVonSoul()
+    if vonSoulTool() then return true end
+    local data = LP:FindFirstChild("InvData")
+    local stored = data and data:FindFirstChild("Von Soul")
+    if not stored or (tonumber(stored.Value) or 0) < 1 then return false end
+    local remote = getInvRemote()
+    if not remote then return false end
+    invokeTimeout(remote, 2, "Remove", "Von Soul", 1) -- exactly 1
+    local t = tick()
+    repeat task.wait(0.1) until vonSoulTool() or tick() - t > 2
+    return vonSoulTool() ~= nil
+end
+
+local function findSummonNpc()
+    local npcs = Workspace:FindFirstChild("NPC")
+    if not npcs then return nil end
+    local function clickable(o) return o:FindFirstChildWhichIsA("ClickDetector", true) or o:FindFirstChildWhichIsA("ProximityPrompt", true) end
+    local exact = npcs:FindFirstChild("SUMMON VON JOESTAR")
+    if exact and clickable(exact) then return exact end
+    for _, npc in ipairs(npcs:GetChildren()) do
+        if npc.Name:upper():find("VON", 1, true) and clickable(npc) then return npc end
+        for _, d in ipairs(npc:GetDescendants()) do
+            if (d:IsA("TextLabel") or d:IsA("TextBox")) and d.Text:upper():find("SUMMON VON JOESTAR", 1, true) and clickable(npc) then
+                return npc
+            end
+        end
+    end
+end
+
+-- Event-based detection: a boss that spawns and dies in under a second can never be missed by polling,
+-- so every spawn / death is counted the moment Roblox reports it.
+local function vonWatch(model)
+    if VON.watched[model] then return end
+    VON.watched[model] = true
+    VON.spawnSeq = VON.spawnSeq + 1
+    local h = model:FindFirstChildOfClass("Humanoid")
+    if h then h.Died:Connect(function() VON.deathSeq = VON.deathSeq + 1 end) end
+    model.AncestryChanged:Connect(function(_, parent)
+        if not parent then VON.deathSeq = VON.deathSeq + 1 end
+    end)
+end
+local function vonConsider(o)
+    local m = o:IsA("Humanoid") and o.Parent or (o:IsA("Model") and o) or nil
+    if not (m and m:IsA("Model")) then return end
+    local n = m.Name:lower()
+    if n:find("joestar", 1, true) and not n:find("summon", 1, true) then vonWatch(m) end
+end
+table.insert(conns, Workspace.DescendantAdded:Connect(function(o)
+    if VON.enabled then pcall(vonConsider, o) end
+end))
+
+local function vonHasSoul()
+    if vonSoulTool() then return true end
+    local data = LP:FindFirstChild("InvData")
+    local stored = data and data:FindFirstChild("Von Soul")
+    return stored ~= nil and (tonumber(stored.Value) or 0) >= 1
+end
+
+local function vonStep(gen)
+    local function cur() return VON.enabled and VON.gen == gen end
+    local boss = VON.find()
+    if boss then
+        VON.farmJester = false
+        VON.state = "fighting"; VON.tries = 0
+        vonStatus("Fighting " .. boss.Name)
+        return
+    end
+    if VON.state == "fighting" then -- boss is gone (killed)
+        VON.state = "idle"; VON.cooldownUntil = tick() + 0.3
+        vonStatus("Boss defeated - next round")
+        return
+    end
+    if VON.state == "pending" then
+        if VON.spawnSeq > VON.spawnAtClick then -- it spawned and is already dead (killed in <1s): go on at once
+            VON.state = "idle"; VON.cooldownUntil = tick() + 0.2
+            vonStatus("Boss killed instantly - next round")
+            return
+        end
+        local left = 15 - (tick() - VON.pendingAt) -- the boss spawns right after the click: do not wait long
+        if left > 0 then vonStatus(string.format("Summoned - waiting for the boss (%ds)", left)); return end
+        VON.state = "idle"; VON.cooldownUntil = tick() + 0.5
+        vonStatus("Boss did not appear - retrying")
+        return
+    end
+    -- no Von Soul left: farm Jester until one drops (then stop at once and summon)
+    if not vonHasSoul() then
+        VON.farmJester = true
+        vonStatus("No Von Soul - farming Jester")
+        return
+    end
+    VON.farmJester = false
+    if tick() < (VON.cooldownUntil or 0) then return end
+    if VON.tries >= 3 then
+        vonStatus("Summon failed 3 times - pausing 10s")
+        VON.tries = 0; VON.cooldownUntil = tick() + 10
+        return
+    end
+    local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if not getMyRoot() or not hum or hum.Health <= 0 then return end
+
+    VON.busy = true -- pauses Auto Farm / Auto Boss so nothing pulls the character away from the NPC
+    local ok, err = pcall(function()
+        if not vonSoulTool() then
+            vonStatus("Taking 1 Von Soul...")
+            if not ensureVonSoul() then
+                vonStatus("No Von Soul (Backpack or storage)"); VON.cooldownUntil = tick() + 3; return
+            end
+        end
+        local npc = findSummonNpc()
+        if not npc then vonStatus('NPC "SUMMON VON JOESTAR" not found'); VON.cooldownUntil = tick() + 3; return end
+        local npcPos = npc:GetPivot().Position
+        local spot = CFrame.new(npcPos + Vector3.new(0, 3, 6))
+        local function hold()
+            local r = getMyRoot()
+            if not r then return false end
+            if (r.Position - npcPos).Magnitude > 12 then
+                r.CFrame = spot -- snapped back by the server/another script: put it back
+            end
+            r.AssemblyLinearVelocity = Vector3.zero
+            return (r.Position - npcPos).Magnitude <= 12
+        end
+
+        -- 1) get to the NPC and stay there stably (0.5s in range) BEFORE clicking
+        vonStatus("Going to the summon NPC...")
+        local stable, t0 = 0, tick()
+        while cur() and tick() - t0 < 4 and stable < 3 do
+            if hold() then stable += 1 else stable = 0 end
+            task.wait(0.1)
+        end
+        if not cur() then return end
+        if stable < 3 then
+            VON.tries += 1; VON.cooldownUntil = tick() + 1
+            vonStatus("Could not stay at the NPC - retry " .. VON.tries .. "/3")
+            return
+        end
+
+        -- 2) ONE click, then keep the position while checking that the Von Soul was consumed
+        local before = soulAmount(vonSoulTool())
+        VON.spawnAtClick = VON.spawnSeq
+        local cd = npc:FindFirstChildWhichIsA("ClickDetector", true)
+        local pp = npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if cd then pcall(fireclickdetector, cd) elseif pp then pcall(fireproximityprompt, pp) end
+        vonStatus("Clicked the NPC - checking...")
+        local consumed, t1 = false, tick()
+        while cur() and tick() - t1 < 3 do
+            hold()
+            if soulAmount(vonSoulTool()) < before or VON.spawnSeq > VON.spawnAtClick or VON.find() then consumed = true; break end
+            task.wait(0.1)
+        end
+        if not cur() then return end
+        if consumed then
+            VON.state = "pending"; VON.pendingAt = tick(); VON.tries = 0
+        else
+            VON.tries += 1; VON.cooldownUntil = tick() + 1.5
+            vonStatus("Summon not registered - retry " .. VON.tries .. "/3")
+        end
+    end)
+    if VON.gen == gen then VON.busy = false end
+    if not ok then vonStatus("Error: " .. tostring(err)); VON.cooldownUntil = tick() + 2 end
+end
+
+function VON.run(gen)
+    VON.beat = tick()
+    while alive and VON.enabled and VON.gen == gen do
+        task.wait(0.15)
+        VON.beat = tick()
+        local ok, err = pcall(vonStep, gen)
+        if not ok then
+            if VON.gen == gen then VON.busy = false end
+            vonStatus("Error: " .. tostring(err)); task.wait(1)
+        end
+    end
+end
+
+-- supervisor: starts one run per toggle (also when a saved config switches it on at load) and restarts a
+-- run that stopped responding for 15s (e.g. an abandoned yield), so it can never stay frozen.
+task.spawn(function()
+    while alive do
+        task.wait(0.3)
+        if VON.enabled then
+            if VON.runGen ~= VON.gen then
+                VON.runGen = VON.gen
+                task.spawn(VON.run, VON.gen)
+            elseif tick() - VON.beat > 15 then
+                VON.gen = VON.gen + 1; VON.busy = false; VON.state = "idle"; VON.tries = 0
+                bossLocked = false; currentTarget = nil
+            end
         end
     end
 end)
@@ -1788,6 +2062,57 @@ local function castSkill(tool, key, char, bp)
     return result
 end
 
+-- ---------- Auto Transform (one cast per weapon, never spammed) ----------
+-- match = lowercase substring of the Tool name. stateAttrs = optional Character/Tool attribute names
+-- that are true while transformed (fill in after running the transform scanner).
+local TRANSFORMS = {
+    { match = "alucard", key = "F", stateAttrs = { "Alucard" } },
+    { match = "gohan",   key = "V", stateAttrs = {} },
+    { match = "von joestar", key = "F", stateAttrs = { "TUSK" } }, -- verified: Character attr TUSK false -> true
+}
+local transformDone = setmetatable({}, { __mode = "k" }) -- Tool -> true (cast OK this life)
+local transformTries = setmetatable({}, { __mode = "k" }) -- Tool -> failed attempts (max 3)
+
+-- Known weapons first (table above). Unknown weapons are auto-detected with the pattern verified on
+-- Alucard: the Character has a boolean attribute named exactly like the Tool (false = not transformed).
+-- Its transform key is F when the weapon has an F skill (Skill folder), otherwise it is not guessed.
+local autoInfoCache = {}
+local function transformInfo(tool, char)
+    local n = tool.Name:lower()
+    for _, t in ipairs(TRANSFORMS) do
+        if n:find(t.match, 1, true) then return t end
+    end
+    if char and typeof(char:GetAttribute(tool.Name)) == "boolean" then
+        local c = autoInfoCache[tool.Name]
+        if not c then
+            local f = SkillFolder and SkillFolder:FindFirstChild(tool.Name)
+            local key = (not f or f:FindFirstChild("F")) and "F" or false
+            c = { key = key, stateAttrs = {} }
+            autoInfoCache[tool.Name] = c
+        end
+        if c.key then return c end
+    end
+end
+
+-- Verified (Alucard scan): Character attribute "<WeaponName>" is false before the transform and
+-- true after it. Other weapons are assumed to follow the same pattern (attribute = Tool name).
+-- Returns isTransformed, attributeFound
+local function transformState(tool, info, char)
+    local names = { tool.Name }
+    for _, a in ipairs(info.stateAttrs) do table.insert(names, a) end
+    local found = false
+    for _, a in ipairs(names) do
+        local v = char:GetAttribute(a)
+        if v == nil then v = tool:GetAttribute(a) end
+        if v ~= nil then
+            found = true
+            if v == true then return true, true end
+        end
+    end
+    if found then return false, true end
+    return transformDone[tool] == true, false -- no state attribute: fall back to "cast once"
+end
+
 local rrName, rrUsed = nil, {} -- round-robin weapon turn state
 task.spawn(function()
     while alive do
@@ -1801,13 +2126,16 @@ task.spawn(function()
         for _, n in ipairs(SKILL_ORDER) do
             if CONFIG.Skills[n].enabled then anyEnabled = true; break end
         end
-        if not anyEnabled then dbg("Waiting: no Auto Skills toggle is ON"); continue end
+        if not anyEnabled and not CONFIG.AutoTransform then dbg("Waiting: no Auto Skills toggle is ON"); continue end
 
         local char = LP.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local bp = getBackpack()
-        if not (char and hum and hrp and bp) or hum.Health <= 0 then dbg("Waiting: character not ready"); continue end
+        if not (char and hum and hrp and bp) or hum.Health <= 0 then
+            table.clear(transformDone); table.clear(transformTries)
+            dbg("Waiting: character not ready"); continue
+        end
 
         -- only cast once we are standing on the target (otherwise the skill whiffs)
         local tp = currentTarget and currentTarget.Parent and getMobPart(currentTarget)
@@ -1818,6 +2146,38 @@ task.spawn(function()
 
         local tools = heldSkillTools()
         if #tools == 0 then dbg("Waiting: no weapon is held"); continue end
+
+        if CONFIG.AutoTransform then
+            local did = false
+            for _, t in ipairs(tools) do
+                local info = transformInfo(t, char)
+                local on, hasAttr = false, false
+                if info then on, hasAttr = transformState(t, info, char) end
+                if on then transformTries[t] = nil end
+                if info and not on
+                    and (transformTries[t] or 0) < 3 and t:GetAttribute(info.key) ~= true then
+                    if char:GetAttribute("Skilling") == true then did = true; break end
+                    skillWindowUntil = tick() + 0.6
+                    dbg("Transforming: " .. t.Name .. " [" .. info.key .. "]")
+                    local res = castSkill(t, info.key, char, bp)
+                    lastCast = string.format("%s [%s] -> %s (transform)", t.Name, info.key, res)
+                    if hasAttr then
+                        -- wait for the game to flip the state attribute (max 1.5s) instead of re-casting
+                        local t0 = tick()
+                        repeat task.wait(0.1) until transformState(t, info, char) or tick() - t0 > 1.5
+                        if not transformState(t, info, char) then transformTries[t] = (transformTries[t] or 0) + 1 end
+                    elseif res == "OK" then
+                        transformDone[t] = true
+                    else
+                        transformTries[t] = (transformTries[t] or 0) + 1
+                    end
+                    did = true
+                    break
+                end
+            end
+            if did then task.wait(0.3); continue end
+        end
+        if not anyEnabled then dbg("Waiting: no Auto Skills toggle is ON"); continue end
 
         local byName, names = {}, {}
         for _, t in ipairs(tools) do
@@ -1832,8 +2192,10 @@ task.spawn(function()
 
         local now = tick()
         local function readyKey(tool, usedSet)
+            local tinfo = CONFIG.AutoTransform and transformInfo(tool, char)
             for _, k in ipairs(SKILL_ORDER) do
-                if CONFIG.Skills[k].enabled and toolHasKey(tool, k) and tool:GetAttribute(k) ~= true
+                if CONFIG.Skills[k].enabled and not (tinfo and tinfo.key == k) -- transform key is never spammed
+                    and toolHasKey(tool, k) and tool:GetAttribute(k) ~= true
                     and not (usedSet and usedSet[k]) then
                     local id = tool.Name .. "|" .. k
                     if not lastTry[id] or now - lastTry[id] >= 0.6 then return k end
