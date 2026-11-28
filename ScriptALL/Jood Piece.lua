@@ -198,6 +198,8 @@ local lastTargetName = nil
 local raidFarmActive = false   -- Auto Castle Raid: farm every mob in the raid map (independent of Auto Farm)
 local lastWildFind = 0
 local VON = { enabled = false, busy = false, status = "OFF", farmJester = false, spawnSeq = 0, deathSeq = 0, spawnAtClick = 0, watched = setmetatable({}, { __mode = "k" }), gen = 0, runGen = 0, state = "idle", tries = 0, beat = 0 } -- Auto VON JOESTAR (own loop, see bottom)
+local SB = { enabled = false, busy = false, selected = "Jotaro", state = "idle", tries = 0, beat = 0, gen = 0, runGen = 0,
+    spawnSeq = 0, spawnAtFire = 0, cooldownUntil = 0, pendingAt = 0, farmMob = nil, lastIslandTp = 0 } -- Auto Boss Summon (NPC "SummonBoss")
 local farmEngaged = false      -- true only while a live target mob exists and we are on it
 local farmStatusCallback        -- set by the UI (updates the Target paragraph)
 local lastFarmMsg
@@ -472,16 +474,40 @@ function VON.find()
     return nil
 end
 
+local sbCache, sbScanAt = nil, 0
+function SB.find()
+    if sbCache and isAliveModel(sbCache) then return sbCache end
+    sbCache = nil
+    if tick() - sbScanAt < 0.3 then return nil end
+    sbScanAt = tick()
+    local want = tostring(SB.selected or ""):lower()
+    if want == "" then return nil end
+    local function isBoss(o)
+        if not o:IsA("Model") or o:FindFirstChildOfClass("Humanoid") == nil then return false end
+        local n = o.Name:lower()
+        return (n == want or n:find(want, 1, true) ~= nil) and not n:find("summon", 1, true)
+            and isAliveModel(o) and getMobPart(o) ~= nil
+    end
+    local mr = getMobsRoot()
+    if mr then for _, o in ipairs(mr:GetDescendants()) do if isBoss(o) then sbCache = o; return o end end end
+    for _, o in ipairs(Workspace:GetChildren()) do if isBoss(o) then sbCache = o; return o end end
+    return nil
+end
+
 local function autoFarmStepInner()
     farmEngaged = false
-    if VON.busy then return end -- summon sequence is moving the character
-    if not CONFIG.AutoFarm and not CONFIG.AutoBoss and not raidFarmActive and not VON.enabled then bossLocked = false; return end
+    if VON.busy or SB.busy then return end -- summon sequence is moving the character
+    if not CONFIG.AutoFarm and not CONFIG.AutoBoss and not raidFarmActive and not VON.enabled and not SB.enabled then bossLocked = false; return end
 
     local wantBoss = CONFIG.AutoBoss and not raidFarmActive and #CONFIG.BossNames > 0
     local wantMob = CONFIG.AutoFarm or raidFarmActive
     local targetName = raidFarmActive and "*" or CONFIG.TargetMobName
     if VON.enabled and VON.farmJester and not raidFarmActive then
         wantMob = true; targetName = "Jester" -- no Von Soul left: farm Jester until one drops
+    end
+
+    if SB.enabled and SB.farmMob and not raidFarmActive then
+        wantMob = true; targetName = SB.farmMob -- missing summon items: farm the mob that drops them
     end
 
     if CONFIG.AutoBoss and not raidFarmActive then
@@ -521,6 +547,17 @@ local function autoFarmStepInner()
             currentTarget = vm
             targetName = vm.Name
             lastBossName = vm.Name
+        end
+    end
+
+    -- 2b) boss summoned through the "SummonBoss" NPC list
+    if not bossLocked and SB.enabled and not raidFarmActive then
+        local bm = SB.find()
+        if bm then
+            bossLocked = true
+            currentTarget = bm
+            targetName = bm.Name
+            lastBossName = bm.Name
         end
     end
 
@@ -573,9 +610,9 @@ local function autoFarmStepInner()
     end
 end
 local function autoFarmStep()
-    if VON.busy then return end
+    if VON.busy or SB.busy then return end
     autoFarmStepInner()
-    if not (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive or VON.enabled) then
+    if not (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive or VON.enabled or SB.enabled) then
         holdCFrame = nil
         return
     end
@@ -617,7 +654,7 @@ end
 
 -- Skills only fire while a hack feature (currently Auto Farm) is running
 local function isHackRunning()
-    return (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive or VON.enabled) and farmEngaged
+    return (CONFIG.AutoFarm or CONFIG.AutoBoss or raidFarmActive or VON.enabled or SB.enabled) and farmEngaged
 end
 
 -- ================= AUTO ROLL (Random Chance) =================
@@ -1353,11 +1390,11 @@ if not IN_RAID_MAP then
     local s1 = page:CreateSection("👑 Boss Selection", "Left")
     local s2 = page:CreateSection("📊 Status", "Right")
 
-    s1:Dropdown({Title = "Select bosses", Options = {"Speed", "Doraemon", "Rune User1", "Rune User2", "Rune User3", "Key Man", "Beast Warriors", "Spaceship"}, Multi = true, Value = {}, Callback = function(selected)
+    s1:Dropdown({Title = "Select bosses", Options = {"Speed", "Doraemon", "Rune User1", "Rune User2", "Rune User3", "Key Man", "Beast Warriors", "Cloud Pirate", "Akaza", "Itachi", "Clover Man", "Vergil", "Spaceship"}, Multi = true, Value = {}, Callback = function(selected)
         if type(selected) ~= "table" then return end
         local copy = {}
         for _, name in ipairs(selected) do
-            if name == "Speed" or name == "Doraemon" or name == "Rune User1" or name == "Rune User2" or name == "Rune User3" or name == "Key Man" or name == "Beast Warriors" or name == "Spaceship" then table.insert(copy, name) end
+            if name == "Speed" or name == "Doraemon" or name == "Rune User1" or name == "Rune User2" or name == "Rune User3" or name == "Key Man" or name == "Beast Warriors" or name == "Cloud Pirate" or name == "Akaza" or name == "Itachi" or name == "Clover Man" or name == "Vergil" or name == "Spaceship" then table.insert(copy, name) end
         end
         CONFIG.BossNames = copy
         currentTarget = nil
@@ -1389,6 +1426,25 @@ if not IN_RAID_MAP then
     end})
     vonPara = s3:Paragraph({Title = "VON JOESTAR status", Content = "OFF"})
     VON.setStatus = function(m) VON.status = m; pcall(function() vonPara:SetContent(m) end) end
+    local s4 = page:CreateSection("👹 Boss Summon (NPC)", "Right")
+    local sbPara
+    s4:Dropdown({Title = "Summon boss", Options = {"Flashy Flash", "Sukuna", "Aizen", "Kokushibo", "Sung Jinwoo", "Okarun", "Modulo Yuji", "Jotaro"}, Multi = false, Value = "Jotaro", Callback = function(v)
+        local name = type(v) == "table" and v[1] or v
+        if type(name) == "string" and name ~= "" then
+            SB.selected = name
+            SB.gen = SB.gen + 1 -- fresh state when the choice changes
+            SB.busy = false; SB.state = "idle"; SB.tries = 0; SB.cooldownUntil = 0; SB.farmMob = nil
+            bossLocked = false; currentTarget = nil
+        end
+    end})
+    s4:Toggle({Title = "Auto Boss Summon", Id = "SB_ENABLED", Value = false, Callback = function(v)
+        SB.enabled = v
+        SB.gen = SB.gen + 1
+        SB.busy = false; SB.state = "idle"; SB.tries = 0; SB.cooldownUntil = 0; SB.farmMob = nil
+        bossLocked = false; currentTarget = nil; farmEngaged = false
+    end})
+    sbPara = s4:Paragraph({Title = "Boss Summon status", Content = "OFF"})
+    SB.setStatus = function(m) pcall(function() sbPara:SetContent(m) end) end
     s2:Paragraph({Title = "Random Auto Boss", Content = "A random living boss from your selected list is chosen. After it is defeated, another living selected boss is chosen automatically. Bosses that are not currently spawned are skipped."})
 end
 
@@ -1866,6 +1922,177 @@ task.spawn(function()
                 task.spawn(VON.run, VON.gen)
             elseif tick() - VON.beat > 15 then
                 VON.gen = VON.gen + 1; VON.busy = false; VON.state = "idle"; VON.tries = 0
+                bossLocked = false; currentTarget = nil
+            end
+        end
+    end
+end)
+
+-- ================= AUTO BOSS SUMMON (NPC "SummonBoss") =================
+-- idle -> System.Summon:FireServer(boss, SB_SUMMON_FLAG) (one packet, no GUI, no TP, no click)
+--      -> pending -> fighting -> idle. Nothing is taken out of storage.
+local SB_SUMMON_FLAG = true -- 2nd argument of the packet, exactly as the game sends it (change to false if it never summons)
+local function sbStatus(m) if SB.setStatus and m ~= SB.lastMsg then SB.lastMsg = m; SB.setStatus(m) end end
+
+local function sbWatch(model)
+    if SB.watched == nil then SB.watched = setmetatable({}, { __mode = "k" }) end
+    if SB.watched[model] then return end
+    SB.watched[model] = true
+    SB.spawnSeq = SB.spawnSeq + 1 -- counted the moment it appears, even if it dies in <1s
+end
+table.insert(conns, Workspace.DescendantAdded:Connect(function(o)
+    if not SB.enabled then return end
+    pcall(function()
+        local m = o:IsA("Humanoid") and o.Parent or (o:IsA("Model") and o) or nil
+        if not (m and m:IsA("Model")) then return end
+        local n, want = m.Name:lower(), tostring(SB.selected or ""):lower()
+        if want ~= "" and n:find(want, 1, true) and not n:find("summon", 1, true) then sbWatch(m) end
+    end)
+end))
+
+-- Items a boss needs. Missing items -> go to the island and farm the mob that drops them.
+local SB_REQ = {
+    ["Jotaro"] = { item = "Time Orb", amount = 3, island = "Event Island", mob = "DIO Guard" },
+}
+
+local function itemCount(name)
+    local n = 0
+    local holders = { getBackpack(), LP.Character }
+    for _, h in ipairs(holders) do
+        for _, t in ipairs(h and h:GetChildren() or {}) do
+            if t:IsA("Tool") and t.Name == name then n += soulAmount(t) end
+        end
+    end
+    local data = LP:FindFirstChild("InvData") -- storage (nothing needs to be taken out)
+    local st = data and data:FindFirstChild(name)
+    if st then n += tonumber(st.Value) or 0 end
+    return n
+end
+
+local function sbStep(gen)
+    local function cur() return SB.enabled and SB.gen == gen end
+    if VON.enabled then sbStatus("Turn off Auto VON JOESTAR first"); return end
+    local boss = SB.find()
+    if boss then
+        SB.state = "fighting"; SB.tries = 0
+        sbStatus("Fighting " .. boss.Name)
+        return
+    end
+    if SB.state == "fighting" then
+        SB.state = "idle"; SB.cooldownUntil = tick() + 0.3
+        sbStatus("Boss defeated - next round")
+        return
+    end
+    if SB.state == "pending" then
+        if SB.spawnSeq > SB.spawnAtFire then -- spawned and already dead
+            SB.state = "idle"; SB.cooldownUntil = tick() + 0.2
+            sbStatus("Boss killed instantly - next round")
+            return
+        end
+        if tick() - SB.pendingAt < 12 then sbStatus("Summoned - waiting for the boss..."); return end
+        SB.state = "idle"; SB.cooldownUntil = tick() + 0.5
+        sbStatus("Boss did not appear - retrying")
+        return
+    end
+    -- missing items: TP to the island and farm the mob until enough have dropped, then summon
+    local req = SB_REQ[SB.selected]
+    if req then
+        local have = itemCount(req.item)
+        if have < req.amount then
+            SB.farmMob = req.mob
+            sbStatus(("Need %d %s (have %d) - farming %s"):format(req.amount, req.item, have, req.mob))
+            local char = LP.Character
+            if char and char:GetAttribute("Island") ~= req.island and tick() - SB.lastIslandTp > 5 then
+                SB.lastIslandTp = tick()
+                teleportToIsland(req.island)
+            end
+            return
+        end
+        SB.farmMob = nil
+    else
+        SB.farmMob = nil
+    end
+    if tick() < SB.cooldownUntil then return end
+    if SB.tries >= 3 then
+        sbStatus("Summon failed 3 times - pausing 10s")
+        SB.tries = 0; SB.cooldownUntil = tick() + 10
+        return
+    end
+    local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if not getMyRoot() or not hum or hum.Health <= 0 then return end
+
+    local ok, err = pcall(function()
+        local sys = ReplicatedStorage:FindFirstChild("System")
+        local remote = sys and sys:FindFirstChild("Summon")
+        if not remote then sbStatus("Summon remote not found"); SB.cooldownUntil = tick() + 3; return end
+
+        local function fireAndCheck()
+            SB.spawnAtFire = SB.spawnSeq
+            pcall(function() remote:FireServer(SB.selected, SB_SUMMON_FLAG) end) -- ONE packet, no GUI
+            local t = tick()
+            while cur() and tick() - t < 3 do
+                if SB.spawnSeq > SB.spawnAtFire or SB.find() then return true end
+                task.wait(0.1)
+            end
+            return false
+        end
+
+        -- Normal path: just send the packet from wherever we are (no TP, no click, no GUI).
+        local spawned
+        if SB.tries < 2 then
+            sbStatus("Summoning " .. tostring(SB.selected) .. "...")
+            spawned = fireAndCheck()
+        else
+            -- the server ignored the packet twice (maybe it needs us near the NPC): ONE attempt next to it, still no GUI
+            local npcs = Workspace:FindFirstChild("NPC")
+            local npc = npcs and npcs:FindFirstChild("SummonBoss")
+            local root = getMyRoot()
+            if npc and root then
+                sbStatus("Server ignored the packet - trying next to the NPC...")
+                SB.busy = true
+                local npcPos = npc:GetPivot().Position
+                root.CFrame = CFrame.new(npcPos + Vector3.new(0, 3, 6))
+                task.wait(0.4)
+                spawned = fireAndCheck()
+                SB.busy = false
+            else
+                spawned = fireAndCheck()
+            end
+        end
+        if not cur() then return end
+        if spawned then
+            SB.state = "pending"; SB.pendingAt = tick(); SB.tries = 0
+        else
+            SB.tries += 1; SB.cooldownUntil = tick() + 1.5
+            sbStatus("Boss did not spawn (missing items?) - retry " .. SB.tries .. "/3")
+        end
+    end)
+    if SB.gen == gen then SB.busy = false end
+    if not ok then sbStatus("Error: " .. tostring(err)); SB.cooldownUntil = tick() + 2 end
+end
+
+function SB.run(gen)
+    SB.beat = tick()
+    while alive and SB.enabled and SB.gen == gen do
+        task.wait(0.15)
+        SB.beat = tick()
+        local ok, err = pcall(sbStep, gen)
+        if not ok then
+            if SB.gen == gen then SB.busy = false end
+            sbStatus("Error: " .. tostring(err)); task.wait(1)
+        end
+    end
+end
+
+task.spawn(function()
+    while alive do
+        task.wait(0.3)
+        if SB.enabled then
+            if SB.runGen ~= SB.gen then
+                SB.runGen = SB.gen
+                task.spawn(SB.run, SB.gen)
+            elseif tick() - SB.beat > 15 then
+                SB.gen = SB.gen + 1; SB.busy = false; SB.state = "idle"; SB.tries = 0; SB.farmMob = nil
                 bossLocked = false; currentTarget = nil
             end
         end
